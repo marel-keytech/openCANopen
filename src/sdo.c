@@ -1,6 +1,8 @@
 #include <linux/can.h>
 #include "canopen/sdo.h"
 
+/* Note: size indication for segmented download is ignored */
+
 static inline void clear_frame(struct can_frame* frame)
 {
 	memset(frame, 0, sizeof(*frame));
@@ -13,19 +15,26 @@ static inline void copy_multiplexer(struct can_frame* dst,
 	       SDO_MULTIPLEXER_SIZE);
 }
 
-static int srv_dl_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
+int sdo_srv_dl_sm_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 			struct can_frame* frame_out, enum sdo_abort_code code)
 {
-	/* TODO */
+	clear_frame(frame_out);
+	sdo_set_cs(frame_out, SDO_SCS_DL_ABORT);
+	sdo_set_abort_code(frame_out, SDO_ABORT_INVALID_CS);
 	return self->dl_state = SDO_SRV_DL_ABORT;
 }
 
-static int srv_dl_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
+int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out)
 {
-	if (sdo_get_cs(frame_in) != SDO_CCS_DL_INIT_REQ)
-		return srv_dl_abort(self, frame_in, frame_out,
-				    SDO_ABORT_INVALID_CS);
+	enum sdo_ccs ccs = sdo_get_cs(frame_in);
+
+	if (ccs == SDO_CCS_DL_ABORT)
+		return self->dl_state; /* ignore abort */
+
+	if (ccs != SDO_CCS_DL_INIT_REQ)
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_INVALID_CS);
 
 	clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_DL_INIT_RES);
@@ -34,16 +43,21 @@ static int srv_dl_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 	return self->dl_state = SDO_SRV_DL_SEG;
 }
 
-static int srv_dl_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
+int sdo_srv_dl_sm_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		      struct can_frame* frame_out, int expect_toggled)
 {
-	if (sdo_get_cs(frame_in) != SDO_CCS_DL_SEG_REQ)
-		return srv_dl_abort(self, frame_in, frame_out,
-				    SDO_ABORT_INVALID_CS);
+	enum sdo_ccs ccs = sdo_get_cs(frame_in);
+
+	if (ccs == SDO_CCS_DL_ABORT)
+		return self->dl_state = SDO_SRV_DL_REMOTE_ABORT;
+
+	if (ccs != SDO_CCS_DL_SEG_REQ)
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_INVALID_CS);
 
 	if (sdo_is_toggled(frame_in) != expect_toggled)
-		return srv_dl_abort(self, frame_in, frame_out,
-				    SDO_ABORT_TOGGLE);
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_TOGGLE);
 
 	clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_DL_SEG_RES);
@@ -64,14 +78,17 @@ int sdo_srv_dl_sm_feed(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 {
 	switch (self->dl_state)
 	{
-	case SDO_SRV_DL_INIT:	return srv_dl_init(self, frame_in, frame_out);
-	case SDO_SRV_DL_SEG:	return srv_dl_seg(self, frame_in, frame_out, 0);
+	case SDO_SRV_DL_INIT:
+		return sdo_srv_dl_sm_init(self, frame_in, frame_out);
+	case SDO_SRV_DL_SEG:
+		return sdo_srv_dl_sm_seg(self, frame_in, frame_out, 0);
 	case SDO_SRV_DL_SEG_TOGGLED:
-				return srv_dl_seg(self, frame_in, frame_out, 1);
+		return sdo_srv_dl_sm_seg(self, frame_in, frame_out, 1);
 	case SDO_SRV_DL_ABORT:
 	case SDO_SRV_DL_DONE:
 	case SDO_SRV_DL_PLEASE_RESET:
-				return SDO_SRV_DL_PLEASE_RESET;
+	case SDO_SRV_DL_REMOTE_ABORT:
+		return SDO_SRV_DL_PLEASE_RESET;
 	}
 }
 

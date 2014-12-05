@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -g -Wall -std=c99 -D_GNU_SOURCE -O0 -Iinc/
+CFLAGS := -g -std=c99 -D_GNU_SOURCE -O0 -Iinc/
 LDFLAGS := -lrt
 
 MAJOR = 0

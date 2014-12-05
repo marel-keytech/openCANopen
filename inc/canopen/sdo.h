@@ -23,7 +23,8 @@ enum sdo_scs {
 };
 
 enum sdo_srv_dl_state {
-	SDO_SRV_DL_PLEASE_RESET = -2,
+	SDO_SRV_DL_PLEASE_RESET = -3,
+	SDO_SRV_DL_REMOTE_ABORT = -2,
 	SDO_SRV_DL_ABORT = -1,
 	SDO_SRV_DL_START = 0,
 	SDO_SRV_DL_INIT = 0,
@@ -52,6 +53,13 @@ static inline void sdo_srv_init(struct sdo_srv* self)
 
 int sdo_srv_dl_sm_feed(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out);
+
+int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
+		       struct can_frame* frame_out);
+int sdo_srv_dl_sm_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
+		      struct can_frame* frame_out, int expect_toggled);
+int sdo_srv_dl_sm_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
+			struct can_frame* frame_out, enum sdo_abort_code code);
 
 static inline void sdo_srv_dl_sm_reset(struct sdo_srv_dl_sm* self)
 {
@@ -102,6 +110,19 @@ static inline void sdo_end_segment(struct can_frame* frame)
 static inline int sdo_is_end_segment(struct can_frame* frame)
 {
 	return frame->data[0] & 1;
+}
+
+static inline enum sdo_abort_code sdo_get_abort_code(struct can_frame* frame)
+{
+	enum sdo_abort_code code;
+	memcpy(&code, &frame->data[4], 4); /* TODO: fix endianness */
+	return code;
+}
+
+static inline void sdo_set_abort_code(struct can_frame* frame,
+				      enum sdo_abort_code code)
+{
+	memcpy(&frame->data[4], &code, 4); /* TODO: fix endianness */
 }
 
 #endif /* _CANOPEN_SDO_H */
