@@ -404,6 +404,105 @@ int sdo_srv_ul_expediated_4bytes()
 	return 0;
 }
 
+int sdo_srv_ul_segmented_5bytes()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	strcpy(_test_data, "abcd");
+	_test_size = 5;
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
+	sdo_set_index(&frame_in, 1000);
+	sdo_set_subindex(&frame_in, 3);
+
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SCS_UL_INIT_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_INT_EQ(1000, _test_index);
+	ASSERT_INT_EQ(3, _test_subindex);
+
+	ASSERT_FALSE(sdo_is_expediated(&frame_out));
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
+	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_TRUE(sdo_is_end_segment(&frame_out));
+	ASSERT_INT_EQ(5, sdo_get_segment_size(&frame_out));
+	ASSERT_STR_EQ("abcd", (char*)&frame_out.data[SDO_SEGMENT_IDX]);
+
+	return 0;
+}
+
+int sdo_srv_ul_segmented_7bytes()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	strcpy(_test_data, "123456");
+	_test_size = 7;
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
+
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SCS_UL_INIT_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_FALSE(sdo_is_expediated(&frame_out));
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
+	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_TRUE(sdo_is_end_segment(&frame_out));
+	ASSERT_INT_EQ(7, sdo_get_segment_size(&frame_out));
+	ASSERT_STR_EQ("123456", (char*)&frame_out.data[SDO_SEGMENT_IDX]);
+
+	return 0;
+}
+
+int sdo_srv_ul_segmented_8bytes()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	memcpy(_test_data, "123456\08", 8);
+	_test_size = 8;
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
+
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SCS_UL_INIT_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_FALSE(sdo_is_expediated(&frame_out));
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG_TOGGLED, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_FALSE(sdo_is_end_segment(&frame_out));
+	ASSERT_INT_EQ(7, sdo_get_segment_size(&frame_out));
+	ASSERT_STR_EQ("123456", (char*)&frame_out.data[SDO_SEGMENT_IDX]);
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
+	sdo_toggle(&frame_in);
+	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_TRUE(sdo_is_end_segment(&frame_out));
+	ASSERT_INT_EQ(1, sdo_get_segment_size(&frame_out));
+	ASSERT_INT_EQ('8', frame_out.data[SDO_SEGMENT_IDX]);
+
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -438,6 +537,9 @@ int main()
 	sdo_srv_get_sdo_addr = my_srv_get_sdo_addr;
 	RUN_TEST(sdo_srv_ul_expediated_1byte);
 	RUN_TEST(sdo_srv_ul_expediated_4bytes);
+	RUN_TEST(sdo_srv_ul_segmented_5bytes);
+	RUN_TEST(sdo_srv_ul_segmented_7bytes);
+	RUN_TEST(sdo_srv_ul_segmented_8bytes);
 	return r;
 }
 

@@ -150,6 +150,13 @@ no_read:
 	return self->ul_state = SDO_SRV_UL_SEG;
 }
 
+static inline void force_eof(FILE* stream)
+{
+	int c = fgetc(stream);
+	if(c != EOF)
+		ungetc(c, stream);
+}
+
 int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		      struct can_frame* frame_out, int expect_toggled)
 {
@@ -157,8 +164,10 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 
 	enum sdo_ccs ccs = sdo_get_cs(frame_in);
 
-	if (ccs == SDO_CCS_ABORT)
+	if (ccs == SDO_CCS_ABORT) {
+		sdo_srv_ul_sm_close_mem(self);
 		return self->ul_state = SDO_SRV_UL_REMOTE_ABORT;
+	}
 
 	if (ccs != SDO_CCS_UL_SEG_REQ) {
 		sdo_srv_ul_sm_close_mem(self);
@@ -177,14 +186,18 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	if (!self->memfd)
 		goto no_read;
 
-	size = fread(&frame_out->data[SDO_SEGMENT_IDX], SDO_SEGMENT_MAX_SIZE, 1,
+	size = fread(&frame_out->data[SDO_SEGMENT_IDX], 1, SDO_SEGMENT_MAX_SIZE,
 		     self->memfd);
 
 	sdo_set_segment_size(frame_out, size);
 
+	if (size == SDO_SEGMENT_MAX_SIZE)
+		force_eof(self->memfd);
+
 	if (feof(self->memfd)) {
 		sdo_end_segment(frame_out);
 		sdo_srv_ul_sm_close_mem(self);
+		return self->ul_state = SDO_SRV_UL_DONE;
 	}
 
 no_read:
