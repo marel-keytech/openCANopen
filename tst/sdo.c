@@ -178,9 +178,8 @@ int sdo_srv_dl_seg_remote_abort()
 	struct can_frame frame_in = { 0 }, frame_out = { 0 };
 	
 	sdo_set_cs(&frame_in, SDO_CCS_DL_ABORT);
-	ASSERT_INT_EQ(SDO_SRV_DL_REMOTE_ABORT, sdo_srv_dl_sm_seg(&sm, &frame_in,
-								 &frame_out,
-								 0));
+	ASSERT_INT_EQ(SDO_SRV_DL_REMOTE_ABORT,
+		      sdo_srv_dl_sm_seg(&sm, &frame_in, &frame_out, 0));
 	ASSERT_INT_EQ(SDO_SRV_DL_REMOTE_ABORT, sm.dl_state);
 
 	return 0;

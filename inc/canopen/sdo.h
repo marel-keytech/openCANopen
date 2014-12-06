@@ -125,5 +125,38 @@ static inline void sdo_set_abort_code(struct can_frame* frame,
 	memcpy(&frame->data[4], &code, 4); /* TODO: fix endianness */
 }
 
+static inline int sdo_is_expediated(struct can_frame* frame)
+{
+	return !!(frame->data[0] & 2);
+}
+
+static inline void sdo_expediate(struct can_frame* frame)
+{
+	frame->data[0] |= 2;
+}
+
+static inline int sdo_is_size_indicated(struct can_frame* frame)
+{
+	return frame->data[0] & 1;
+}
+
+static inline void sdo_indicate_size(struct can_frame* frame)
+{
+	frame->data[0] |= 1;
+}
+
+static inline size_t sdo_get_expediated_size(struct can_frame* frame)
+{
+	int n = (frame->data[0] >> 2) & 3;
+	return 4 - n;
+}
+
+static inline void sdo_set_expediated_size(struct can_frame* frame, size_t size)
+{
+	int n = 4 - size;
+	frame->data[0] &= ~(3 << 2);
+	frame->data[0] |= n << 2;
+}
+
 #endif /* _CANOPEN_SDO_H */
 

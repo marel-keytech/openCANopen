@@ -29,12 +29,13 @@ libcanopen.so: $(LIBCANOPEN)
 clean:
 	rm -f *.so*
 	rm -f src/*.o tst/*.o
+	rm -f tst/test_*
 
-tst/sdo: src/sdo.o tst/sdo.o
+tst/test_sdo: src/sdo.o tst/sdo.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
 .PHONY:
-test: tst/sdo
+test: tst/test_sdo
 	run-parts tst
 
 install:
