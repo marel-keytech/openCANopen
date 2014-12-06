@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <linux/can.h>
 
@@ -199,13 +200,23 @@ static inline void sdo_set_expediated_size(struct can_frame* frame, size_t size)
 static inline int sdo_get_index(struct can_frame* frame)
 {
 	uint16_t value;
-	byteorder(&value, frame->data[SDO_MULTIPLEXER_IDX], 2);
+	byteorder(&value, &frame->data[SDO_MULTIPLEXER_IDX], 2);
 	return value;
 }
 
 static inline int sdo_get_subindex(struct can_frame* frame)
 {
 	return frame->data[SDO_MULTIPLEXER_IDX+2];
+}
+
+static inline void sdo_set_index(struct can_frame* frame, int index)
+{
+	byteorder(&frame->data[SDO_MULTIPLEXER_IDX], &index, 2);
+}
+
+static inline void sdo_set_subindex(struct can_frame* frame, int subindex)
+{
+	frame->data[SDO_MULTIPLEXER_IDX+2] = subindex;
 }
 
 #endif /* _CANOPEN_SDO_H */

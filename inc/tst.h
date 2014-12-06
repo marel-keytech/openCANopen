@@ -37,8 +37,8 @@
 
 #define ASSERT_STR_EQ(value, expr) do { \
 	char* expr_ = (expr); \
-	if (strcmp(expr_, (value)) == 0) { \
-		fprintf(stderr, "FAILED " xstr(__LINE__) ": Expected " xstr(expr) " to be \"" xstr(value) "\"; was \"%s\"\n", \
+	if (strcmp(expr_, (value)) != 0) { \
+		fprintf(stderr, "FAILED " xstr(__LINE__) ": Expected " xstr(expr) " to be " xstr(value) "; was \"%s\"\n", \
 			expr_); \
 		return 1; \
 	} \
@@ -53,7 +53,7 @@
 
 #define ASSERT_STR_NEQ(value, expr) do { \
 	if (strcmp((expr), (value)) == 0) { \
-		fprintf(stderr, "FAILED " xstr(__LINE__) ": Expected " xstr(expr) " to NOT be \"" xstr(value) "\"\n"); \
+		fprintf(stderr, "FAILED " xstr(__LINE__) ": Expected " xstr(expr) " to NOT be " xstr(value) "\n"); \
 		return 1; \
 	} \
 } while(0)

@@ -31,7 +31,7 @@ clean:
 	rm -f src/*.o tst/*.o
 	rm -f tst/test_*
 
-tst/test_sdo: src/sdo.o tst/sdo.o
+tst/test_sdo: src/sdo.o src/byteorder.o tst/sdo.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
 .PHONY:

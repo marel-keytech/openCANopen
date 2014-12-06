@@ -3,6 +3,21 @@
 #include "tst.h"
 #include "canopen/sdo.h"
 
+#define TEST_DATA_MAX_SIZE 1024
+
+static char _test_data[TEST_DATA_MAX_SIZE];
+static int _test_index;
+static int _test_subindex;
+static size_t _test_size;
+
+void* my_srv_get_sdo_addr(int index, int subindex, size_t* size)
+{
+	_test_index = index;
+	_test_subindex = subindex;
+	*size = _test_size;
+	return _test_data;
+}
+
 int set_get_cs()
 {
 	struct can_frame frame = { .data = { 0xff } };
@@ -337,6 +352,58 @@ int sdo_srv_ul_seg_remote_abort()
 	return 0;
 }
 
+int sdo_srv_ul_expediated_1byte()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	_test_data[0] = 42;
+	_test_size = 1;
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
+	sdo_set_index(&frame_in, 1337);
+	sdo_set_subindex(&frame_in, 1);
+
+	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+
+	ASSERT_INT_EQ(1337, _test_index);
+	ASSERT_INT_EQ(1, _test_subindex);
+
+	ASSERT_TRUE(sdo_is_size_indicated(&frame_out));
+	ASSERT_TRUE(sdo_is_expediated(&frame_out));
+	ASSERT_INT_EQ(1, sdo_get_expediated_size(&frame_out));
+	ASSERT_INT_EQ(42, frame_out.data[SDO_EXPEDIATED_DATA_IDX]);
+
+	return 0;
+}
+
+int sdo_srv_ul_expediated_4bytes()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	strcpy(_test_data, "foo");
+	_test_size = 4;
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
+	sdo_set_index(&frame_in, 1234);
+	sdo_set_subindex(&frame_in, 2);
+
+	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
+		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+
+	ASSERT_INT_EQ(1234, _test_index);
+	ASSERT_INT_EQ(2, _test_subindex);
+
+	ASSERT_TRUE(sdo_is_size_indicated(&frame_out));
+	ASSERT_TRUE(sdo_is_expediated(&frame_out));
+	ASSERT_INT_EQ(4, sdo_get_expediated_size(&frame_out));
+	ASSERT_STR_EQ("foo", (char*)&frame_out.data[SDO_EXPEDIATED_DATA_IDX]);
+
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -357,7 +424,8 @@ int main()
 	RUN_TEST(sdo_srv_dl_seg_remote_abort);
 	RUN_TEST(sdo_srv_dl_example);
 
-	fprintf(stderr, "\nServer upload:\n");
+	fprintf(stderr, "\nServer upload state machine:\n");
+	sdo_srv_get_sdo_addr = NULL;
 	RUN_TEST(sdo_srv_ul_init_ok);
 	RUN_TEST(sdo_srv_ul_init_failed_cs);
 	RUN_TEST(sdo_srv_ul_init_remote_abort);
@@ -365,6 +433,11 @@ int main()
 	RUN_TEST(sdo_srv_ul_seg_toggled_ok);
 	RUN_TEST(sdo_srv_ul_seg_failed_cs);
 	RUN_TEST(sdo_srv_ul_seg_remote_abort);
+
+	fprintf(stderr, "\nServer upload:\n");
+	sdo_srv_get_sdo_addr = my_srv_get_sdo_addr;
+	RUN_TEST(sdo_srv_ul_expediated_1byte);
+	RUN_TEST(sdo_srv_ul_expediated_4bytes);
 	return r;
 }
 
