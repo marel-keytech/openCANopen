@@ -2,6 +2,7 @@
 #define _CANOPEN_SDO_H
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <linux/can.h>
 
@@ -13,13 +14,17 @@
 enum sdo_ccs {
 	SDO_CCS_DL_SEG_REQ = 0,
 	SDO_CCS_DL_INIT_REQ = 1,
-	SDO_CCS_DL_ABORT = 4,
+	SDO_CCS_UL_INIT_REQ = 2,
+	SDO_CCS_UL_SEG_REQ = 3,
+	SDO_CCS_ABORT = 4,
 };
 
 enum sdo_scs {
+	SDO_SCS_UL_SEG_RES = 0,
 	SDO_SCS_DL_SEG_RES = 1,
+	SDO_SCS_UL_INIT_RES = 2,
 	SDO_SCS_DL_INIT_RES = 3,
-	SDO_SCS_DL_ABORT = 4,
+	SDO_SCS_ABORT = 4,
 };
 
 enum sdo_srv_dl_state {
@@ -33,6 +38,17 @@ enum sdo_srv_dl_state {
 	SDO_SRV_DL_DONE
 };
 
+enum sdo_srv_ul_state {
+	SDO_SRV_UL_PLEASE_RESET = -3,
+	SDO_SRV_UL_REMOTE_ABORT = -2,
+	SDO_SRV_UL_ABORT = -1,
+	SDO_SRV_UL_START = 0,
+	SDO_SRV_UL_INIT = 0,
+	SDO_SRV_UL_SEG,
+	SDO_SRV_UL_SEG_TOGGLED,
+	SDO_SRV_UL_DONE
+};
+
 enum sdo_abort_code {
 	SDO_ABORT_TOGGLE	= 0x05030000,
 	SDO_ABORT_INVALID_CS	= 0x05040001,
@@ -42,14 +58,25 @@ struct sdo_srv_dl_sm {
 	enum sdo_srv_dl_state dl_state;
 };
 
+struct sdo_srv_ul_sm {
+	enum sdo_srv_ul_state ul_state;
+};
+
 struct sdo_srv {
 	struct sdo_srv_dl_sm client[128];
 };
+
+extern void* (sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
 
 static inline void sdo_srv_init(struct sdo_srv* self)
 {
 	memset(self, 0, sizeof(*self));
 }
+
+FILE* sdo_srv_open_memstream(int index, int subindex);
+
+int sdo_srv_sm_abort(void* self, struct can_frame* frame_in,
+		     struct can_frame* frame_out, enum sdo_abort_code code);
 
 int sdo_srv_dl_sm_feed(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out);
@@ -58,8 +85,14 @@ int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out);
 int sdo_srv_dl_sm_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		      struct can_frame* frame_out, int expect_toggled);
-int sdo_srv_dl_sm_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
-			struct can_frame* frame_out, enum sdo_abort_code code);
+
+int sdo_srv_ul_sm_feed(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
+		       struct can_frame* frame_out);
+
+int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
+		       struct can_frame* frame_out);
+int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
+		      struct can_frame* frame_out, int expect_toggled);
 
 static inline void sdo_srv_dl_sm_reset(struct sdo_srv_dl_sm* self)
 {

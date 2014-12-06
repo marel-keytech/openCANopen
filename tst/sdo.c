@@ -70,7 +70,7 @@ int sdo_srv_dl_init_failed_cs()
 	ASSERT_INT_EQ(SDO_SRV_DL_ABORT, sdo_srv_dl_sm_init(&sm, &frame_in,
 							 &frame_out));
 	ASSERT_INT_EQ(SDO_SRV_DL_ABORT, sm.dl_state);
-	ASSERT_INT_EQ(SDO_SCS_DL_ABORT, sdo_get_cs(&frame_out));
+	ASSERT_INT_EQ(SDO_SCS_ABORT, sdo_get_cs(&frame_out));
 	ASSERT_INT_EQ(SDO_ABORT_INVALID_CS, sdo_get_abort_code(&frame_out));
 
 	return 0;
@@ -81,7 +81,7 @@ int sdo_srv_dl_init_remote_abort()
 	struct sdo_srv_dl_sm sm = { .dl_state = SDO_SRV_DL_START };
 	struct can_frame frame_in = { 0 };
 	
-	sdo_set_cs(&frame_in, SDO_CCS_DL_ABORT);
+	sdo_set_cs(&frame_in, SDO_CCS_ABORT);
 	ASSERT_INT_EQ(SDO_SRV_DL_INIT, sdo_srv_dl_sm_init(&sm, &frame_in,
 							 NULL));
 	ASSERT_INT_EQ(SDO_SRV_DL_INIT, sm.dl_state);
@@ -166,7 +166,7 @@ int sdo_srv_dl_seg_failed_cs()
 	ASSERT_INT_EQ(SDO_SRV_DL_ABORT, sdo_srv_dl_sm_seg(&sm, &frame_in,
 								&frame_out, 0));
 	ASSERT_INT_EQ(SDO_SRV_DL_ABORT, sm.dl_state);
-	ASSERT_INT_EQ(SDO_SCS_DL_ABORT, sdo_get_cs(&frame_out));
+	ASSERT_INT_EQ(SDO_SCS_ABORT, sdo_get_cs(&frame_out));
 	ASSERT_INT_EQ(SDO_ABORT_INVALID_CS, sdo_get_abort_code(&frame_out));
 
 	return 0;
@@ -177,7 +177,7 @@ int sdo_srv_dl_seg_remote_abort()
 	struct sdo_srv_dl_sm sm = { .dl_state = SDO_SRV_DL_START };
 	struct can_frame frame_in = { 0 }, frame_out = { 0 };
 	
-	sdo_set_cs(&frame_in, SDO_CCS_DL_ABORT);
+	sdo_set_cs(&frame_in, SDO_CCS_ABORT);
 	ASSERT_INT_EQ(SDO_SRV_DL_REMOTE_ABORT,
 		      sdo_srv_dl_sm_seg(&sm, &frame_in, &frame_out, 0));
 	ASSERT_INT_EQ(SDO_SRV_DL_REMOTE_ABORT, sm.dl_state);
@@ -234,13 +234,118 @@ int sdo_srv_dl_example()
 	return 0;
 }
 
+int sdo_srv_ul_init_ok()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
+	strcpy((char*)&frame_in.data[SDO_MULTIPLEXER_IDX], "ab");
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG,
+		      sdo_srv_ul_sm_init(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG, sm.ul_state);
+	ASSERT_INT_EQ(SDO_SCS_UL_INIT_RES, sdo_get_cs(&frame_out));
+	ASSERT_STR_EQ("ab", (char*)&frame_out.data[SDO_MULTIPLEXER_IDX]);
+
+	return 0;
+}
+
+int sdo_srv_ul_init_failed_cs()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
+	ASSERT_INT_EQ(SDO_SRV_UL_ABORT,
+		      sdo_srv_ul_sm_init(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SRV_UL_ABORT, sm.ul_state);
+	ASSERT_INT_EQ(SDO_SCS_ABORT, sdo_get_cs(&frame_out));
+	ASSERT_INT_EQ(SDO_ABORT_INVALID_CS, sdo_get_abort_code(&frame_out));
+
+	return 0;
+}
+
+int sdo_srv_ul_init_remote_abort()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	sdo_set_cs(&frame_in, SDO_CCS_ABORT);
+	ASSERT_INT_EQ(SDO_SRV_UL_INIT,
+		      sdo_srv_ul_sm_init(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SRV_UL_INIT, sm.ul_state);
+
+	return 0;
+}
+
+int sdo_srv_ul_seg_ok()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG_TOGGLED,
+		      sdo_srv_ul_sm_seg(&sm, &frame_in, &frame_out, 0));
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG_TOGGLED, sm.ul_state);
+	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
+	ASSERT_FALSE(sdo_is_toggled(&frame_out));
+
+	return 0;
+}
+
+int sdo_srv_ul_seg_toggled_ok()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
+	sdo_toggle(&frame_in);
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG,
+		      sdo_srv_ul_sm_seg(&sm, &frame_in, &frame_out, 1));
+	ASSERT_INT_EQ(SDO_SRV_UL_SEG, sm.ul_state);
+	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
+	ASSERT_TRUE(sdo_is_toggled(&frame_out));
+
+	return 0;
+}
+
+int sdo_srv_ul_seg_failed_cs()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
+	ASSERT_INT_EQ(SDO_SRV_UL_ABORT,
+		      sdo_srv_ul_sm_seg(&sm, &frame_in, &frame_out, 0));
+	ASSERT_INT_EQ(SDO_SRV_UL_ABORT, sm.ul_state);
+	ASSERT_INT_EQ(SDO_SCS_ABORT, sdo_get_cs(&frame_out));
+	ASSERT_INT_EQ(SDO_ABORT_INVALID_CS, sdo_get_abort_code(&frame_out));
+
+	return 0;
+}
+
+int sdo_srv_ul_seg_remote_abort()
+{
+	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	sdo_set_cs(&frame_in, SDO_CCS_ABORT);
+	ASSERT_INT_EQ(SDO_SRV_UL_REMOTE_ABORT,
+		      sdo_srv_ul_sm_seg(&sm, &frame_in, &frame_out, 0));
+	ASSERT_INT_EQ(SDO_SRV_UL_REMOTE_ABORT, sm.ul_state);
+
+	return 0;
+}
 
 int main()
 {
 	int r = 0;
+	fprintf(stderr, "Misc:\n");
 	RUN_TEST(set_get_cs);
 	RUN_TEST(set_get_segment_size);
 	RUN_TEST(set_get_abort_code);
+
+	fprintf(stderr, "\nServer download:\n");
 	RUN_TEST(sdo_srv_dl_init_ok);
 	RUN_TEST(sdo_srv_dl_init_failed_cs);
 	RUN_TEST(sdo_srv_dl_init_remote_abort);
@@ -251,6 +356,15 @@ int main()
 	RUN_TEST(sdo_srv_dl_seg_failed_cs);
 	RUN_TEST(sdo_srv_dl_seg_remote_abort);
 	RUN_TEST(sdo_srv_dl_example);
+
+	fprintf(stderr, "\nServer upload:\n");
+	RUN_TEST(sdo_srv_ul_init_ok);
+	RUN_TEST(sdo_srv_ul_init_failed_cs);
+	RUN_TEST(sdo_srv_ul_init_remote_abort);
+	RUN_TEST(sdo_srv_ul_seg_ok);
+	RUN_TEST(sdo_srv_ul_seg_toggled_ok);
+	RUN_TEST(sdo_srv_ul_seg_failed_cs);
+	RUN_TEST(sdo_srv_ul_seg_remote_abort);
 	return r;
 }
 
