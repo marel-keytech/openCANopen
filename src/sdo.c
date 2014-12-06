@@ -4,7 +4,7 @@
 
 /* Note: size indication for segmented download is ignored */
 
-void* (sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
+void* (*sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
 
 static inline void clear_frame(struct can_frame* frame)
 {
@@ -148,13 +148,17 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	if (ccs == SDO_CCS_ABORT)
 		return self->ul_state = SDO_SRV_UL_REMOTE_ABORT;
 
-	if (ccs != SDO_CCS_UL_SEG_REQ)
+	if (ccs != SDO_CCS_UL_SEG_REQ) {
+		fclose(self->memfd);
 		return sdo_srv_sm_abort(self, frame_in, frame_out,
 					SDO_ABORT_INVALID_CS);
+	}
 
-	if (sdo_is_toggled(frame_in) != expect_toggled)
+	if (sdo_is_toggled(frame_in) != expect_toggled) {
+		fclose(self->memfd);
 		return sdo_srv_sm_abort(self, frame_in, frame_out,
 					SDO_ABORT_TOGGLE);
+	}
 
 	clear_frame(frame_out);
 

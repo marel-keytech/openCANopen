@@ -71,7 +71,7 @@ struct sdo_srv {
 	struct sdo_srv_dl_sm client[128];
 };
 
-extern void* (sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
+extern void* (*sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
 
 static inline void sdo_srv_init(struct sdo_srv* self)
 {
