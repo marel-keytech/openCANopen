@@ -6,6 +6,8 @@
 #include <string.h>
 #include <linux/can.h>
 
+#include "canopen/byteorder.h"
+
 #define SDO_SEGMENT_IDX 1
 #define SDO_SEGMENT_MAX_SIZE 7
 #define SDO_EXPEDIATED_DATA_IDX 4
@@ -151,14 +153,14 @@ static inline int sdo_is_end_segment(struct can_frame* frame)
 static inline enum sdo_abort_code sdo_get_abort_code(struct can_frame* frame)
 {
 	enum sdo_abort_code code;
-	memcpy(&code, &frame->data[4], 4); /* TODO: fix endianness */
+	byteorder(&code, &frame->data[4], 4);
 	return code;
 }
 
 static inline void sdo_set_abort_code(struct can_frame* frame,
 				      enum sdo_abort_code code)
 {
-	memcpy(&frame->data[4], &code, 4); /* TODO: fix endianness */
+	byteorder(&frame->data[4], &code, 4);
 }
 
 static inline int sdo_is_expediated(struct can_frame* frame)
@@ -196,14 +198,15 @@ static inline void sdo_set_expediated_size(struct can_frame* frame, size_t size)
 
 static inline int sdo_get_index(struct can_frame* frame)
 {
-	/* TODO */
-	return 0;
+	uint16_t value;
+	byteorder(&value, frame->data[SDO_MULTIPLEXER_IDX], 2);
+	return value;
 }
 
 static inline int sdo_get_subindex(struct can_frame* frame)
 {
-	/* TODO */
-	return 0;
+	return frame->data[SDO_MULTIPLEXER_IDX+2];
 }
+
 #endif /* _CANOPEN_SDO_H */
 

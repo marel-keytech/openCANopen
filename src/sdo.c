@@ -1,6 +1,10 @@
+#define _GNU_SOURCE
 #include <assert.h>
+#include <stdio.h>
 #include <linux/can.h>
+
 #include "canopen/sdo.h"
+#include "canopen/byteorder.h"
 
 /* Note: size indication for segmented download is ignored */
 

@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "canopen/byteorder.h"
+
 #ifdef __powerpc__
-static void fix_endianness(void* dst, const void* src, size_t size)
+void byteorder(void* dst, const void* src, size_t size)
 {
     uint8_t* d = (uint8_t*)dst;
     uint8_t* s = (uint8_t*)src;
@@ -21,8 +23,9 @@ static void fix_endianness(void* dst, const void* src, size_t size)
     }
 }
 #else
-static inline void fix_endianness(void* dst, const void* src, size_t size)
+void byteorder(void* dst, const void* src, size_t size)
 {
     memcpy(dst, src, size);
 }
 #endif
+
