@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <linux/can.h>
 #include "canopen/sdo.h"
 
@@ -97,6 +98,9 @@ int sdo_srv_dl_sm_feed(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out)
 {
+	void* addr;
+	size_t size;
+
 	enum sdo_ccs ccs = sdo_get_cs(frame_in);
 
 	if (ccs == SDO_CCS_ABORT)
@@ -106,7 +110,28 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		return sdo_srv_sm_abort(self, frame_in, frame_out,
 					SDO_ABORT_INVALID_CS);
 
+	addr = sdo_srv_get_sdo_addr(sdo_get_index(frame_in),
+				    sdo_get_subindex(frame_in), &size);
+	if (!addr)
+		return sdo_srv_sm_abort(self, frame_in, frame_out,
+					SDO_ABORT_NEXIST);
+	assert(size != 0);
+
 	clear_frame(frame_out);
+
+	if (size <= 4) {
+		memcpy(&frame_out->data[SDO_EXPEDIATED_DATA_IDX], addr, size);
+		sdo_indicate_size(frame_out);
+		sdo_set_expediated_size(frame_out, size);
+		sdo_expediate(frame_out);
+		return self->ul_state = SDO_SRV_UL_DONE;
+	}
+
+	self->memfd = fmemopen(addr, size, "r");
+	if (!self->memfd)
+		return sdo_srv_sm_abort(self, frame_in, frame_out,
+					SDO_ABORT_NOMEM);
+
 	sdo_set_cs(frame_out, SDO_SCS_UL_INIT_RES);
 	copy_multiplexer(frame_out, frame_in);
 
@@ -116,6 +141,8 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		      struct can_frame* frame_out, int expect_toggled)
 {
+	size_t size;
+
 	enum sdo_ccs ccs = sdo_get_cs(frame_in);
 
 	if (ccs == SDO_CCS_ABORT)
@@ -130,6 +157,17 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 					SDO_ABORT_TOGGLE);
 
 	clear_frame(frame_out);
+
+	size = fread(&frame_out->data[SDO_SEGMENT_IDX], SDO_SEGMENT_MAX_SIZE, 1,
+		     self->memfd);
+
+	sdo_set_segment_size(frame_out, size);
+
+	if (feof(self->memfd)) {
+		sdo_end_segment(frame_out);
+		fclose(self->memfd);
+	}
+
 	sdo_set_cs(frame_out, SDO_SCS_UL_SEG_RES);
 	if (expect_toggled)
 		sdo_toggle(frame_out);

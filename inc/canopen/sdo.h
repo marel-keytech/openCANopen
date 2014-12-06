@@ -8,6 +8,8 @@
 
 #define SDO_SEGMENT_IDX 1
 #define SDO_SEGMENT_MAX_SIZE 7
+#define SDO_EXPEDIATED_DATA_IDX 4
+#define SDO_EXPEDIATED_DATA_SIZE 4
 #define SDO_MULTIPLEXER_IDX 1
 #define SDO_MULTIPLEXER_SIZE 3
 
@@ -52,6 +54,8 @@ enum sdo_srv_ul_state {
 enum sdo_abort_code {
 	SDO_ABORT_TOGGLE	= 0x05030000,
 	SDO_ABORT_INVALID_CS	= 0x05040001,
+	SDO_ABORT_NOMEM		= 0x05040005,
+	SDO_ABORT_NEXIST	= 0x06020000,
 };
 
 struct sdo_srv_dl_sm {
@@ -60,6 +64,7 @@ struct sdo_srv_dl_sm {
 
 struct sdo_srv_ul_sm {
 	enum sdo_srv_ul_state ul_state;
+	FILE* memfd;
 };
 
 struct sdo_srv {
@@ -72,8 +77,6 @@ static inline void sdo_srv_init(struct sdo_srv* self)
 {
 	memset(self, 0, sizeof(*self));
 }
-
-FILE* sdo_srv_open_memstream(int index, int subindex);
 
 int sdo_srv_sm_abort(void* self, struct can_frame* frame_in,
 		     struct can_frame* frame_out, enum sdo_abort_code code);
@@ -191,5 +194,16 @@ static inline void sdo_set_expediated_size(struct can_frame* frame, size_t size)
 	frame->data[0] |= n << 2;
 }
 
+static inline int sdo_get_index(struct can_frame* frame)
+{
+	/* TODO */
+	return 0;
+}
+
+static inline int sdo_get_subindex(struct can_frame* frame)
+{
+	/* TODO */
+	return 0;
+}
 #endif /* _CANOPEN_SDO_H */
 
