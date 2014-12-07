@@ -507,6 +507,11 @@ int sdo_srv_ul_segmented_8bytes()
 	return 0;
 }
 
+int sdo_client_dl_init_ok()
+{
+	return 0;
+}
+
 int main()
 {
 	int r = 0;

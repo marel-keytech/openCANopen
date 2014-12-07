@@ -41,7 +41,7 @@ enum sdo_srv_dl_state {
 	SDO_SRV_DL_INIT = 0,
 	SDO_SRV_DL_SEG,
 	SDO_SRV_DL_SEG_TOGGLED,
-	SDO_SRV_DL_DONE
+	SDO_SRV_DL_DONE,
 };
 
 enum sdo_srv_ul_state {
@@ -64,6 +64,8 @@ enum sdo_abort_code {
 
 struct sdo_srv_dl_sm {
 	enum sdo_srv_dl_state dl_state;
+	void* ptr;
+	size_t size;
 };
 
 struct sdo_srv_ul_sm {
