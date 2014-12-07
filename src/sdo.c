@@ -24,13 +24,13 @@ static inline void copy_multiplexer(struct can_frame* dst,
 	       SDO_MULTIPLEXER_SIZE);
 }
 
-int sdo_srv_sm_abort(void* self, struct can_frame* frame_in,
+int sdo_srv_dl_sm_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		     struct can_frame* frame_out, enum sdo_abort_code code)
 {
 	clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_ABORT);
 	sdo_set_abort_code(frame_out, SDO_ABORT_INVALID_CS);
-	return ((struct sdo_srv_dl_sm*)self)->dl_state = SDO_SRV_DL_ABORT;
+	return self->dl_state = SDO_SRV_DL_ABORT;
 }
 
 int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
@@ -42,8 +42,8 @@ int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		return self->dl_state; /* ignore abort */
 
 	if (ccs != SDO_CCS_DL_INIT_REQ)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_INVALID_CS);
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_INVALID_CS);
 
 	clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_DL_INIT_RES);
@@ -61,12 +61,12 @@ int sdo_srv_dl_sm_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		return self->dl_state = SDO_SRV_DL_REMOTE_ABORT;
 
 	if (ccs != SDO_CCS_DL_SEG_REQ)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_INVALID_CS);
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_INVALID_CS);
 
 	if (sdo_is_toggled(frame_in) != expect_toggled)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_TOGGLE);
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_TOGGLE);
 
 	clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_DL_SEG_RES);
@@ -105,6 +105,17 @@ static inline void sdo_srv_ul_sm_close_mem(struct sdo_srv_ul_sm* self)
 	self->memfd = NULL;
 }
 
+int sdo_srv_ul_sm_abort(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
+			struct can_frame* frame_out, enum sdo_abort_code code)
+{
+	sdo_srv_ul_sm_close_mem(self);
+
+	clear_frame(frame_out);
+	sdo_set_cs(frame_out, SDO_SCS_ABORT);
+	sdo_set_abort_code(frame_out, SDO_ABORT_INVALID_CS);
+	return self->ul_state = SDO_SRV_UL_ABORT;
+}
+
 int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out)
 {
@@ -117,8 +128,8 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		return self->ul_state; /* ignore abort */
 
 	if (ccs != SDO_CCS_UL_INIT_REQ)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_INVALID_CS);
+		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_INVALID_CS);
 
 	clear_frame(frame_out);
 
@@ -128,8 +139,8 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	addr = sdo_srv_get_sdo_addr(sdo_get_index(frame_in),
 				    sdo_get_subindex(frame_in), &size);
 	if (!addr)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_NEXIST);
+		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_NEXIST);
 	assert(size != 0);
 
 	if (size <= 4) {
@@ -142,8 +153,8 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 
 	self->memfd = fmemopen(addr, size, "r");
 	if (!self->memfd)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_NOMEM);
+		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_NOMEM);
 
 	sdo_indicate_size(frame_out);
 	sdo_set_indicated_size(frame_out, size);
@@ -174,17 +185,13 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		return self->ul_state = SDO_SRV_UL_REMOTE_ABORT;
 	}
 
-	if (ccs != SDO_CCS_UL_SEG_REQ) {
-		sdo_srv_ul_sm_close_mem(self);
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_INVALID_CS);
-	}
+	if (ccs != SDO_CCS_UL_SEG_REQ)
+		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_INVALID_CS);
 
-	if (sdo_is_toggled(frame_in) != expect_toggled) {
-		sdo_srv_ul_sm_close_mem(self);
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_TOGGLE);
-	}
+	if (sdo_is_toggled(frame_in) != expect_toggled)
+		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_TOGGLE);
 
 	clear_frame(frame_out);
 

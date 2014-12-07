@@ -83,8 +83,8 @@ static inline void sdo_srv_init(struct sdo_srv* self)
 	memset(self, 0, sizeof(*self));
 }
 
-int sdo_srv_sm_abort(void* self, struct can_frame* frame_in,
-		     struct can_frame* frame_out, enum sdo_abort_code code);
+int sdo_srv_dl_sm_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
+			struct can_frame* frame_out, enum sdo_abort_code code);
 
 int sdo_srv_dl_sm_feed(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out);
@@ -93,6 +93,9 @@ int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out);
 int sdo_srv_dl_sm_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		      struct can_frame* frame_out, int expect_toggled);
+
+int sdo_srv_ul_sm_abort(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
+			struct can_frame* frame_out, enum sdo_abort_code code);
 
 int sdo_srv_ul_sm_feed(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out);
