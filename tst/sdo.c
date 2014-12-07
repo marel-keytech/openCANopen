@@ -424,6 +424,8 @@ int sdo_srv_ul_segmented_5bytes()
 	ASSERT_INT_EQ(3, _test_subindex);
 
 	ASSERT_FALSE(sdo_is_expediated(&frame_out));
+	ASSERT_TRUE(sdo_is_size_indicated(&frame_out));
+	ASSERT_INT_EQ(5, sdo_get_indicated_size(&frame_out));
 
 	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
 	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
@@ -452,6 +454,8 @@ int sdo_srv_ul_segmented_7bytes()
 	ASSERT_INT_EQ(SDO_SCS_UL_INIT_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_FALSE(sdo_is_expediated(&frame_out));
+	ASSERT_TRUE(sdo_is_size_indicated(&frame_out));
+	ASSERT_INT_EQ(7, sdo_get_indicated_size(&frame_out));
 
 	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
 	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
@@ -542,5 +546,4 @@ int main()
 	RUN_TEST(sdo_srv_ul_segmented_8bytes);
 	return r;
 }
-
 

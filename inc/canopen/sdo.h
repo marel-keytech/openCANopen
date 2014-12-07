@@ -12,6 +12,7 @@
 #define SDO_SEGMENT_IDX 1
 #define SDO_SEGMENT_MAX_SIZE 7
 #define SDO_EXPEDIATED_DATA_IDX 4
+#define SDO_INDICATED_SIZE_IDX 4
 #define SDO_EXPEDIATED_DATA_SIZE 4
 #define SDO_MULTIPLEXER_IDX 1
 #define SDO_MULTIPLEXER_SIZE 3
@@ -75,6 +76,7 @@ struct sdo_srv {
 };
 
 extern void* (*sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
+extern int (*sdo_srv_write_obj)(int index, int subindex, const void*, size_t*);
 
 static inline void sdo_srv_init(struct sdo_srv* self)
 {
@@ -182,6 +184,18 @@ static inline int sdo_is_size_indicated(struct can_frame* frame)
 static inline void sdo_indicate_size(struct can_frame* frame)
 {
 	frame->data[0] |= 1;
+}
+
+static inline void sdo_set_indicated_size(struct can_frame* frame, size_t size)
+{
+	byteorder(&frame->data[SDO_INDICATED_SIZE_IDX], &size, 4);
+}
+
+static inline size_t sdo_get_indicated_size(struct can_frame* frame)
+{
+	size_t size;
+	byteorder(&size, &frame->data[SDO_INDICATED_SIZE_IDX], 4);
+	return size;
 }
 
 static inline size_t sdo_get_expediated_size(struct can_frame* frame)

@@ -1,4 +1,7 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include <assert.h>
 #include <stdio.h>
 #include <linux/can.h>
@@ -6,9 +9,8 @@
 #include "canopen/sdo.h"
 #include "canopen/byteorder.h"
 
-/* Note: size indication for segmented download is ignored */
-
 void* (*sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
+int (*sdo_srv_write_obj)(int index, int subindex, const void*, size_t*);
 
 static inline void clear_frame(struct can_frame* frame)
 {
@@ -142,6 +144,9 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	if (!self->memfd)
 		return sdo_srv_sm_abort(self, frame_in, frame_out,
 					SDO_ABORT_NOMEM);
+
+	sdo_indicate_size(frame_out);
+	sdo_set_indicated_size(frame_out, size);
 
 no_read:
 	sdo_set_cs(frame_out, SDO_SCS_UL_INIT_RES);
