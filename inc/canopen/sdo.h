@@ -240,5 +240,18 @@ static inline void sdo_set_subindex(struct can_frame* frame, int subindex)
 	frame->data[SDO_MULTIPLEXER_IDX+2] = subindex;
 }
 
+static inline void sdo_clear_frame(struct can_frame* frame)
+{
+	memset(frame, 0, sizeof(*frame));
+}
+
+static inline void sdo_copy_multiplexer(struct can_frame* dst,
+					struct can_frame* src)
+{
+	memcpy(&dst->data[SDO_MULTIPLEXER_IDX], &src->data[SDO_MULTIPLEXER_IDX],
+	       SDO_MULTIPLEXER_SIZE);
+}
+
+
 #endif /* _CANOPEN_SDO_H */
 
