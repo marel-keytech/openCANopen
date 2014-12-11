@@ -2,6 +2,7 @@
 
 #include "tst.h"
 #include "canopen/sdo.h"
+#include "canopen/sdo_srv.h"
 
 #define TEST_DATA_MAX_SIZE 1024
 

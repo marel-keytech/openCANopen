@@ -31,11 +31,11 @@ clean:
 	rm -f src/*.o tst/*.o
 	rm -f tst/test_*
 
-tst/test_sdo: src/sdo.o src/byteorder.o tst/sdo.o
+tst/test_sdo_srv: src/sdo_srv.o src/byteorder.o tst/sdo_srv.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
 .PHONY:
-test: tst/test_sdo
+test: tst/test_sdo_srv
 	run-parts tst
 
 install:

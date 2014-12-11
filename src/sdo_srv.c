@@ -8,7 +8,7 @@
 #include <sys/param.h>
 
 #include "canopen/sdo.h"
-#include "canopen/byteorder.h"
+#include "canopen/sdo_srv.h"
 
 void* (*sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
 int (*sdo_srv_write_obj)(int index, int subindex, const void*, size_t*);
