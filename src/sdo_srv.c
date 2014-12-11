@@ -134,9 +134,6 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	self->ptr = addr;
 	self->size = size;
 	self->index = 0;
-	if (!self->ptr)
-		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
-					   SDO_ABORT_NOMEM);
 
 	sdo_indicate_size(frame_out);
 	sdo_set_indicated_size(frame_out, size);
