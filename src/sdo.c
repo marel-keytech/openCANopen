@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <linux/can.h>
+#include <sys/param.h>
 
 #include "canopen/sdo.h"
 #include "canopen/byteorder.h"
@@ -98,18 +99,9 @@ int sdo_srv_dl_sm_feed(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 	}
 }
 
-static inline void sdo_srv_ul_sm_close_mem(struct sdo_srv_ul_sm* self)
-{
-	if(self->memfd)
-		fclose(self->memfd);
-	self->memfd = NULL;
-}
-
 int sdo_srv_ul_sm_abort(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 			struct can_frame* frame_out, enum sdo_abort_code code)
 {
-	sdo_srv_ul_sm_close_mem(self);
-
 	clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_ABORT);
 	sdo_set_abort_code(frame_out, SDO_ABORT_INVALID_CS);
@@ -151,8 +143,10 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		return self->ul_state = SDO_SRV_UL_DONE;
 	}
 
-	self->memfd = fmemopen(addr, size, "r");
-	if (!self->memfd)
+	self->ptr = addr;
+	self->size = size;
+	self->index = 0;
+	if (!self->ptr)
 		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_NOMEM);
 
@@ -166,13 +160,6 @@ no_read:
 	return self->ul_state = SDO_SRV_UL_SEG;
 }
 
-static inline void force_eof(FILE* stream)
-{
-	int c = fgetc(stream);
-	if(c != EOF)
-		ungetc(c, stream);
-}
-
 int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		      struct can_frame* frame_out, int expect_toggled)
 {
@@ -180,10 +167,8 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 
 	enum sdo_ccs ccs = sdo_get_cs(frame_in);
 
-	if (ccs == SDO_CCS_ABORT) {
-		sdo_srv_ul_sm_close_mem(self);
+	if (ccs == SDO_CCS_ABORT)
 		return self->ul_state = SDO_SRV_UL_REMOTE_ABORT;
-	}
 
 	if (ccs != SDO_CCS_UL_SEG_REQ)
 		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
@@ -195,20 +180,19 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 
 	clear_frame(frame_out);
 
-	if (!self->memfd)
+	if (!self->ptr)
 		goto no_read;
 
-	size = fread(&frame_out->data[SDO_SEGMENT_IDX], 1, SDO_SEGMENT_MAX_SIZE,
-		     self->memfd);
+	size = MIN(self->size, SDO_SEGMENT_MAX_SIZE);
+	memcpy(&frame_out->data[SDO_SEGMENT_IDX], &self->ptr[self->index], size);
+
+	self->size -= size;
+	self->index += size;
 
 	sdo_set_segment_size(frame_out, size);
 
-	if (size == SDO_SEGMENT_MAX_SIZE)
-		force_eof(self->memfd);
-
-	if (feof(self->memfd)) {
+	if (self->size <= 0) {
 		sdo_end_segment(frame_out);
-		sdo_srv_ul_sm_close_mem(self);
 		return self->ul_state = SDO_SRV_UL_DONE;
 	}
 

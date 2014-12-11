@@ -70,7 +70,9 @@ struct sdo_srv_dl_sm {
 
 struct sdo_srv_ul_sm {
 	enum sdo_srv_ul_state ul_state;
-	FILE* memfd;
+	uint8_t* ptr;
+	size_t size;
+	int index;
 };
 
 struct sdo_srv {
