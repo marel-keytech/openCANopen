@@ -13,6 +13,8 @@ enum sdo_req_state {
 };
 
 struct sdo_req {
+	struct sdo_req* next_req;
+
 	int nodeid;
 	int index;
 	int subindex;
@@ -39,13 +41,14 @@ struct sdo_ul_req {
 
 struct sdo_client {
 	struct sdo_req* requests[128];
-	int have_frames; /* has frames to send ?*/
+	struct can_frame outgoing;
+	int have_frame;
 };
 
-int sdo_request_download(struct sdo_dl_req* req, int nodeid, int index,
+int sdo_request_download(struct sdo_client* self, int nodeid, int index,
 			 int subindex, const void* addr, size_t size);
 
-int sdo_request_upload(struct sdo_up_req* req, int nodeid, int index,
+int sdo_request_upload(struct sdo_client* self, int nodeid, int index,
 		       int subindex, size_t expected_size);
 
 int sdo_dl_req_next_frame(struct sdo_dl_req* self, struct can_frame* out);
@@ -60,7 +63,10 @@ static inline void sdo_client_init(struct sdo_client* self)
 }
 
 int sdo_client_feed(struct sdo_client* self, const struct can_frame* frame);
-int sdo_client_get_frame(struct sdo_client* self, struct can_frame* out);
+static inline struct can_frame* sdo_client_get_frame(struct sdo_client* self)
+{
+	return self->have_frame ? &self->outgoing : NULL;
+}
 
 #endif /* _CANOPEN_SDO_CLIENT_H */
 
