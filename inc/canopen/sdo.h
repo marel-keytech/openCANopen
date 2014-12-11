@@ -60,6 +60,8 @@ enum sdo_abort_code {
 	SDO_ABORT_INVALID_CS	= 0x05040001,
 	SDO_ABORT_NOMEM		= 0x05040005,
 	SDO_ABORT_NEXIST	= 0x06020000,
+	SDO_ABORT_SIZE          = 5, /* TODO: invalid size */
+	SDO_ABORT_TOO_LONG      = 6, /* TODO: too long sdo */
 };
 
 static inline int sdo_get_cs(struct can_frame* frame)
