@@ -34,25 +34,12 @@ static int dl_expediated(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 	return self->dl_state = SDO_SRV_DL_DONE;
 }
 
-int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
-		       struct can_frame* frame_out)
+static int dl_init_write_frame(struct sdo_srv_dl_sm* self,
+			       struct can_frame* frame_in,
+			       struct can_frame* frame_out)
 {
 	void* addr;
 	size_t size;
-
-	enum sdo_ccs ccs = sdo_get_cs(frame_in);
-
-	if (ccs == SDO_CCS_ABORT)
-		return self->dl_state; /* ignore abort */
-
-	if (ccs != SDO_CCS_DL_INIT_REQ)
-		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
-					   SDO_ABORT_INVALID_CS);
-
-	sdo_clear_frame(frame_out);
-
-	if (!sdo_srv_get_sdo_addr)
-		goto no_write;
 
 	addr = sdo_srv_get_sdo_addr(sdo_get_index(frame_in),
 				    sdo_get_subindex(frame_in), &size);
@@ -72,17 +59,56 @@ int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 	    sdo_get_indicated_size(frame_in) != size)
 		return sdo_srv_dl_sm_abort(self, frame_in, frame_out, SDO_ABORT_SIZE);
 
-no_write:
+	return 0;
+}
+
+int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
+		       struct can_frame* frame_out)
+{
+
+	enum sdo_ccs ccs = sdo_get_cs(frame_in);
+
+	if (ccs == SDO_CCS_ABORT)
+		return self->dl_state; /* ignore abort */
+
+	if (ccs != SDO_CCS_DL_INIT_REQ)
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_INVALID_CS);
+
+	sdo_clear_frame(frame_out);
+
+	if (sdo_srv_get_sdo_addr)
+		if (dl_init_write_frame(self, frame_in, frame_out) < 0)
+			return -1;
+
 	sdo_set_cs(frame_out, SDO_SCS_DL_INIT_RES);
 	sdo_copy_multiplexer(frame_out, frame_in);
 
 	return self->dl_state = SDO_SRV_DL_SEG;
 }
 
+
+static int dl_seg_write_frame(struct sdo_srv_dl_sm* self,
+			      struct can_frame* frame_in,
+			      struct can_frame* frame_out)
+{
+	size_t size = sdo_get_segment_size(frame_in);
+
+	if (size > self->size)
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_TOO_LONG);
+
+	memcpy(&self->ptr[self->index], &frame_in->data[SDO_SEGMENT_IDX], size);
+
+	self->index += size;
+	self->size -= size;
+
+	return 0;
+}
+
 int sdo_srv_dl_sm_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 		      struct can_frame* frame_out, int expect_toggled)
 {
-	size_t size;
 
 	enum sdo_ccs ccs = sdo_get_cs(frame_in);
 
@@ -99,21 +125,10 @@ int sdo_srv_dl_sm_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 
 	sdo_clear_frame(frame_out);
 
-	if (!self->ptr)
-		goto no_write;
+	if (self->ptr)
+		if (dl_seg_write_frame(self, frame_in, frame_out) < 0)
+			return -1;
 
-	size = sdo_get_segment_size(frame_in);
-
-	if (size > self->size)
-		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
-					   SDO_ABORT_TOO_LONG);
-
-	memcpy(&self->ptr[self->index], &frame_in->data[SDO_SEGMENT_IDX], size);
-
-	self->index += size;
-	self->size -= size;
-
-no_write:
 	sdo_set_cs(frame_out, SDO_SCS_DL_SEG_RES);
 	if (expect_toggled)
 		sdo_toggle(frame_out);
@@ -152,25 +167,12 @@ int sdo_srv_ul_sm_abort(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	return self->ul_state = SDO_SRV_UL_ABORT;
 }
 
-int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
-		       struct can_frame* frame_out)
+static int ul_init_read_frame(struct sdo_srv_ul_sm* self,
+			      struct can_frame* frame_in,
+			      struct can_frame* frame_out)
 {
 	void* addr;
 	size_t size;
-
-	enum sdo_ccs ccs = sdo_get_cs(frame_in);
-
-	if (ccs == SDO_CCS_ABORT)
-		return self->ul_state; /* ignore abort */
-
-	if (ccs != SDO_CCS_UL_INIT_REQ)
-		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
-					   SDO_ABORT_INVALID_CS);
-
-	sdo_clear_frame(frame_out);
-
-	if (!sdo_srv_get_sdo_addr)
-		goto no_read;
 
 	addr = sdo_srv_get_sdo_addr(sdo_get_index(frame_in),
 				    sdo_get_subindex(frame_in), &size);
@@ -194,18 +196,57 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	sdo_indicate_size(frame_out);
 	sdo_set_indicated_size(frame_out, size);
 
-no_read:
+	return 0;
+}
+
+int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
+		       struct can_frame* frame_out)
+{
+	enum sdo_ccs ccs = sdo_get_cs(frame_in);
+
+	if (ccs == SDO_CCS_ABORT)
+		return self->ul_state; /* ignore abort */
+
+	if (ccs != SDO_CCS_UL_INIT_REQ)
+		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_INVALID_CS);
+
+	sdo_clear_frame(frame_out);
+
+	if (sdo_srv_get_sdo_addr)
+		if (ul_init_read_frame(self, frame_in, frame_out) < 0)
+			return -1;
+
 	sdo_set_cs(frame_out, SDO_SCS_UL_INIT_RES);
 	sdo_copy_multiplexer(frame_out, frame_in);
 
 	return self->ul_state = SDO_SRV_UL_SEG;
 }
 
+static int ul_seg_read_frame(struct sdo_srv_ul_sm* self,
+			     struct can_frame* frame_in,
+			     struct can_frame* frame_out)
+{
+	size_t size = MIN(self->size, SDO_SEGMENT_MAX_SIZE);
+
+	memcpy(&frame_out->data[SDO_SEGMENT_IDX], &self->ptr[self->index], size);
+
+	self->size -= size;
+	self->index += size;
+
+	sdo_set_segment_size(frame_out, size);
+
+	if (self->size <= 0) {
+		sdo_end_segment(frame_out);
+		return self->ul_state = SDO_SRV_UL_DONE;
+	}
+
+	return 0;
+}
+
 int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 		      struct can_frame* frame_out, int expect_toggled)
 {
-	size_t size;
-
 	enum sdo_ccs ccs = sdo_get_cs(frame_in);
 
 	if (ccs == SDO_CCS_ABORT)
@@ -221,23 +262,10 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 
 	sdo_clear_frame(frame_out);
 
-	if (!self->ptr)
-		goto no_read;
+	if (self->ptr)
+		if (ul_seg_read_frame(self, frame_in, frame_out) < 0)
+			return -1;
 
-	size = MIN(self->size, SDO_SEGMENT_MAX_SIZE);
-	memcpy(&frame_out->data[SDO_SEGMENT_IDX], &self->ptr[self->index], size);
-
-	self->size -= size;
-	self->index += size;
-
-	sdo_set_segment_size(frame_out, size);
-
-	if (self->size <= 0) {
-		sdo_end_segment(frame_out);
-		return self->ul_state = SDO_SRV_UL_DONE;
-	}
-
-no_read:
 	sdo_set_cs(frame_out, SDO_SCS_UL_SEG_RES);
 	if (expect_toggled)
 		sdo_toggle(frame_out);

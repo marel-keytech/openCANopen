@@ -365,8 +365,7 @@ int sdo_srv_ul_expediated_1byte()
 	sdo_set_index(&frame_in, 1337);
 	sdo_set_subindex(&frame_in, 1);
 
-	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 
 	ASSERT_INT_EQ(1337, _test_index);
 	ASSERT_INT_EQ(1, _test_subindex);
@@ -391,8 +390,7 @@ int sdo_srv_ul_expediated_4bytes()
 	sdo_set_index(&frame_in, 1234);
 	sdo_set_subindex(&frame_in, 2);
 
-	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 
 	ASSERT_INT_EQ(1234, _test_index);
 	ASSERT_INT_EQ(2, _test_subindex);
@@ -417,8 +415,7 @@ int sdo_srv_ul_segmented_5bytes()
 	sdo_set_index(&frame_in, 1000);
 	sdo_set_subindex(&frame_in, 3);
 
-	ASSERT_INT_EQ(SDO_SRV_UL_SEG, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 	ASSERT_INT_EQ(SDO_SCS_UL_INIT_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_INT_EQ(1000, _test_index);
@@ -429,8 +426,7 @@ int sdo_srv_ul_segmented_5bytes()
 	ASSERT_INT_EQ(5, sdo_get_indicated_size(&frame_out));
 
 	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
-	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_TRUE(sdo_is_end_segment(&frame_out));
@@ -450,8 +446,7 @@ int sdo_srv_ul_segmented_7bytes()
 
 	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
 
-	ASSERT_INT_EQ(SDO_SRV_UL_SEG, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 	ASSERT_INT_EQ(SDO_SCS_UL_INIT_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_FALSE(sdo_is_expediated(&frame_out));
@@ -459,8 +454,7 @@ int sdo_srv_ul_segmented_7bytes()
 	ASSERT_INT_EQ(7, sdo_get_indicated_size(&frame_out));
 
 	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
-	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_TRUE(sdo_is_end_segment(&frame_out));
@@ -480,15 +474,13 @@ int sdo_srv_ul_segmented_8bytes()
 
 	sdo_set_cs(&frame_in, SDO_CCS_UL_INIT_REQ);
 
-	ASSERT_INT_EQ(SDO_SRV_UL_SEG, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 	ASSERT_INT_EQ(SDO_SCS_UL_INIT_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_FALSE(sdo_is_expediated(&frame_out));
 
 	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
-	ASSERT_INT_EQ(SDO_SRV_UL_SEG_TOGGLED, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_FALSE(sdo_is_end_segment(&frame_out));
@@ -497,8 +489,7 @@ int sdo_srv_ul_segmented_8bytes()
 
 	sdo_set_cs(&frame_in, SDO_CCS_UL_SEG_REQ);
 	sdo_toggle(&frame_in);
-	ASSERT_INT_EQ(SDO_SRV_UL_DONE, 
-		      sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_GE(0, sdo_srv_ul_sm_feed(&sm, &frame_in, &frame_out));
 	ASSERT_INT_EQ(SDO_SCS_UL_SEG_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_TRUE(sdo_is_end_segment(&frame_out));
