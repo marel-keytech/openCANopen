@@ -325,6 +325,75 @@ int sdo_srv_dl_segmented_5bytes()
 	return 0;
 }
 
+int sdo_srv_dl_segmented_7bytes()
+{
+	struct sdo_srv_dl_sm sm = { .dl_state = SDO_SRV_DL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	memset(_test_data, -1, TEST_DATA_MAX_SIZE);
+	_test_size = 7;
+
+	sdo_indicate_size(&frame_in);
+	sdo_set_indicated_size(&frame_in, 7);
+
+	sdo_set_cs(&frame_in, SDO_CCS_DL_INIT_REQ);
+	ASSERT_INT_GE(0, sdo_srv_dl_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SRV_DL_SEG, sm.dl_state);
+	ASSERT_INT_EQ(SDO_SCS_DL_INIT_RES, sdo_get_cs(&frame_out));
+
+	sdo_clear_frame(&frame_in);
+	strcpy((char*)&frame_in.data[SDO_SEGMENT_IDX], "123456");
+	sdo_set_cs(&frame_in, SDO_CCS_DL_SEG_REQ);
+	sdo_set_segment_size(&frame_in, 7);
+	sdo_end_segment(&frame_in);
+	ASSERT_INT_GE(0, sdo_srv_dl_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SRV_DL_DONE, sm.dl_state);
+	ASSERT_INT_EQ(SDO_SCS_DL_SEG_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_STR_EQ("123456", _test_data);
+
+	return 0;
+}
+
+int sdo_srv_dl_segmented_8bytes()
+{
+	struct sdo_srv_dl_sm sm = { .dl_state = SDO_SRV_DL_START };
+	struct can_frame frame_in = { 0 }, frame_out = { 0 };
+
+	memset(_test_data, -1, TEST_DATA_MAX_SIZE);
+	_test_size = 8;
+
+	sdo_indicate_size(&frame_in);
+	sdo_set_indicated_size(&frame_in, 8);
+
+	sdo_set_cs(&frame_in, SDO_CCS_DL_INIT_REQ);
+	ASSERT_INT_GE(0, sdo_srv_dl_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SRV_DL_SEG, sm.dl_state);
+	ASSERT_INT_EQ(SDO_SCS_DL_INIT_RES, sdo_get_cs(&frame_out));
+
+	sdo_clear_frame(&frame_in);
+	strcpy((char*)&frame_in.data[SDO_SEGMENT_IDX], "123456");
+	sdo_set_cs(&frame_in, SDO_CCS_DL_SEG_REQ);
+	sdo_set_segment_size(&frame_in, 7);
+	ASSERT_INT_GE(0, sdo_srv_dl_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SRV_DL_SEG_TOGGLED, sm.dl_state);
+	ASSERT_INT_EQ(SDO_SCS_DL_SEG_RES, sdo_get_cs(&frame_out));
+
+	frame_in.data[SDO_SEGMENT_IDX] = 42;
+	sdo_set_cs(&frame_in, SDO_CCS_DL_SEG_REQ);
+	sdo_set_segment_size(&frame_in, 1);
+	sdo_end_segment(&frame_in);
+	sdo_toggle(&frame_in);
+	ASSERT_INT_GE(0, sdo_srv_dl_sm_feed(&sm, &frame_in, &frame_out));
+	ASSERT_INT_EQ(SDO_SRV_DL_DONE, sm.dl_state);
+	ASSERT_INT_EQ(SDO_SCS_DL_SEG_RES, sdo_get_cs(&frame_out));
+
+	ASSERT_STR_EQ("123456", _test_data);
+	ASSERT_INT_EQ(42, _test_data[7]);
+
+	return 0;
+}
+
 int sdo_srv_ul_init_ok()
 {
 	struct sdo_srv_ul_sm sm = { .ul_state = SDO_SRV_UL_START };
@@ -606,10 +675,8 @@ int main()
 	RUN_TEST(sdo_srv_dl_expediated_1byte);
 	RUN_TEST(sdo_srv_dl_expediated_4bytes);
 	RUN_TEST(sdo_srv_dl_segmented_5bytes);
-	/*
 	RUN_TEST(sdo_srv_dl_segmented_7bytes);
 	RUN_TEST(sdo_srv_dl_segmented_8bytes);
-	*/
 
 	fprintf(stderr, "\nServer upload state machine:\n");
 	sdo_srv_get_sdo_addr = NULL;
