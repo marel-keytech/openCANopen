@@ -17,7 +17,7 @@ int my_sdo_get_obj(struct sdo_obj* obj, int index, int subindex)
 	_test_subindex = subindex;
 	obj->addr = _test_data;
 	obj->size = _test_size;
-	obj->flags = 0;
+	obj->flags = SDO_OBJ_RW | SDO_OBJ_EQ;
 	return 0;
 }
 

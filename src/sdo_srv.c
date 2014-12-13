@@ -53,6 +53,10 @@ static int dl_init_write_frame(struct sdo_srv_dl_sm* self,
 	if (sdo_get_obj(&obj, index, subindex) < 0)
 		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_NEXIST);
+	
+	if (!(obj.flags & SDO_OBJ_W))
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_RO);
 
 	self->ptr = obj.addr;
 	self->size = obj.size;
@@ -185,6 +189,10 @@ static int ul_init_read_frame(struct sdo_srv_ul_sm* self,
 	if (sdo_get_obj(&obj, index, subindex) < 0)
 		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_NEXIST);
+
+	if (!(obj.flags & SDO_OBJ_R))
+		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_WO);
 
 	if (obj.size <= SDO_EXPEDIATED_DATA_SIZE) {
 		memcpy(&frame_out->data[SDO_EXPEDIATED_DATA_IDX], obj.addr,

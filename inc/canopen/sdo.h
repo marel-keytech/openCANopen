@@ -63,6 +63,8 @@ enum sdo_abort_code {
 	SDO_ABORT_SIZE          = 0x06070010,
 	SDO_ABORT_TOO_LONG      = 0x06070012,
 	SDO_ABORT_TOO_SHORT     = 0x06070013,
+	SDO_ABORT_RO            = 0x06010001,
+	SDO_ABORT_WO            = 0x06010002,
 };
 
 enum sdo_obj_flags {
