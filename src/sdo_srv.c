@@ -102,10 +102,16 @@ static int dl_seg_write_frame(struct sdo_srv_dl_sm* self,
 			      struct can_frame* frame_out)
 {
 	size_t size = sdo_get_segment_size(frame_in);
+	enum sdo_abort_code abort_code;
 
 	if (size > self->obj.size)
 		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_TOO_LONG);
+
+	if (sdo_is_end_segment(frame_in) &&
+	    !sdo_match_obj_size(&self->obj, size, &abort_code))
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   abort_code);
 
 	memcpy(&self->obj.addr[self->index], &frame_in->data[SDO_SEGMENT_IDX],
 	       size);
