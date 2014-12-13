@@ -3,6 +3,8 @@
 
 #include <string.h>
 
+#include "canopen/sdo.h"
+
 struct sdo_srv_dl_sm {
 	enum sdo_srv_dl_state dl_state;
 	uint8_t* ptr;
@@ -54,6 +56,9 @@ static inline void sdo_srv_dl_sm_reset(struct sdo_srv_dl_sm* self)
 }
 
 int sdo_srv_feed(struct sdo_srv* self, struct can_frame* frame);
+
+int sdo_match_obj_size(struct sdo_obj* obj, size_t size,
+		       enum sdo_abort_code* code);
 
 #endif /* _CANOPEN_SDO_SRV_H */
 

@@ -17,6 +17,7 @@ int my_sdo_get_obj(struct sdo_obj* obj, int index, int subindex)
 	_test_subindex = subindex;
 	obj->addr = _test_data;
 	obj->size = _test_size;
+	obj->flags = 0;
 	return 0;
 }
 
@@ -651,6 +652,126 @@ int sdo_srv_ul_segmented_8bytes()
 	return 0;
 }
 
+int sdo_match_obj_size_default()
+{
+	struct sdo_obj obj;
+	enum sdo_abort_code code = 0xff;
+
+	obj.flags = 0;
+	obj.size = 42;
+	
+	ASSERT_TRUE(sdo_match_obj_size(&obj, 42, &code));
+	ASSERT_INT_EQ(0, code);
+
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 41, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_SHORT, code);
+
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 43, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_LONG, code);
+
+	return 0;
+}
+
+int sdo_match_obj_size_eq()
+{
+	struct sdo_obj obj;
+	enum sdo_abort_code code = 0xff;
+
+	obj.flags = SDO_OBJ_EQ;
+	obj.size = 42;
+	
+	ASSERT_TRUE(sdo_match_obj_size(&obj, 42, &code));
+	ASSERT_INT_EQ(0, code);
+
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 41, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_SHORT, code);
+
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 43, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_LONG, code);
+
+	return 0;
+}
+
+int sdo_match_obj_size_lt()
+{
+	struct sdo_obj obj;
+	enum sdo_abort_code code = 0xff;
+
+	obj.flags = SDO_OBJ_LT;
+	obj.size = 42;
+	
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 42, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_LONG, code);
+
+	ASSERT_TRUE(sdo_match_obj_size(&obj, 41, &code));
+	ASSERT_INT_EQ(0, code);
+
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 43, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_LONG, code);
+
+	return 0;
+}
+
+int sdo_match_obj_size_le()
+{
+	struct sdo_obj obj;
+	enum sdo_abort_code code = 0xff;
+
+	obj.flags = SDO_OBJ_LE;
+	obj.size = 42;
+	
+	ASSERT_TRUE(sdo_match_obj_size(&obj, 42, &code));
+	ASSERT_INT_EQ(0, code);
+
+	ASSERT_TRUE(sdo_match_obj_size(&obj, 41, &code));
+	ASSERT_INT_EQ(0, code);
+
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 43, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_LONG, code);
+
+	return 0;
+}
+
+int sdo_match_obj_size_gt()
+{
+	struct sdo_obj obj;
+	enum sdo_abort_code code = 0xff;
+
+	obj.flags = SDO_OBJ_GT;
+	obj.size = 42;
+	
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 42, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_SHORT, code);
+
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 41, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_SHORT, code);
+
+	ASSERT_TRUE(sdo_match_obj_size(&obj, 43, &code));
+	ASSERT_INT_EQ(0, code);
+
+	return 0;
+}
+
+int sdo_match_obj_size_ge()
+{
+	struct sdo_obj obj;
+	enum sdo_abort_code code = 0xff;
+
+	obj.flags = SDO_OBJ_GE;
+	obj.size = 42;
+	
+	ASSERT_TRUE(sdo_match_obj_size(&obj, 42, &code));
+	ASSERT_INT_EQ(0, code);
+
+	ASSERT_FALSE(sdo_match_obj_size(&obj, 41, &code));
+	ASSERT_INT_EQ(SDO_ABORT_TOO_SHORT, code);
+
+	ASSERT_TRUE(sdo_match_obj_size(&obj, 43, &code));
+	ASSERT_INT_EQ(0, code);
+
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -660,6 +781,14 @@ int main()
 	RUN_TEST(set_get_cs);
 	RUN_TEST(set_get_segment_size);
 	RUN_TEST(set_get_abort_code);
+
+	fprintf(stderr, "\nsdo_match_obj_size:\n");
+	RUN_TEST(sdo_match_obj_size_default);
+	RUN_TEST(sdo_match_obj_size_eq);
+	RUN_TEST(sdo_match_obj_size_lt);
+	RUN_TEST(sdo_match_obj_size_le);
+	RUN_TEST(sdo_match_obj_size_gt);
+	RUN_TEST(sdo_match_obj_size_ge);
 
 	fprintf(stderr, "\nServer download state machine:\n");
 	RUN_TEST(sdo_srv_dl_init_ok);
@@ -698,6 +827,7 @@ int main()
 	RUN_TEST(sdo_srv_ul_segmented_5bytes);
 	RUN_TEST(sdo_srv_ul_segmented_7bytes);
 	RUN_TEST(sdo_srv_ul_segmented_8bytes);
+
 	return r;
 }
 

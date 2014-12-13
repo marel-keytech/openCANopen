@@ -22,12 +22,17 @@ int sdo_srv_dl_sm_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 }
 
 static int dl_expediated(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
-			 struct can_frame* frame_out)
+			 struct can_frame* frame_out, struct sdo_obj* obj)
 {
-	if (sdo_is_size_indicated(frame_in) &&
-	    sdo_get_expediated_size(frame_in) != self->size)
-		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
-					   SDO_ABORT_SIZE);
+	enum sdo_abort_code abort_code;
+	size_t size;
+
+	if (sdo_is_size_indicated(frame_in)) {
+		size = sdo_get_expediated_size(frame_in);
+		if (!sdo_match_obj_size(obj, size, &abort_code))
+			return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+						   abort_code);
+	}
 
 	memcpy(self->ptr, &frame_in->data[SDO_EXPEDIATED_DATA_IDX], self->size);
 
@@ -39,6 +44,8 @@ static int dl_init_write_frame(struct sdo_srv_dl_sm* self,
 			       struct can_frame* frame_out)
 {
 	struct sdo_obj obj;
+	size_t size;
+	enum sdo_abort_code abort_code;
 
 	int index = sdo_get_index(frame_in);
 	int subindex = sdo_get_subindex(frame_in);
@@ -52,12 +59,14 @@ static int dl_init_write_frame(struct sdo_srv_dl_sm* self,
 	self->index = 0;
 
 	if (sdo_is_expediated(frame_in))
-		return dl_expediated(self, frame_in, frame_out);
+		return dl_expediated(self, frame_in, frame_out, &obj);
 
-	if (sdo_is_size_indicated(frame_in) &&
-	    sdo_get_indicated_size(frame_in) != obj.size)
-		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
-					   SDO_ABORT_SIZE);
+	if (sdo_is_size_indicated(frame_in)) {
+		size = sdo_get_indicated_size(frame_in);
+		if (!sdo_match_obj_size(&obj, size, &abort_code))
+			return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+						   abort_code);
+	}
 
 	return self->dl_state;
 }
@@ -285,5 +294,39 @@ int sdo_srv_ul_sm_feed(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	default:
 		return SDO_SRV_UL_PLEASE_RESET;
 	}
+}
+
+int sdo_match_obj_size(struct sdo_obj* obj, size_t size,
+		       enum sdo_abort_code* code)
+{
+	switch (obj->flags & SDO_OBJ_MATCH_MASK)
+	{
+	case 0:
+	case SDO_OBJ_EQ:
+		if (size > obj->size)
+			*code = SDO_ABORT_TOO_LONG;
+		else if (size < obj->size)
+			*code = SDO_ABORT_TOO_SHORT;
+		else
+			*code = 0;
+		break;
+	case SDO_OBJ_LT:
+		*code = size < obj->size ? 0 : SDO_ABORT_TOO_LONG;
+		break;
+	case SDO_OBJ_LE:
+		*code = size <= obj->size ? 0 : SDO_ABORT_TOO_LONG;
+		break;
+	case SDO_OBJ_GT:
+		*code = size > obj->size ? 0 : SDO_ABORT_TOO_SHORT;
+		break;
+	case SDO_OBJ_GE:
+		*code = size >= obj->size ? 0 : SDO_ABORT_TOO_SHORT;
+		break;
+	case SDO_OBJ_MATCH_MASK: /* don't care */
+		*code = 0;
+		break;
+	}
+
+	return *code == 0;
 }
 

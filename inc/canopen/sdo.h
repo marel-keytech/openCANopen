@@ -60,8 +60,9 @@ enum sdo_abort_code {
 	SDO_ABORT_INVALID_CS	= 0x05040001,
 	SDO_ABORT_NOMEM		= 0x05040005,
 	SDO_ABORT_NEXIST	= 0x06020000,
-	SDO_ABORT_SIZE          = 5, /* TODO: invalid size */
-	SDO_ABORT_TOO_LONG      = 6, /* TODO: too long sdo */
+	SDO_ABORT_SIZE          = 0x06070010,
+	SDO_ABORT_TOO_LONG      = 0x06070012,
+	SDO_ABORT_TOO_SHORT     = 0x06070013,
 };
 
 enum sdo_obj_flags {
@@ -75,6 +76,8 @@ enum sdo_obj_flags {
 	
 	SDO_OBJ_LE = SDO_OBJ_EQ | SDO_OBJ_LT,
 	SDO_OBJ_GE = SDO_OBJ_EQ | SDO_OBJ_GT,
+
+	SDO_OBJ_MATCH_MASK = SDO_OBJ_EQ | SDO_OBJ_LT | SDO_OBJ_GT,
 };
 
 struct sdo_obj {
