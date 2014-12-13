@@ -1,4 +1,4 @@
-*.so
+*.so*
 *.o
 *.swp
 tst/test_*
