@@ -22,19 +22,20 @@ int sdo_srv_dl_sm_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 }
 
 static int dl_expediated(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
-			 struct can_frame* frame_out, struct sdo_obj* obj)
+			 struct can_frame* frame_out)
 {
 	enum sdo_abort_code abort_code;
 	size_t size;
 
 	if (sdo_is_size_indicated(frame_in)) {
 		size = sdo_get_expediated_size(frame_in);
-		if (!sdo_match_obj_size(obj, size, &abort_code))
+		if (!sdo_match_obj_size(&self->obj, size, &abort_code))
 			return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
 						   abort_code);
 	}
 
-	memcpy(self->ptr, &frame_in->data[SDO_EXPEDIATED_DATA_IDX], self->size);
+	memcpy(self->obj.addr, &frame_in->data[SDO_EXPEDIATED_DATA_IDX],
+	       self->obj.size);
 
 	return self->dl_state = SDO_SRV_DL_DONE;
 }
@@ -43,31 +44,28 @@ static int dl_init_write_frame(struct sdo_srv_dl_sm* self,
 			       struct can_frame* frame_in,
 			       struct can_frame* frame_out)
 {
-	struct sdo_obj obj;
 	size_t size;
 	enum sdo_abort_code abort_code;
 
 	int index = sdo_get_index(frame_in);
 	int subindex = sdo_get_subindex(frame_in);
 
-	if (sdo_get_obj(&obj, index, subindex) < 0)
+	if (sdo_get_obj(&self->obj, index, subindex) < 0)
 		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_NEXIST);
 	
-	if (!(obj.flags & SDO_OBJ_W))
+	if (!(self->obj.flags & SDO_OBJ_W))
 		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_RO);
 
-	self->ptr = obj.addr;
-	self->size = obj.size;
 	self->index = 0;
 
 	if (sdo_is_expediated(frame_in))
-		return dl_expediated(self, frame_in, frame_out, &obj);
+		return dl_expediated(self, frame_in, frame_out);
 
 	if (sdo_is_size_indicated(frame_in)) {
 		size = sdo_get_indicated_size(frame_in);
-		if (!sdo_match_obj_size(&obj, size, &abort_code))
+		if (!sdo_match_obj_size(&self->obj, size, &abort_code))
 			return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
 						   abort_code);
 	}
@@ -105,14 +103,15 @@ static int dl_seg_write_frame(struct sdo_srv_dl_sm* self,
 {
 	size_t size = sdo_get_segment_size(frame_in);
 
-	if (size > self->size)
+	if (size > self->obj.size)
 		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_TOO_LONG);
 
-	memcpy(&self->ptr[self->index], &frame_in->data[SDO_SEGMENT_IDX], size);
+	memcpy(&self->obj.addr[self->index], &frame_in->data[SDO_SEGMENT_IDX],
+	       size);
 
 	self->index += size;
-	self->size -= size;
+	self->obj.size -= size;
 
 	return 0;
 }
@@ -139,7 +138,7 @@ int sdo_srv_dl_sm_seg(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 	if (expect_toggled)
 		sdo_toggle(frame_out);
 
-	if (self->ptr)
+	if (self->obj.addr)
 		if (dl_seg_write_frame(self, frame_in, frame_out) != 0)
 			return self->dl_state;
 
@@ -181,34 +180,30 @@ static int ul_init_read_frame(struct sdo_srv_ul_sm* self,
 			      struct can_frame* frame_in,
 			      struct can_frame* frame_out)
 {
-	struct sdo_obj obj;
-
 	int index = sdo_get_index(frame_in);
 	int subindex = sdo_get_subindex(frame_in);
 
-	if (sdo_get_obj(&obj, index, subindex) < 0)
+	if (sdo_get_obj(&self->obj, index, subindex) < 0)
 		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_NEXIST);
 
-	if (!(obj.flags & SDO_OBJ_R))
+	if (!(self->obj.flags & SDO_OBJ_R))
 		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_WO);
 
-	if (obj.size <= SDO_EXPEDIATED_DATA_SIZE) {
-		memcpy(&frame_out->data[SDO_EXPEDIATED_DATA_IDX], obj.addr,
-		       obj.size);
+	if (self->obj.size <= SDO_EXPEDIATED_DATA_SIZE) {
+		memcpy(&frame_out->data[SDO_EXPEDIATED_DATA_IDX],
+		       self->obj.addr, self->obj.size);
 		sdo_indicate_size(frame_out);
-		sdo_set_expediated_size(frame_out, obj.size);
+		sdo_set_expediated_size(frame_out, self->obj.size);
 		sdo_expediate(frame_out);
 		return self->ul_state = SDO_SRV_UL_DONE;
 	}
 
-	self->ptr = obj.addr;
-	self->size = obj.size;
 	self->index = 0;
 
 	sdo_indicate_size(frame_out);
-	sdo_set_indicated_size(frame_out, obj.size);
+	sdo_set_indicated_size(frame_out, self->obj.size);
 
 	return self->ul_state;
 }
@@ -241,16 +236,17 @@ static int ul_seg_read_frame(struct sdo_srv_ul_sm* self,
 			     struct can_frame* frame_in,
 			     struct can_frame* frame_out)
 {
-	size_t size = MIN(self->size, SDO_SEGMENT_MAX_SIZE);
+	size_t size = MIN(self->obj.size, SDO_SEGMENT_MAX_SIZE);
 
-	memcpy(&frame_out->data[SDO_SEGMENT_IDX], &self->ptr[self->index], size);
+	memcpy(&frame_out->data[SDO_SEGMENT_IDX], &self->obj.addr[self->index],
+	       size);
 
-	self->size -= size;
+	self->obj.size -= size;
 	self->index += size;
 
 	sdo_set_segment_size(frame_out, size);
 
-	if (self->size <= 0) {
+	if (self->obj.size <= 0) {
 		sdo_end_segment(frame_out);
 		return self->ul_state = SDO_SRV_UL_DONE;
 	}
@@ -280,7 +276,7 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	if (expect_toggled)
 		sdo_toggle(frame_out);
 
-	if (self->ptr)
+	if (self->obj.addr)
 		if (ul_seg_read_frame(self, frame_in, frame_out) != 0)
 			return self->ul_state;
 
