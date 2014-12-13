@@ -10,8 +10,7 @@
 #include "canopen/sdo.h"
 #include "canopen/sdo_srv.h"
 
-void* (*sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
-int (*sdo_srv_write_obj)(int index, int subindex, const void*, size_t*);
+int (*sdo_get_obj)(struct sdo_obj* obj, int index, int subindex);
 
 int sdo_srv_dl_sm_abort(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 			struct can_frame* frame_out, enum sdo_abort_code code)
@@ -27,7 +26,8 @@ static int dl_expediated(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 {
 	if (sdo_is_size_indicated(frame_in) &&
 	    sdo_get_expediated_size(frame_in) != self->size)
-		return sdo_srv_dl_sm_abort(self, frame_in, frame_out, SDO_ABORT_SIZE);
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_SIZE);
 
 	memcpy(self->ptr, &frame_in->data[SDO_EXPEDIATED_DATA_IDX], self->size);
 
@@ -38,26 +38,26 @@ static int dl_init_write_frame(struct sdo_srv_dl_sm* self,
 			       struct can_frame* frame_in,
 			       struct can_frame* frame_out)
 {
-	void* addr;
-	size_t size;
+	struct sdo_obj obj;
 
-	addr = sdo_srv_get_sdo_addr(sdo_get_index(frame_in),
-				    sdo_get_subindex(frame_in), &size);
-	if (!addr)
+	int index = sdo_get_index(frame_in);
+	int subindex = sdo_get_subindex(frame_in);
+
+	if (sdo_get_obj(&obj, index, subindex) < 0)
 		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_NEXIST);
-	assert(size != 0);
 
-	self->ptr = addr;
-	self->size = size;
+	self->ptr = obj.addr;
+	self->size = obj.size;
 	self->index = 0;
 
 	if (sdo_is_expediated(frame_in))
 		return dl_expediated(self, frame_in, frame_out);
 
 	if (sdo_is_size_indicated(frame_in) &&
-	    sdo_get_indicated_size(frame_in) != size)
-		return sdo_srv_dl_sm_abort(self, frame_in, frame_out, SDO_ABORT_SIZE);
+	    sdo_get_indicated_size(frame_in) != obj.size)
+		return sdo_srv_dl_sm_abort(self, frame_in, frame_out,
+					   SDO_ABORT_SIZE);
 
 	return self->dl_state;
 }
@@ -78,7 +78,7 @@ int sdo_srv_dl_sm_init(struct sdo_srv_dl_sm* self, struct can_frame* frame_in,
 	sdo_set_cs(frame_out, SDO_SCS_DL_INIT_RES);
 	sdo_copy_multiplexer(frame_out, frame_in);
 
-	if (sdo_srv_get_sdo_addr)
+	if (sdo_get_obj)
 		if (dl_init_write_frame(self, frame_in, frame_out) != 0)
 			return self->dl_state;
 
@@ -168,30 +168,30 @@ static int ul_init_read_frame(struct sdo_srv_ul_sm* self,
 			      struct can_frame* frame_in,
 			      struct can_frame* frame_out)
 {
-	void* addr;
-	size_t size;
+	struct sdo_obj obj;
 
-	addr = sdo_srv_get_sdo_addr(sdo_get_index(frame_in),
-				    sdo_get_subindex(frame_in), &size);
-	if (!addr)
+	int index = sdo_get_index(frame_in);
+	int subindex = sdo_get_subindex(frame_in);
+
+	if (sdo_get_obj(&obj, index, subindex) < 0)
 		return sdo_srv_ul_sm_abort(self, frame_in, frame_out,
 					   SDO_ABORT_NEXIST);
-	assert(size != 0);
 
-	if (size <= SDO_EXPEDIATED_DATA_SIZE) {
-		memcpy(&frame_out->data[SDO_EXPEDIATED_DATA_IDX], addr, size);
+	if (obj.size <= SDO_EXPEDIATED_DATA_SIZE) {
+		memcpy(&frame_out->data[SDO_EXPEDIATED_DATA_IDX], obj.addr,
+		       obj.size);
 		sdo_indicate_size(frame_out);
-		sdo_set_expediated_size(frame_out, size);
+		sdo_set_expediated_size(frame_out, obj.size);
 		sdo_expediate(frame_out);
 		return self->ul_state = SDO_SRV_UL_DONE;
 	}
 
-	self->ptr = addr;
-	self->size = size;
+	self->ptr = obj.addr;
+	self->size = obj.size;
 	self->index = 0;
 
 	sdo_indicate_size(frame_out);
-	sdo_set_indicated_size(frame_out, size);
+	sdo_set_indicated_size(frame_out, obj.size);
 
 	return self->ul_state;
 }
@@ -213,7 +213,7 @@ int sdo_srv_ul_sm_init(struct sdo_srv_ul_sm* self, struct can_frame* frame_in,
 	sdo_set_cs(frame_out, SDO_SCS_UL_INIT_RES);
 	sdo_copy_multiplexer(frame_out, frame_in);
 
-	if (sdo_srv_get_sdo_addr)
+	if (sdo_get_obj)
 		if (ul_init_read_frame(self, frame_in, frame_out) != 0)
 			return self->ul_state;
 

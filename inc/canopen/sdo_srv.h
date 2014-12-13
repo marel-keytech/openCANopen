@@ -21,9 +21,6 @@ struct sdo_srv {
 	struct sdo_srv_dl_sm client[128];
 };
 
-extern void* (*sdo_srv_get_sdo_addr)(int index, int subindex, size_t*);
-extern int (*sdo_srv_write_obj)(int index, int subindex, const void*, size_t*);
-
 static inline void sdo_srv_init(struct sdo_srv* self)
 {
 	memset(self, 0, sizeof(*self));

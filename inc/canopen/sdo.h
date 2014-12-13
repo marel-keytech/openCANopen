@@ -64,6 +64,27 @@ enum sdo_abort_code {
 	SDO_ABORT_TOO_LONG      = 6, /* TODO: too long sdo */
 };
 
+enum sdo_obj_flags {
+	SDO_OBJ_R = 1,
+	SDO_OBJ_W = 2,
+	SDO_OBJ_RW = SDO_OBJ_R | SDO_OBJ_W,
+
+	SDO_OBJ_EQ = 4,
+	SDO_OBJ_LT = 8,
+	SDO_OBJ_GT = 16,
+	
+	SDO_OBJ_LE = SDO_OBJ_EQ | SDO_OBJ_LT,
+	SDO_OBJ_GE = SDO_OBJ_EQ | SDO_OBJ_GT,
+};
+
+struct sdo_obj {
+	void* addr;
+	size_t size;
+	enum sdo_obj_flags flags;
+};
+
+extern int (*sdo_get_obj)(struct sdo_obj* obj, int index, int subindex);
+
 static inline int sdo_get_cs(struct can_frame* frame)
 {
 	return frame->data[0] >> 5;

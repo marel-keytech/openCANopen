@@ -11,12 +11,13 @@ static int _test_index;
 static int _test_subindex;
 static size_t _test_size;
 
-void* my_srv_get_sdo_addr(int index, int subindex, size_t* size)
+int my_sdo_get_obj(struct sdo_obj* obj, int index, int subindex)
 {
 	_test_index = index;
 	_test_subindex = subindex;
-	*size = _test_size;
-	return _test_data;
+	obj->addr = _test_data;
+	obj->size = _test_size;
+	return 0;
 }
 
 int set_get_cs()
@@ -653,6 +654,8 @@ int sdo_srv_ul_segmented_8bytes()
 int main()
 {
 	int r = 0;
+	sdo_get_obj = NULL;
+
 	fprintf(stderr, "Misc:\n");
 	RUN_TEST(set_get_cs);
 	RUN_TEST(set_get_segment_size);
@@ -671,7 +674,7 @@ int main()
 	RUN_TEST(sdo_srv_dl_example);
 
 	fprintf(stderr, "\nServer download:\n");
-	sdo_srv_get_sdo_addr = my_srv_get_sdo_addr;
+	sdo_get_obj = my_sdo_get_obj;
 	RUN_TEST(sdo_srv_dl_expediated_1byte);
 	RUN_TEST(sdo_srv_dl_expediated_4bytes);
 	RUN_TEST(sdo_srv_dl_segmented_5bytes);
@@ -679,7 +682,7 @@ int main()
 	RUN_TEST(sdo_srv_dl_segmented_8bytes);
 
 	fprintf(stderr, "\nServer upload state machine:\n");
-	sdo_srv_get_sdo_addr = NULL;
+	sdo_get_obj = NULL;
 	RUN_TEST(sdo_srv_ul_init_ok);
 	RUN_TEST(sdo_srv_ul_init_failed_cs);
 	RUN_TEST(sdo_srv_ul_init_remote_abort);
@@ -689,7 +692,7 @@ int main()
 	RUN_TEST(sdo_srv_ul_seg_remote_abort);
 
 	fprintf(stderr, "\nServer upload:\n");
-	sdo_srv_get_sdo_addr = my_srv_get_sdo_addr;
+	sdo_get_obj = my_sdo_get_obj;
 	RUN_TEST(sdo_srv_ul_expediated_1byte);
 	RUN_TEST(sdo_srv_ul_expediated_4bytes);
 	RUN_TEST(sdo_srv_ul_segmented_5bytes);
