@@ -340,3 +340,30 @@ int sdo_match_obj_size(struct sdo_obj* obj, size_t size,
 	return *code == 0;
 }
 
+int sdo_srv_feed(struct sdo_srv* self, struct can_frame* frame)
+{
+	struct can_frame* out = sdo_srv_append(self);
+
+	switch (sdo_get_cs(frame)) {
+	case SDO_CCS_UL_INIT_REQ:
+	case SDO_CCS_UL_SEG_REQ:
+		sdo_srv_ul_sm_feed(&self->ul_sm, frame, out);
+		break;
+	case SDO_CCS_DL_INIT_REQ:
+	case SDO_CCS_DL_SEG_REQ:
+		sdo_srv_dl_sm_feed(&self->dl_sm, frame, out);
+		break;
+	case SDO_CCS_ABORT:
+		if (self->ul_sm.ul_state)
+			sdo_srv_ul_sm_feed(&self->ul_sm, frame, out);
+		if (self->dl_sm.dl_state)
+			sdo_srv_dl_sm_feed(&self->dl_sm, frame, out);
+		break;
+	default:
+		/* TODO: abort */
+		break;
+	}
+
+	return 0;
+}
+
