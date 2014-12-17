@@ -34,6 +34,7 @@
 #define ASSERT_INT_EQ(value, expr) TST_ASSERT_EQ_(value, expr, int, "%d")
 #define ASSERT_UINT_EQ(value, expr) TST_ASSERT_EQ_(value, expr, unsigned int, "%d")
 #define ASSERT_DOUBLE_EQ(value, expr) TST_ASSERT_EQ_(value, expr, double, "%f")
+#define ASSERT_PTR_EQ(value, expr) TST_ASSERT_EQ_(value, expr, void*, "%p")
 
 #define TST_ASSERT_GT_(value, expr, type, fmt) do { \
 	type expr_ = (expr); \

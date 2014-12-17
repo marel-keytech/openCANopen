@@ -30,30 +30,13 @@ struct sdo_srv_sm {
 struct sdo_srv {
 	struct sdo_srv_sm sm;
 
-	size_t out_count;
-	int out_index;
-	struct can_frame out_queue[SDO_SRV_QUEUE_SIZE];
+	int have_frame;
+	struct can_frame out_frame;
 };
-
-static inline int sdo_srv_queue_index_postinc(struct sdo_srv* self)
-{
-	int i = self->out_index++;
-	if (self->out_index > SDO_SRV_QUEUE_MAX)
-		self->out_index = 0;
-	return i;
-}
 
 static inline struct can_frame* sdo_srv_next(struct sdo_srv* self)
 {
-	return self->out_count != 0 ?
-	       &self->out_queue[self->out_index - self->out_count--] : NULL;
-}
-
-static inline struct can_frame* sdo_srv_append(struct sdo_srv* self)
-{
-	if(self->out_count < SDO_SRV_QUEUE_MAX)
-		++self->out_count;
-	return &self->out_queue[sdo_srv_queue_index_postinc(self)];
+	return self->have_frame ? &self->out_frame : NULL;
 }
 
 static inline void sdo_srv_init(struct sdo_srv* self)

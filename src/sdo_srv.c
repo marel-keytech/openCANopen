@@ -333,27 +333,30 @@ int sdo_match_obj_size(struct sdo_obj* obj, size_t size,
 
 int sdo_srv_feed(struct sdo_srv* self, struct can_frame* frame)
 {
-	struct can_frame* out = sdo_srv_append(self);
-
 	switch (sdo_get_cs(frame)) {
 	case SDO_CCS_UL_INIT_REQ:
 	case SDO_CCS_UL_SEG_REQ:
-		sdo_srv_ul_sm_feed(&self->sm, frame, out);
+		sdo_srv_ul_sm_feed(&self->sm, frame, &self->out_frame);
+		self->have_frame = 1;
 		break;
 	case SDO_CCS_DL_INIT_REQ:
 	case SDO_CCS_DL_SEG_REQ:
-		sdo_srv_dl_sm_feed(&self->sm, frame, out);
+		sdo_srv_dl_sm_feed(&self->sm, frame, &self->out_frame);
+		self->have_frame = 1;
 		break;
 	case SDO_CCS_ABORT:
 		self->sm.state = SDO_SRV_REMOTE_ABORT;
+		self->have_frame = 0;
 	default:
-		sdo_srv_sm_abort(&self->sm, frame, out, SDO_ABORT_INVALID_CS);
+		sdo_srv_sm_abort(&self->sm, frame, &self->out_frame,
+				 SDO_ABORT_INVALID_CS);
+		self->have_frame = 1;
 		break;
 	}
 
 	if (self->sm.state < 0 || self->sm.state == SDO_SRV_DONE)
 		memset(&self->sm, 0, sizeof(self->sm));
 
-	return self->out_count;
+	return self->have_frame;
 }
 
