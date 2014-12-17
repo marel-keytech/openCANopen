@@ -24,6 +24,11 @@ struct nmt_slave {
 	enum nmt_state state;
 };
 
+static inline int nmt_is_valid(const struct can_frame* frame)
+{
+	return frame->can_dlc == 2;
+}
+
 static inline enum nmt_cs nmt_get_cs(const struct can_frame* frame)
 {
 	return frame->data[0];

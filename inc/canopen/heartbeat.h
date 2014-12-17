@@ -4,6 +4,11 @@
 #include <linux/can.h>
 #include "canopen/nmt.h"
 
+static inline int heartbeat_is_valid(const struct can_frame* frame)
+{
+	return frame->can_dlc == 1;
+}
+
 static inline int heartbeat_is_bootup(const struct can_frame* frame)
 {
 	return frame->data[0] == NMT_STATE_BOOTUP;
