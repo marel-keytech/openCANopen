@@ -1,24 +1,7 @@
 #include <linux/can.h>
-#include "canopen.h"
+#include <assert.h>
 
-enum canopen_range {
-	R_NMT = 0,
-	R_SYNC = 0x80,
-	R_EMCY = 0x80, EMCY_LOW = R_EMCY + 1, EMCY_HIGH = R_EMCY + 0x7f,
-	R_TIMESTAMP = 0x100,
-	R_TPDO1 = 0x180, TPDO1_LOW = R_TPDO1, TPDO1_HIGH = R_TPDO1 + 0x7f,
-	R_RPDO1 = 0x200, RPDO1_LOW = R_RPDO1, RPDO1_HIGH = R_RPDO1 + 0x7f,
-	R_TPDO2 = 0x280, TPDO2_LOW = R_TPDO2, TPDO2_HIGH = R_TPDO2 + 0x7f,
-	R_RPDO2 = 0x300, RPDO2_LOW = R_RPDO2, RPDO2_HIGH = R_RPDO2 + 0x7f,
-	R_TPDO3 = 0x380, TPDO3_LOW = R_TPDO3, TPDO3_HIGH = R_TPDO3 + 0x7f,
-	R_RPDO3 = 0x400, RPDO3_LOW = R_RPDO3, RPDO3_HIGH = R_RPDO3 + 0x7f,
-	R_TPDO4 = 0x480, TPDO4_LOW = R_TPDO4, TPDO4_HIGH = R_TPDO4 + 0x7f,
-	R_RPDO4 = 0x500, RPDO4_LOW = R_RPDO4, RPDO4_HIGH = R_RPDO4 + 0x7f,
-	R_TSDO  = 0x580, TSDO_LOW  = R_TSDO , TSDO_HIGH  = R_TSDO  + 0x7f,
-	R_RSDO  = 0x600, RSDO_LOW  = R_RSDO , RSDO_HIGH  = R_RSDO  + 0x7f,
-	R_HEARTBEAT = 0x700, HEARTBEAT_LOW = R_HEARTBEAT,
-	HEARTBEAT_HIGH = R_HEARTBEAT + 0x7f,
-};
+#include "canopen.h"
 
 struct canopen_msg {
 	int id;
@@ -96,6 +79,19 @@ int canopen_get_object_type(struct canopen_msg* msg, struct can_frame* frame)
 		return -1;
 	}
 } 
+
+int canopen_get_object_type_simple(struct canopen_msg* msg,
+				   struct can_frame* frame, int nodeid)
+{
+	enum canopen_range cob = (enum canopen_range)frame->can_id;
+
+	assert(nodeid < 128);
+
+	msg->id = nodeid;
+	msg->object = nodeid > cob ? cob - nodeid : (enum canopen_object)cob;
+
+	return 0;
+}
 
 const char* canopen_object_type_to_string(enum canopen_object obj)
 {
