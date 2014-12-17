@@ -12,8 +12,8 @@
 
 int (*sdo_get_obj)(struct sdo_obj* obj, int index, int subindex);
 
-int sdo_srv_sm_abort(struct sdo_srv_sm* self, struct can_frame* frame_in,
-		     struct can_frame* frame_out, enum sdo_abort_code code)
+int sdo_srv_sm_abort(struct sdo_srv_sm* self, struct can_frame* frame_out,
+		     enum sdo_abort_code code)
 {
 	sdo_clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_ABORT);
@@ -30,8 +30,7 @@ static int dl_expediated(struct sdo_srv_sm* self, struct can_frame* frame_in,
 	if (sdo_is_size_indicated(frame_in)) {
 		size = sdo_get_expediated_size(frame_in);
 		if (!sdo_match_obj_size(&self->obj, size, &abort_code))
-			return sdo_srv_sm_abort(self, frame_in, frame_out,
-						abort_code);
+			return sdo_srv_sm_abort(self, frame_out, abort_code);
 	}
 
 	memcpy(self->obj.addr, &frame_in->data[SDO_EXPEDIATED_DATA_IDX],
@@ -51,12 +50,10 @@ static int dl_init_write_frame(struct sdo_srv_sm* self,
 	int subindex = sdo_get_subindex(frame_in);
 
 	if (sdo_get_obj(&self->obj, index, subindex) < 0)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_NEXIST);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_NEXIST);
 	
 	if (!(self->obj.flags & SDO_OBJ_W))
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_RO);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_RO);
 
 	self->index = 0;
 
@@ -66,8 +63,7 @@ static int dl_init_write_frame(struct sdo_srv_sm* self,
 	if (sdo_is_size_indicated(frame_in)) {
 		size = sdo_get_indicated_size(frame_in);
 		if (!sdo_match_obj_size(&self->obj, size, &abort_code))
-			return sdo_srv_sm_abort(self, frame_in, frame_out,
-						abort_code);
+			return sdo_srv_sm_abort(self, frame_out, abort_code);
 	}
 
 	return self->state;
@@ -82,8 +78,7 @@ int sdo_srv_dl_sm_init(struct sdo_srv_sm* self, struct can_frame* frame_in,
 		return self->state; /* ignore abort */
 
 	if (ccs != SDO_CCS_DL_INIT_REQ)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_INVALID_CS);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_INVALID_CS);
 
 	sdo_clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_DL_INIT_RES);
@@ -105,13 +100,11 @@ static int dl_seg_write_frame(struct sdo_srv_sm* self,
 	enum sdo_abort_code abort_code;
 
 	if (size > self->obj.size)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_TOO_LONG);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_TOO_LONG);
 
 	if (sdo_is_end_segment(frame_in) &&
 	    !sdo_match_obj_size(&self->obj, size, &abort_code))
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					abort_code);
+		return sdo_srv_sm_abort(self, frame_out, abort_code);
 
 	memcpy(&self->obj.addr[self->index], &frame_in->data[SDO_SEGMENT_IDX],
 	       size);
@@ -132,12 +125,10 @@ int sdo_srv_dl_sm_seg(struct sdo_srv_sm* self, struct can_frame* frame_in,
 		return self->state = SDO_SRV_REMOTE_ABORT;
 
 	if (ccs != SDO_CCS_DL_SEG_REQ)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_INVALID_CS);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_INVALID_CS);
 
 	if (sdo_is_toggled(frame_in) != expect_toggled)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_TOGGLE);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_TOGGLE);
 
 	sdo_clear_frame(frame_out);
 	sdo_set_cs(frame_out, SDO_SCS_DL_SEG_RES);
@@ -181,12 +172,10 @@ static int ul_init_read_frame(struct sdo_srv_sm* self,
 	int subindex = sdo_get_subindex(frame_in);
 
 	if (sdo_get_obj(&self->obj, index, subindex) < 0)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_NEXIST);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_NEXIST);
 
 	if (!(self->obj.flags & SDO_OBJ_R))
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_WO);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_WO);
 
 	if (self->obj.size <= SDO_EXPEDIATED_DATA_SIZE) {
 		memcpy(&frame_out->data[SDO_EXPEDIATED_DATA_IDX],
@@ -214,8 +203,7 @@ int sdo_srv_ul_sm_init(struct sdo_srv_sm* self, struct can_frame* frame_in,
 		return self->state; /* ignore abort */
 
 	if (ccs != SDO_CCS_UL_INIT_REQ)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_INVALID_CS);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_INVALID_CS);
 
 	sdo_clear_frame(frame_out);
 
@@ -260,12 +248,10 @@ int sdo_srv_ul_sm_seg(struct sdo_srv_sm* self, struct can_frame* frame_in,
 		return self->state = SDO_SRV_REMOTE_ABORT;
 
 	if (ccs != SDO_CCS_UL_SEG_REQ)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_INVALID_CS);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_INVALID_CS);
 
 	if (sdo_is_toggled(frame_in) != expect_toggled)
-		return sdo_srv_sm_abort(self, frame_in, frame_out,
-					SDO_ABORT_TOGGLE);
+		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_TOGGLE);
 
 	sdo_clear_frame(frame_out);
 
@@ -348,7 +334,7 @@ int sdo_srv_feed(struct sdo_srv* self, struct can_frame* frame)
 		self->sm.state = SDO_SRV_REMOTE_ABORT;
 		self->have_frame = 0;
 	default:
-		sdo_srv_sm_abort(&self->sm, frame, &self->out_frame,
+		sdo_srv_sm_abort(&self->sm, &self->out_frame,
 				 SDO_ABORT_INVALID_CS);
 		self->have_frame = 1;
 		break;

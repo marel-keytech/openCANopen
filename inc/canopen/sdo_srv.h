@@ -46,8 +46,8 @@ static inline void sdo_srv_init(struct sdo_srv* self)
 
 int sdo_srv_feed(struct sdo_srv* self, struct can_frame* frame);
 
-int sdo_srv_sm_abort(struct sdo_srv_sm* self, struct can_frame* frame_in,
-		     struct can_frame* frame_out, enum sdo_abort_code code);
+int sdo_srv_sm_abort(struct sdo_srv_sm* self, struct can_frame* frame_out,
+		     enum sdo_abort_code code);
 
 int sdo_srv_dl_sm_feed(struct sdo_srv_sm* self, struct can_frame* frame_in,
 		       struct can_frame* frame_out);
