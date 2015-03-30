@@ -40,6 +40,9 @@ tst/test_sdo_client: src/sdo_client.o src/byteorder.o tst/sdo_client.o
 fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_srv.o src/byteorder.o
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
 
+dlsdo: src/dlsdo.o src/canopen.o src/socketcan.o src/sdo_client.o src/byteorder.o
+	$(CC) $^ $(LDFLAGS) -o $@
+
 .PHONY:
 test: tst/test_sdo_srv tst/test_sdo_client
 	run-parts tst
