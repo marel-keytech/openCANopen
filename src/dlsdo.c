@@ -11,8 +11,11 @@
 #include "canopen.h"
 #include "socketcan.h"
 #include "canopen/byteorder.h"
+#include "canopen/sdo.h"
 #include "canopen/sdo_client.h"
 #include "canopen/byteorder.h"
+
+static int nodeid_;
 
 enum dict_entry_type {
 	DICT_ENTRY_TYPE_UNKNOWN = -1,
@@ -180,8 +183,11 @@ static int unpack_csv_line(struct csv_line* output, char* line)
 	return 0;
 }
 
-static int write_can_frame(int fd, const struct can_frame* frame)
+static int write_can_frame(int fd, struct can_frame* frame)
 {
+	frame->can_dlc = SDO_SEGMENT_IDX + sdo_get_segment_size(frame);
+	frame->can_id = R_RSDO + nodeid_;
+
 	if(write(fd, frame, sizeof(*frame)) == sizeof(*frame))
 		return 0;
 
@@ -320,6 +326,8 @@ int main(int argc, char* argv[])
 		fprintf(stderr, "Node id must be less than 128\n");
 		return 1;
 	}
+
+	nodeid_ = nodeid;
 
 	csv_file = fopen(csv_path, "r");
 	if (!csv_file) {
