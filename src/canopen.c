@@ -3,11 +3,6 @@
 
 #include "canopen.h"
 
-struct canopen_msg {
-	int id;
-	enum canopen_object object;
-};
-
 int canopen_get_object_type(struct canopen_msg* msg, struct can_frame* frame)
 {
 	enum canopen_range id = (enum canopen_range)frame->can_id;

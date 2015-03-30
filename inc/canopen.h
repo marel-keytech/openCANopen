@@ -41,6 +41,12 @@ enum canopen_object {
 	CANOPEN_MASK		= (CANOPEN_HEARTBEAT << 1) - 1
 };
 
+struct canopen_msg {
+	int id;
+	enum canopen_object object;
+};
+
+int canopen_get_object_type(struct canopen_msg* msg, struct can_frame* frame);
 
 #endif /* _CANOPEN_H */
 
