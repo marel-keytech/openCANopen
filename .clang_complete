@@ -1,1 +1,1 @@
--Iinc/
+-Iinc/ -I/usr/include/lua5.1

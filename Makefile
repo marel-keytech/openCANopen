@@ -1,5 +1,5 @@
 CC := clang
-CFLAGS := -Wall -g -std=c99 -D_GNU_SOURCE -O0 -Iinc/
+CFLAGS := -Wall -g -std=c99 -D_GNU_SOURCE -O0 -Iinc/ -I/usr/include/lua5.1
 LDFLAGS := -lrt
 
 MAJOR = 0
@@ -33,6 +33,9 @@ clean:
 
 tst/test_sdo_srv: src/sdo_srv.o src/byteorder.o tst/sdo_srv.o
 	$(CC) $^ $(LDFLAGS) -o $@
+
+fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_srv.o src/byteorder.o
+	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
 
 .PHONY:
 test: tst/test_sdo_srv
