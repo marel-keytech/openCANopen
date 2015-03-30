@@ -68,7 +68,7 @@ struct sdo_obj {
 
 extern int (*sdo_get_obj)(struct sdo_obj* obj, int index, int subindex);
 
-static inline int sdo_get_cs(struct can_frame* frame)
+static inline int sdo_get_cs(const struct can_frame* frame)
 {
 	return frame->data[0] >> 5;
 }
@@ -202,6 +202,12 @@ static inline void sdo_copy_multiplexer(struct can_frame* dst,
 {
 	memcpy(&dst->data[SDO_MULTIPLEXER_IDX], &src->data[SDO_MULTIPLEXER_IDX],
 	       SDO_MULTIPLEXER_SIZE);
+}
+
+static inline void sdo_abort(struct can_frame* frame, enum sdo_abort_code code)
+{
+	sdo_set_cs(frame, SDO_SCS_ABORT);
+	sdo_set_abort_code(frame, code);
 }
 
 
