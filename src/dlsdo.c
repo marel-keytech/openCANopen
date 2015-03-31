@@ -75,10 +75,10 @@ static inline int is_match(const char* a, const char* b)
 static enum dict_entry_type str_to_type(const char* str)
 {
 	if (is_prefix(str, "UNSIGNED_"))
-		return DICT_ENTRY_TYPE_U + atoi(&str[strlen("UNSIGNED_")]);
+		return DICT_ENTRY_TYPE_U + atoi(&str[strlen("UNSIGNED_")])/8;
 
 	if (is_prefix(str, "INTEGER_"))
-		return DICT_ENTRY_TYPE_S + atoi(&str[strlen("INTEGER_")]);
+		return DICT_ENTRY_TYPE_S + atoi(&str[strlen("INTEGER_")])/8;
 
 	if (is_match(str, "VISIBLE_STRING"))
 		return DICT_ENTRY_TYPE_VISIBLE_STRING;
@@ -216,13 +216,13 @@ static void download_single_buffer(int fd, struct csv_line* params,
 			     size);
 
 	do {
-		if (write_can_frame(fd, &req.frame) < 0) return;
-		if (read_can_frame(&rcf, fd) < 0) return;
-		if (!sdo_dl_req_feed(&req, &rcf)) return;
-	} while (req.state != SDO_REQ_DONE || req.state == SDO_REQ_ABORTED);
+		if (write_can_frame(fd, &req.frame) < 0) break;
+		if (read_can_frame(&rcf, fd) < 0) break;
+		if (!sdo_dl_req_feed(&req, &rcf)) break;
+	} while (req.state != SDO_REQ_DONE && req.state != SDO_REQ_ABORTED);
 
 	if (req.state == SDO_REQ_ABORTED)
-		fprintf(stderr, "Remote abort on index %d, subindex %d!\n",
+		fprintf(stderr, "Abort on index %x, subindex %x!\n",
 				params->index, params->subindex);
 }
 
