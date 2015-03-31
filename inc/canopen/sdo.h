@@ -53,7 +53,7 @@ enum sdo_obj_flags {
 	SDO_OBJ_EQ = 4,
 	SDO_OBJ_LT = 8,
 	SDO_OBJ_GT = 16,
-	
+
 	SDO_OBJ_LE = SDO_OBJ_EQ | SDO_OBJ_LT,
 	SDO_OBJ_GE = SDO_OBJ_EQ | SDO_OBJ_GT,
 
@@ -97,7 +97,7 @@ static inline void sdo_toggle(struct can_frame* frame)
 	frame->data[0] ^= 1 << 4;
 }
 
-static inline int sdo_is_toggled(struct can_frame* frame)
+static inline int sdo_is_toggled(const struct can_frame* frame)
 {
 	return !!(frame->data[0] & 1 << 4);
 }
@@ -204,10 +204,16 @@ static inline void sdo_copy_multiplexer(struct can_frame* dst,
 	       SDO_MULTIPLEXER_SIZE);
 }
 
-static inline void sdo_abort(struct can_frame* frame, enum sdo_abort_code code)
+static inline void sdo_abort(struct can_frame* frame, enum sdo_abort_code code,
+			     int index, int subindex)
 {
 	sdo_set_cs(frame, SDO_SCS_ABORT);
 	sdo_set_abort_code(frame, code);
+
+	sdo_set_index(frame, index);
+	sdo_set_subindex(frame, subindex);
+
+	frame->can_dlc = CAN_MAX_DLC;
 }
 
 

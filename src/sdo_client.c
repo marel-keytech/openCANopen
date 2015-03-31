@@ -4,6 +4,18 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+static int sdo_dl_req_abort(struct sdo_dl_req* self, enum sdo_abort_code code)
+{
+	struct can_frame* cf = &self->frame;
+
+	sdo_abort(cf, SDO_ABORT_TOGGLE, self->index, self->subindex);
+
+	self->state = SDO_REQ_ABORTED;
+	self->have_frame = 1;
+
+	return self->have_frame;
+}
+
 static void request_segmented_download(struct sdo_dl_req* self, int index,
 				       int subindex, const void* addr,
 				       size_t size)
@@ -35,11 +47,14 @@ static void request_expediated_download(struct sdo_dl_req* self, int index,
 	memcpy(&cf->data[SDO_EXPEDIATED_DATA_IDX], addr, size);
 }
 
-int sdo_request_download(struct sdo_dl_req* self, int index,
-			 int subindex, const void* addr, size_t size)
+int sdo_request_download(struct sdo_dl_req* self, int index, int subindex,
+			 const void* addr, size_t size)
 {
 	memset(self, 0, sizeof(*self));
 	struct can_frame* cf = &self->frame;
+
+	self->index = index;
+	self->subindex = subindex;
 
 	sdo_set_index(cf, index);
 	sdo_set_subindex(cf, subindex);
@@ -53,13 +68,11 @@ int sdo_request_download(struct sdo_dl_req* self, int index,
 		request_expediated_download(self, index, subindex, addr, size);
 
 	self->have_frame = 1;
-
 	return self->have_frame;
 }
 
 static int request_download_segment(struct sdo_dl_req* self,
-				    const struct can_frame* frame,
-				    int is_toggled)
+				    const struct can_frame* frame)
 {
 	struct can_frame* cf = &self->frame;
 
@@ -67,8 +80,11 @@ static int request_download_segment(struct sdo_dl_req* self,
 
 	sdo_set_cs(cf, SDO_CCS_DL_SEG_REQ);
 
-	if (is_toggled)
+	if (self->is_toggled)
 		sdo_toggle(cf);
+
+	if (self->state != SDO_REQ_INIT)
+		self->is_toggled ^= 1;
 
 	size_t segment_size = MIN(SDO_SEGMENT_MAX_SIZE, self->size - self->pos);
 	assert(segment_size > 0);
@@ -79,10 +95,12 @@ static int request_download_segment(struct sdo_dl_req* self,
 	cf->can_dlc = SDO_SEGMENT_IDX + segment_size;
 
 	self->pos += segment_size;
-	if (self->pos >= self->size)
+	if (self->pos >= self->size) {
 		self->state = SDO_REQ_END_SEGMENT;
-	else
-		self->state = is_toggled ? SDO_REQ_SEG : SDO_REQ_SEG_TOGGLED;
+		sdo_end_segment(cf);
+	} else {
+		self->state = SDO_REQ_SEG;
+	}
 
 	self->have_frame = 1;
 	return self->have_frame;
@@ -98,15 +116,34 @@ int sdo_dl_req_feed(struct sdo_dl_req* self, const struct can_frame* frame)
 
 	switch (self->state) {
 	case SDO_REQ_INIT:
-	case SDO_REQ_SEG:
-		return request_download_segment(self, frame, 0);
-	case SDO_REQ_SEG_TOGGLED:
-		return request_download_segment(self, frame, 1);
 	case SDO_REQ_INIT_EXPEDIATED:
+		if (sdo_get_cs(frame) != SDO_SCS_DL_INIT_RES)
+			return sdo_dl_req_abort(self, SDO_ABORT_INVALID_CS);
+
+		if (self->state == SDO_REQ_INIT_EXPEDIATED) {
+			self->state = SDO_REQ_DONE;
+			self->have_frame = 0;
+			return 0;
+		}
+
+		return request_download_segment(self, frame);
+
+	case SDO_REQ_SEG:
 	case SDO_REQ_END_SEGMENT:
-		self->state = SDO_REQ_DONE;
-		self->have_frame = 0;
-		return 0;
+		if (sdo_get_cs(frame) != SDO_SCS_DL_SEG_RES)
+			return sdo_dl_req_abort(self, SDO_ABORT_INVALID_CS);
+
+		if (self->is_toggled != sdo_is_toggled(frame))
+			return sdo_dl_req_abort(self, SDO_ABORT_TOGGLE);
+
+		if (self->state == SDO_REQ_END_SEGMENT) {
+			self->state = SDO_REQ_DONE;
+			self->have_frame = 0;
+			return 0;
+		}
+
+		return request_download_segment(self, frame);
+
 	default:
 		break;
 	}

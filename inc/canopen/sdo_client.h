@@ -9,7 +9,6 @@ enum sdo_req_state {
 	SDO_REQ_INIT = 0,
 	SDO_REQ_INIT_EXPEDIATED,
 	SDO_REQ_SEG,
-	SDO_REQ_SEG_TOGGLED,
 	SDO_REQ_END_SEGMENT,
 	SDO_REQ_DONE,
 };
@@ -17,6 +16,10 @@ enum sdo_req_state {
 struct sdo_dl_req {
 	enum sdo_req_state state;
 	struct can_frame frame;
+	int is_toggled;
+
+	int index;
+	int subindex;
 
 	const void* addr;
 	size_t size;

@@ -97,7 +97,7 @@ static int test_expediated_download_abort()
 	ASSERT_TRUE(sdo_request_download(&req, 0x1000, 42, "foo", 4));
 	ASSERT_INT_EQ(8, req.frame.can_dlc);
 
-	sdo_abort(&rcf, SDO_ABORT_NEXIST);
+	sdo_abort(&rcf, SDO_ABORT_NEXIST, 0x1000, 42);
 
 	ASSERT_INT_EQ(0, sdo_dl_req_feed(&req, &rcf));
 	ASSERT_INT_EQ(SDO_REQ_ABORTED, req.state);
@@ -124,7 +124,7 @@ static int test_segmented_download_success_one_segment()
 
 	ASSERT_INT_EQ(SDO_CCS_DL_SEG_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(7, sdo_get_segment_size(&req.frame));
-	ASSERT_FALSE(sdo_is_end_segment(&req.frame));
+	ASSERT_TRUE(sdo_is_end_segment(&req.frame));
 	ASSERT_FALSE(sdo_is_toggled(&req.frame));
 	ASSERT_STR_EQ("foobar", (char*)&req.frame.data[SDO_SEGMENT_IDX]);
 
@@ -165,8 +165,8 @@ static int test_segmented_download_success_two_segments()
 
 	ASSERT_INT_EQ(SDO_CCS_DL_SEG_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(1, sdo_get_segment_size(&req.frame));
-	ASSERT_FALSE(sdo_is_end_segment(&req.frame));
-	ASSERT_TRUE(sdo_is_toggled(&req.frame));
+	ASSERT_TRUE(sdo_is_end_segment(&req.frame));
+	ASSERT_FALSE(sdo_is_toggled(&req.frame));
 	ASSERT_INT_EQ('x', req.frame.data[SDO_SEGMENT_IDX]);
 
 	sdo_toggle(&rcf);
@@ -195,7 +195,7 @@ static int test_segmented_download_abort_one_segment()
 
 	ASSERT_INT_EQ(SDO_CCS_DL_SEG_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(7, sdo_get_segment_size(&req.frame));
-	ASSERT_FALSE(sdo_is_end_segment(&req.frame));
+	ASSERT_TRUE(sdo_is_end_segment(&req.frame));
 	ASSERT_FALSE(sdo_is_toggled(&req.frame));
 	ASSERT_STR_EQ("foobar", (char*)&req.frame.data[SDO_SEGMENT_IDX]);
 
