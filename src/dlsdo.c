@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <poll.h>
 
 #include <linux/can.h>
 #include "canopen.h"
@@ -14,6 +15,8 @@
 #include "canopen/sdo.h"
 #include "canopen/sdo_client.h"
 #include "canopen/byteorder.h"
+
+#define TIMEOUT 1000
 
 static int nodeid_;
 
@@ -187,7 +190,7 @@ static int write_can_frame(int fd, struct can_frame* frame)
 {
 	frame->can_id = R_RSDO + nodeid_;
 
-	if(write(fd, frame, sizeof(*frame)) == sizeof(*frame))
+	if (write(fd, frame, sizeof(*frame)) == sizeof(*frame))
 		return 0;
 
 	perror("Warning: Dropped can frame in writing");
@@ -195,13 +198,30 @@ static int write_can_frame(int fd, struct can_frame* frame)
 	return -1;
 }
 
-static int read_can_frame(struct can_frame* frame, int fd)
+static ssize_t read_w_timeout(int fd, void* buf, size_t count, int timeout)
 {
-	ssize_t rsize = read(fd, frame, sizeof(*frame));
-	if(rsize == sizeof(*frame))
+	struct pollfd pollfd = { .fd = fd, .events = POLLIN, .revents = 0 };
+
+	int nfds = poll(&pollfd, 1, timeout);
+	if (nfds < 0)
+		return -1;
+	else if (nfds == 0)
 		return 0;
 
-	perror("Warning: Dropped can frame in writing");
+	return read(fd, buf, count);
+}
+
+static int read_can_frame(struct can_frame* frame, int fd)
+{
+	ssize_t rsize = read_w_timeout(fd, frame, sizeof(*frame), TIMEOUT);
+	if (rsize == 0) {
+		fprintf(stderr, "Read timed out!\n");
+		return -1;
+	} else if (rsize == sizeof(*frame)) {
+		return 0;
+	}
+
+	perror("Warning: Dropped can frame in reading");
 
 	return -1;
 }
@@ -216,9 +236,12 @@ static void download_single_buffer(int fd, struct csv_line* params,
 			     size);
 
 	do {
-		if (write_can_frame(fd, &req.frame) < 0) break;
-		if (read_can_frame(&rcf, fd) < 0) break;
-		if (!sdo_dl_req_feed(&req, &rcf)) break;
+		if (write_can_frame(fd, &req.frame) < 0)
+			break;
+
+		if (read_can_frame(&rcf, fd) >= 0)
+			if (!sdo_dl_req_feed(&req, &rcf))
+				break;
 	} while (req.state != SDO_REQ_DONE && req.state != SDO_REQ_ABORTED);
 
 	if (req.state == SDO_REQ_ABORTED)
