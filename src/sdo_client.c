@@ -15,6 +15,8 @@ static void request_segmented_download(struct sdo_dl_req* self, int index,
 	self->addr = addr;
 	self->size = size;
 
+	cf->can_dlc = CAN_MAX_DLC;
+
 	sdo_set_indicated_size(cf, size);
 }
 
@@ -27,6 +29,8 @@ static void request_expediated_download(struct sdo_dl_req* self, int index,
 	self->state = SDO_REQ_INIT_EXPEDIATED;
 	sdo_expediate(cf);
 	sdo_set_expediated_size(cf, size);
+
+	cf->can_dlc = SDO_EXPEDIATED_DATA_IDX + size;
 
 	memcpy(&cf->data[SDO_EXPEDIATED_DATA_IDX], addr, size);
 }
@@ -71,6 +75,8 @@ static int request_download_segment(struct sdo_dl_req* self,
 	sdo_set_segment_size(cf, segment_size);
 
 	memcpy(&cf->data[SDO_SEGMENT_IDX], &self->addr[self->pos],segment_size);
+
+	cf->can_dlc = SDO_SEGMENT_IDX + segment_size;
 
 	self->pos += segment_size;
 	if (self->pos >= self->size)

@@ -14,6 +14,7 @@ static int test_make_dl_request_1_byte()
 	ASSERT_INT_EQ(SDO_REQ_INIT_EXPEDIATED, req.state);
 	ASSERT_INT_EQ(SDO_CCS_DL_INIT_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(1, sdo_get_expediated_size(&req.frame));
+	ASSERT_INT_EQ(5, req.frame.can_dlc);
 	ASSERT_TRUE(sdo_is_expediated(&req.frame));
 	ASSERT_TRUE(sdo_is_size_indicated(&req.frame));
 	ASSERT_INT_EQ(0x1000, sdo_get_index(&req.frame));
@@ -33,6 +34,7 @@ static int test_make_dl_request_4_bytes()
 	ASSERT_INT_EQ(SDO_REQ_INIT_EXPEDIATED, req.state);
 	ASSERT_INT_EQ(SDO_CCS_DL_INIT_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(4, sdo_get_expediated_size(&req.frame));
+	ASSERT_INT_EQ(8, req.frame.can_dlc);
 	ASSERT_TRUE(sdo_is_expediated(&req.frame));
 	ASSERT_TRUE(sdo_is_size_indicated(&req.frame));
 	ASSERT_INT_EQ(0x1000, sdo_get_index(&req.frame));
@@ -55,6 +57,7 @@ static int test_make_dl_request_5_bytes()
 	ASSERT_PTR_EQ((void*)0xdeadbeef, (void*)req.addr);
 	ASSERT_INT_EQ(SDO_CCS_DL_INIT_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(5, sdo_get_indicated_size(&req.frame));
+	ASSERT_INT_EQ(8, req.frame.can_dlc);
 	ASSERT_FALSE(sdo_is_expediated(&req.frame));
 	ASSERT_TRUE(sdo_is_size_indicated(&req.frame));
 	ASSERT_INT_EQ(0x1000, sdo_get_index(&req.frame));
@@ -72,6 +75,7 @@ static int test_expediated_download_success()
 	sdo_clear_frame(&rcf);
 
 	ASSERT_TRUE(sdo_request_download(&req, 0x1000, 42, "foo", 4));
+	ASSERT_INT_EQ(8, req.frame.can_dlc);
 
 	sdo_set_cs(&rcf, SDO_SCS_DL_INIT_RES);
 	sdo_set_index(&rcf, 0x1000);
@@ -91,6 +95,7 @@ static int test_expediated_download_abort()
 	sdo_clear_frame(&rcf);
 
 	ASSERT_TRUE(sdo_request_download(&req, 0x1000, 42, "foo", 4));
+	ASSERT_INT_EQ(8, req.frame.can_dlc);
 
 	sdo_abort(&rcf, SDO_ABORT_NEXIST);
 
@@ -108,12 +113,14 @@ static int test_segmented_download_success_one_segment()
 	sdo_clear_frame(&rcf);
 
 	ASSERT_TRUE(sdo_request_download(&req, 0x1000, 42, "foobar", 7));
+	ASSERT_INT_EQ(8, req.frame.can_dlc);
 
 	sdo_set_cs(&rcf, SDO_SCS_DL_INIT_RES);
 	sdo_set_index(&rcf, 0x1000);
 	sdo_set_subindex(&rcf, 42);
 
 	ASSERT_INT_EQ(1, sdo_dl_req_feed(&req, &rcf));
+	ASSERT_INT_EQ(8, req.frame.can_dlc);
 
 	ASSERT_INT_EQ(SDO_CCS_DL_SEG_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(7, sdo_get_segment_size(&req.frame));
@@ -143,6 +150,7 @@ static int test_segmented_download_success_two_segments()
 	sdo_set_subindex(&rcf, 42);
 
 	ASSERT_INT_EQ(1, sdo_dl_req_feed(&req, &rcf));
+	ASSERT_INT_EQ(8, req.frame.can_dlc);
 
 	ASSERT_INT_EQ(SDO_CCS_DL_SEG_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(7, sdo_get_segment_size(&req.frame));
@@ -153,6 +161,7 @@ static int test_segmented_download_success_two_segments()
 	sdo_set_cs(&rcf, SDO_SCS_DL_SEG_RES);
 
 	ASSERT_INT_EQ(1, sdo_dl_req_feed(&req, &rcf));
+	ASSERT_INT_EQ(2, req.frame.can_dlc);
 
 	ASSERT_INT_EQ(SDO_CCS_DL_SEG_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(1, sdo_get_segment_size(&req.frame));
@@ -182,6 +191,7 @@ static int test_segmented_download_abort_one_segment()
 	sdo_set_subindex(&rcf, 42);
 
 	ASSERT_INT_EQ(1, sdo_dl_req_feed(&req, &rcf));
+	ASSERT_INT_EQ(8, req.frame.can_dlc);
 
 	ASSERT_INT_EQ(SDO_CCS_DL_SEG_REQ, sdo_get_cs(&req.frame));
 	ASSERT_INT_EQ(7, sdo_get_segment_size(&req.frame));

@@ -185,7 +185,6 @@ static int unpack_csv_line(struct csv_line* output, char* line)
 
 static int write_can_frame(int fd, struct can_frame* frame)
 {
-	frame->can_dlc = SDO_SEGMENT_IDX + sdo_get_segment_size(frame);
 	frame->can_id = R_RSDO + nodeid_;
 
 	if(write(fd, frame, sizeof(*frame)) == sizeof(*frame))
