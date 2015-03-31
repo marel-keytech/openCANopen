@@ -15,9 +15,7 @@ int (*sdo_get_obj)(struct sdo_obj* obj, int index, int subindex);
 int sdo_srv_sm_abort(struct sdo_srv_sm* self, struct can_frame* frame_out,
 		     enum sdo_abort_code code)
 {
-	sdo_clear_frame(frame_out);
-	sdo_set_cs(frame_out, SDO_SCS_ABORT);
-	sdo_set_abort_code(frame_out, SDO_ABORT_INVALID_CS);
+	sdo_abort(frame_out, code, self->xindex, self->xsubindex);
 	return self->state = SDO_SRV_ABORT;
 }
 
@@ -49,9 +47,12 @@ static int dl_init_write_frame(struct sdo_srv_sm* self,
 	int index = sdo_get_index(frame_in);
 	int subindex = sdo_get_subindex(frame_in);
 
+	self->xindex = index;
+	self->xsubindex = subindex;
+
 	if (sdo_get_obj(&self->obj, index, subindex) < 0)
 		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_NEXIST);
-	
+
 	if (!(self->obj.flags & SDO_OBJ_W))
 		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_RO);
 
@@ -170,6 +171,9 @@ static int ul_init_read_frame(struct sdo_srv_sm* self,
 {
 	int index = sdo_get_index(frame_in);
 	int subindex = sdo_get_subindex(frame_in);
+
+	self->xindex = index;
+	self->xsubindex = subindex;
 
 	if (sdo_get_obj(&self->obj, index, subindex) < 0)
 		return sdo_srv_sm_abort(self, frame_out, SDO_ABORT_NEXIST);

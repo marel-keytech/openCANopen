@@ -22,6 +22,9 @@ struct sdo_srv_sm {
 	enum sdo_srv_state state;
 	struct sdo_obj obj;
 	int index;
+
+	int xindex;
+	int xsubindex;
 };
 
 #define SDO_SRV_QUEUE_SIZE 8
