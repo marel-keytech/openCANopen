@@ -5,6 +5,7 @@
 #include <linux/can.h>
 
 enum sdo_req_state {
+	SDO_REQ_REMOTE_ABORT = -2,
 	SDO_REQ_ABORTED = -1,
 	SDO_REQ_INIT = 0,
 	SDO_REQ_INIT_EXPEDIATED,

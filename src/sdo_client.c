@@ -109,7 +109,7 @@ static int request_download_segment(struct sdo_dl_req* self,
 int sdo_dl_req_feed(struct sdo_dl_req* self, const struct can_frame* frame)
 {
 	if (sdo_get_cs(frame) == SDO_SCS_ABORT) {
-		self->state = SDO_REQ_ABORTED;
+		self->state = SDO_REQ_REMOTE_ABORT;
 		self->have_frame = 0;
 		return 0;
 	}

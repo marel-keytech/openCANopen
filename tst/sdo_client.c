@@ -100,7 +100,7 @@ static int test_expediated_download_abort()
 	sdo_abort(&rcf, SDO_ABORT_NEXIST, 0x1000, 42);
 
 	ASSERT_INT_EQ(0, sdo_dl_req_feed(&req, &rcf));
-	ASSERT_INT_EQ(SDO_REQ_ABORTED, req.state);
+	ASSERT_INT_EQ(SDO_REQ_REMOTE_ABORT, req.state);
 
 	return 0;
 }
@@ -202,7 +202,7 @@ static int test_segmented_download_abort_one_segment()
 	sdo_set_cs(&rcf, SDO_SCS_ABORT);
 
 	ASSERT_INT_EQ(0, sdo_dl_req_feed(&req, &rcf));
-	ASSERT_INT_EQ(SDO_REQ_ABORTED, req.state);
+	ASSERT_INT_EQ(SDO_REQ_REMOTE_ABORT, req.state);
 
 	return 0;
 }
