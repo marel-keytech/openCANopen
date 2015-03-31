@@ -122,6 +122,21 @@ static inline int lenze_code_to_index(int code)
 	return 0x5FFF - code;
 }
 
+static char* get_csv(char* str, char** saveptr)
+{
+	char* res = *saveptr ? *saveptr : str;
+	if (!res[0])
+		return NULL;
+
+	const char* delim = ";\n\r";
+
+	char* next = res + strcspn(res, delim);
+	*next = 0;
+
+	*saveptr = next + 1;
+	return res;
+}
+
 /*
  *  1: Code;
  *  2: Subcode;
@@ -139,39 +154,40 @@ static inline int lenze_code_to_index(int code)
  */
 static int unpack_csv_line(struct csv_line* output, char* line)
 {
-	const char* delim = ";\r\n";
 	const char* value = NULL;
+	char* saveptr = NULL;
 
-	char* tok = strtok(line, delim); /* 1 */
+	char* tok = get_csv(line, &saveptr); /* 1 */
 	if (!tok) return -1;
 	if (!isdigit(*tok)) return -1;
 	output->index = lenze_code_to_index(atoi(tok));
 
-	tok = strtok(NULL, delim); /* 2 */
+	tok = get_csv(tok, &saveptr); /* 2 */
 	if (!tok) return -1;
 	output->subindex = atoi(tok);
 
-	if (!strtok(NULL, delim)) return -1; /* 3 */
+	tok = get_csv(tok, &saveptr); if (!tok) return -1; /* 3 */
 
-	value = strtok(NULL, delim); /* 4 */
-	if (!value) return -1;
+	tok = get_csv(tok, &saveptr); /* 4 */
+	if (!tok) return -1;
+	value = tok;
 
-	if (!strtok(NULL, delim)) return -1; /* 5 */
+	if (!get_csv(tok, &saveptr)) return -1; /* 5 */
 
-	tok = strtok(NULL, delim); /* 6 */
+	tok = get_csv(tok, &saveptr); /* 6 */
 	if (!tok) return -1;
 	output->type = str_to_type(tok);
 	if(output->type < 0)
 		return -1;
 
-	if (!strtok(NULL, delim)) return -1; /* 7 */
-	if (!strtok(NULL, delim)) return -1; /* 8 */
-	if (!strtok(NULL, delim)) return -1; /* 9 */
-	if (!strtok(NULL, delim)) return -1; /* 10 */
-	if (!strtok(NULL, delim)) return -1; /* 11 */
-	if (!strtok(NULL, delim)) return -1; /* 12 */
+	tok = get_csv(tok, &saveptr); if (!tok) return -1; /* 7 */
+	tok = get_csv(tok, &saveptr); if (!tok) return -1; /* 8 */
+	tok = get_csv(tok, &saveptr); if (!tok) return -1; /* 9 */
+	tok = get_csv(tok, &saveptr); if (!tok) return -1; /* 10 */
+	tok = get_csv(tok, &saveptr); if (!tok) return -1; /* 11 */
+	tok = get_csv(tok, &saveptr); if (!tok) return -1; /* 12 */
 
-	tok = strtok(NULL, delim); /* 13 */
+	tok = get_csv(tok, &saveptr); /* 13 */
 	if (!tok) return -1;
 	output->access = str_to_access(tok);
 
