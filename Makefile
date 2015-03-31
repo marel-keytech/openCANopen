@@ -31,16 +31,19 @@ clean:
 	rm -f src/*.o tst/*.o
 	rm -f tst/test_*
 
-tst/test_sdo_srv: src/sdo_srv.o src/byteorder.o tst/sdo_srv.o
+tst/test_sdo_srv: src/sdo_common.o src/sdo_srv.o src/byteorder.o tst/sdo_srv.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
-tst/test_sdo_client: src/sdo_client.o src/byteorder.o tst/sdo_client.o
+tst/test_sdo_client: src/sdo_common.o src/sdo_client.o src/byteorder.o \
+		     tst/sdo_client.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
-fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_srv.o src/byteorder.o
+fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_common.o \
+	  src/sdo_srv.o src/byteorder.o
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
 
-dlsdo: src/dlsdo.o src/canopen.o src/socketcan.o src/sdo_client.o src/byteorder.o
+dlsdo: src/dlsdo.o src/canopen.o src/socketcan.o src/sdo_common.o \
+	src/sdo_client.o src/byteorder.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
 .PHONY:

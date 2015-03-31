@@ -204,20 +204,10 @@ static inline void sdo_copy_multiplexer(struct can_frame* dst,
 	       SDO_MULTIPLEXER_SIZE);
 }
 
-static inline void sdo_abort(struct can_frame* frame, enum sdo_abort_code code,
-			     int index, int subindex)
-{
-	sdo_clear_frame(frame);
+void sdo_abort(struct can_frame* frame, enum sdo_abort_code code, int index,
+	       int subindex);
 
-	sdo_set_cs(frame, SDO_SCS_ABORT);
-	sdo_set_abort_code(frame, code);
-
-	sdo_set_index(frame, index);
-	sdo_set_subindex(frame, subindex);
-
-	frame->can_dlc = CAN_MAX_DLC;
-}
-
+const char* sdo_strerror(enum sdo_abort_code code);
 
 #endif /* _CANOPEN_SDO_H */
 
