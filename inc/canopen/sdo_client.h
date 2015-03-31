@@ -22,7 +22,7 @@ struct sdo_dl_req {
 	int index;
 	int subindex;
 
-	const void* addr;
+	const char* addr;
 	size_t size;
 	int pos;
 
@@ -34,7 +34,7 @@ struct sdo_ul_req {
 	struct can_frame frame;
 
 	size_t expected_size;
-	void* addr;
+	char* addr;
 	size_t size;
 	int pos;
 

@@ -8,6 +8,7 @@
 #include <ctype.h>
 #include <poll.h>
 
+#include <sys/socket.h>
 #include <linux/can.h>
 #include "canopen.h"
 #include "socketcan.h"
@@ -303,6 +304,7 @@ static void download_single_parameter(int fd, struct csv_line* params)
 
 	if (!(params->access & DICT_ENTRY_ACCESS_W))
 		return;
+
 
 	if(params->type == DICT_ENTRY_TYPE_VISIBLE_STRING)
 		download_single_string(fd, params);

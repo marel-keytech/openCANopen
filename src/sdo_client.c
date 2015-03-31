@@ -4,6 +4,10 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+#ifndef CAN_MAX_DLC
+#define CAN_MAX_DLC 8
+#endif
+
 static int sdo_dl_req_abort(struct sdo_dl_req* self, enum sdo_abort_code code)
 {
 	struct can_frame* cf = &self->frame;

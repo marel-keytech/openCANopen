@@ -1,3 +1,4 @@
+#include <sys/socket.h>
 #include <linux/can.h>
 #include <assert.h>
 

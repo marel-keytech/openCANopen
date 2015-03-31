@@ -210,6 +210,7 @@ static int test_segmented_download_abort_one_segment()
 int main()
 {
 	int r = 0;
+
 	RUN_TEST(test_make_dl_request_1_byte);
 	RUN_TEST(test_make_dl_request_4_bytes);
 	RUN_TEST(test_make_dl_request_5_bytes);
@@ -221,6 +222,6 @@ int main()
 	RUN_TEST(test_segmented_download_success_two_segments);
 	RUN_TEST(test_segmented_download_abort_one_segment);
 
-	return 0;
+	return r;
 }
 

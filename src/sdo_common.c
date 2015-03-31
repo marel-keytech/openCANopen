@@ -1,5 +1,9 @@
 #include "canopen/sdo.h"
 
+#ifndef CAN_MAX_DLC
+#define CAN_MAX_DLC 8
+#endif
+
 void sdo_abort(struct can_frame* frame, enum sdo_abort_code code, int index,
 	       int subindex)
 {

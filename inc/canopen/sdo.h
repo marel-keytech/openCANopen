@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <linux/can.h>
 
 #include "canopen/byteorder.h"
@@ -61,7 +62,7 @@ enum sdo_obj_flags {
 };
 
 struct sdo_obj {
-	void* addr;
+	char* addr;
 	size_t size;
 	enum sdo_obj_flags flags;
 };
