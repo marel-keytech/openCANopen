@@ -222,8 +222,13 @@ static void download_single_buffer(int fd, struct csv_line* params,
 	} while (req.state != SDO_REQ_DONE && req.state != SDO_REQ_ABORTED);
 
 	if (req.state == SDO_REQ_ABORTED)
-		fprintf(stderr, "Abort on index %x, subindex %x!\n",
-				params->index, params->subindex);
+		fprintf(stderr, "Abort %x:%x: %s\n",
+				params->index, params->subindex,
+				sdo_strerror(sdo_get_abort_code(&req.frame)));
+	else if (req.state == SDO_REQ_REMOTE_ABORT)
+		fprintf(stderr, "Remote abort %x:%x: %s\n",
+				params->index, params->subindex,
+				sdo_strerror(sdo_get_abort_code(&rcf)));
 }
 
 static void download_single_string(int fd, struct csv_line* params)
