@@ -207,6 +207,126 @@ static int test_segmented_download_abort_one_segment()
 	return 0;
 }
 
+static int test_make_ul_request()
+{
+	struct sdo_ul_req req;
+	memset(&req, 0, sizeof(req));
+	sdo_request_upload(&req, 0x1000, 42);
+
+	ASSERT_INT_EQ(SDO_REQ_INIT, req.state);
+	ASSERT_INT_EQ(SDO_CCS_UL_INIT_REQ, sdo_get_cs(&req.frame));
+	ASSERT_INT_EQ(0x1000, sdo_get_index(&req.frame));
+	ASSERT_INT_EQ(42, sdo_get_subindex(&req.frame));
+	ASSERT_INT_EQ(4, req.frame.can_dlc);
+	ASSERT_INT_EQ(-1, req.indicated_size);
+	ASSERT_INT_EQ(0x1000, req.index);
+	ASSERT_INT_EQ(42, req.subindex);
+	ASSERT_TRUE(req.have_frame);
+
+	return 0;
+}
+
+static int test_expediated_upload_1_byte_size_indicated()
+{
+	struct sdo_ul_req req;
+	struct can_frame rcf;
+
+	sdo_clear_frame(&rcf);
+
+	ASSERT_TRUE(sdo_request_upload(&req, 0x1000, 42));
+
+	sdo_set_cs(&rcf, SDO_SCS_UL_INIT_RES);
+	sdo_expediate(&rcf);
+	sdo_indicate_size(&rcf);
+	sdo_set_expediated_size(&rcf, 1);
+	sdo_copy_multiplexer(&rcf, &req.frame);
+	rcf.data[SDO_EXPEDIATED_DATA_IDX] = 23;
+
+	int save = 0;
+	req.addr = (void*)&save;
+	req.size = 1;
+
+	ASSERT_FALSE(sdo_ul_req_feed(&req, &rcf));
+
+	ASSERT_INT_EQ(SDO_REQ_DONE, req.state);
+	ASSERT_FALSE(req.have_frame);
+	ASSERT_INT_EQ(23, save);
+	ASSERT_INT_EQ(1, req.indicated_size);
+
+	return 0;
+}
+
+static int test_expediated_upload_1_byte_size_not_indicated()
+{
+	struct sdo_ul_req req;
+	struct can_frame rcf;
+
+
+	ASSERT_TRUE(sdo_request_upload(&req, 0x1000, 42));
+
+	sdo_clear_frame(&rcf);
+	sdo_set_cs(&rcf, SDO_SCS_UL_INIT_RES);
+	sdo_expediate(&rcf);
+	sdo_copy_multiplexer(&rcf, &req.frame);
+	rcf.data[SDO_EXPEDIATED_DATA_IDX] = 23;
+
+	int save = 0;
+	req.addr = (void*)&save;
+	req.size = 1;
+
+	ASSERT_FALSE(sdo_ul_req_feed(&req, &rcf));
+
+	ASSERT_INT_EQ(SDO_REQ_DONE, req.state);
+	ASSERT_FALSE(req.have_frame);
+	ASSERT_INT_EQ(23, save);
+	ASSERT_INT_EQ(-1, req.indicated_size);
+
+	return 0;
+}
+
+static int test_segmented_upload_7_bytes_size_indicated()
+{
+	struct sdo_ul_req req;
+	struct can_frame rcf;
+
+	ASSERT_TRUE(sdo_request_upload(&req, 0x1000, 42));
+
+	sdo_clear_frame(&rcf);
+	sdo_set_cs(&rcf, SDO_SCS_UL_INIT_RES);
+	sdo_indicate_size(&rcf);
+	sdo_set_indicated_size(&rcf, 7);
+	sdo_copy_multiplexer(&rcf, &req.frame);
+
+	ASSERT_TRUE(sdo_ul_req_feed(&req, &rcf));
+
+	ASSERT_INT_EQ(SDO_REQ_SEG, req.state);
+	ASSERT_TRUE(req.have_frame);
+	ASSERT_INT_EQ(SDO_CCS_UL_SEG_REQ, sdo_get_cs(&req.frame));
+	ASSERT_FALSE(sdo_is_toggled(&req.frame));
+	ASSERT_FALSE(req.is_toggled);
+	ASSERT_INT_EQ(1, req.frame.can_dlc);
+	ASSERT_INT_EQ(7, req.indicated_size);
+
+	sdo_clear_frame(&rcf);
+	sdo_set_cs(&rcf, SDO_SCS_UL_SEG_RES);
+	sdo_set_segment_size(&rcf, 7);
+	sdo_end_segment(&rcf);
+	memcpy(&rcf.data[SDO_SEGMENT_IDX], "foobar", 7);
+
+	char buffer[7];
+	req.addr = buffer;
+	req.size = 7;
+
+	ASSERT_FALSE(sdo_ul_req_feed(&req, &rcf));
+
+	ASSERT_INT_EQ(SDO_REQ_DONE, req.state);
+	ASSERT_FALSE(req.have_frame);
+	ASSERT_STR_EQ("foobar", buffer);
+	ASSERT_INT_EQ(7, req.indicated_size);
+
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -221,6 +341,12 @@ int main()
 	RUN_TEST(test_segmented_download_success_one_segment);
 	RUN_TEST(test_segmented_download_success_two_segments);
 	RUN_TEST(test_segmented_download_abort_one_segment);
+
+	RUN_TEST(test_make_ul_request);
+	RUN_TEST(test_expediated_upload_1_byte_size_indicated);
+	RUN_TEST(test_expediated_upload_1_byte_size_not_indicated);
+
+	RUN_TEST(test_segmented_upload_7_bytes_size_indicated);
 
 	return r;
 }

@@ -32,8 +32,13 @@ struct sdo_dl_req {
 struct sdo_ul_req {
 	enum sdo_req_state state;
 	struct can_frame frame;
+	int is_toggled;
 
-	size_t expected_size;
+	int index;
+	int subindex;
+
+	ssize_t indicated_size;
+
 	char* addr;
 	size_t size;
 	int pos;
@@ -44,8 +49,7 @@ struct sdo_ul_req {
 int sdo_request_download(struct sdo_dl_req* self, int index, int subindex,
 			 const void* addr, size_t size);
 
-int sdo_request_upload(struct sdo_ul_req* self, int index, int subindex,
-		       ssize_t expected_size);
+int sdo_request_upload(struct sdo_ul_req* self, int index, int subindex);
 
 int sdo_dl_req_next_frame(struct sdo_dl_req* self, struct can_frame* out);
 int sdo_ul_req_next_frame(struct sdo_ul_req* self, struct can_frame* out);
