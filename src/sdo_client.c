@@ -133,12 +133,12 @@ int sdo_dl_req_feed(struct sdo_dl_req* self, const struct can_frame* frame)
 		return request_download_segment(self, frame);
 
 	case SDO_REQ_SEG:
+		if (self->is_toggled != sdo_is_toggled(frame))
+			return sdo_dl_req_abort(self, SDO_ABORT_TOGGLE);
+
 	case SDO_REQ_END_SEGMENT:
 		if (sdo_get_cs(frame) != SDO_SCS_DL_SEG_RES)
 			return sdo_dl_req_abort(self, SDO_ABORT_INVALID_CS);
-
-		if (self->is_toggled != sdo_is_toggled(frame))
-			return sdo_dl_req_abort(self, SDO_ABORT_TOGGLE);
 
 		if (self->state == SDO_REQ_END_SEGMENT) {
 			self->state = SDO_REQ_DONE;
@@ -159,6 +159,8 @@ int sdo_dl_req_feed(struct sdo_dl_req* self, const struct can_frame* frame)
 int sdo_request_upload(struct sdo_ul_req* self, int index, int subindex,
 		       ssize_t expected_size)
 {
+
+
 	return 0;
 }
 
