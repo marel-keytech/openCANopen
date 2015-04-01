@@ -80,7 +80,7 @@ static inline void sdo_set_cs(struct can_frame* frame, int cs)
 	frame->data[0] |= cs << 5;
 }
 
-static inline size_t sdo_get_segment_size(struct can_frame* frame)
+static inline size_t sdo_get_segment_size(const struct can_frame* frame)
 {
 	int n = (frame->data[0] >> 1) & 7;
 	return 7 - n;
@@ -108,7 +108,7 @@ static inline void sdo_end_segment(struct can_frame* frame)
 	frame->data[0] |= 1;
 }
 
-static inline int sdo_is_end_segment(struct can_frame* frame)
+static inline int sdo_is_end_segment(const struct can_frame* frame)
 {
 	return frame->data[0] & 1;
 }
@@ -126,7 +126,7 @@ static inline void sdo_set_abort_code(struct can_frame* frame,
 	byteorder(&frame->data[4], &code, 4);
 }
 
-static inline int sdo_is_expediated(struct can_frame* frame)
+static inline int sdo_is_expediated(const struct can_frame* frame)
 {
 	return !!(frame->data[0] & 2);
 }
@@ -136,7 +136,7 @@ static inline void sdo_expediate(struct can_frame* frame)
 	frame->data[0] |= 2;
 }
 
-static inline int sdo_is_size_indicated(struct can_frame* frame)
+static inline int sdo_is_size_indicated(const struct can_frame* frame)
 {
 	return frame->data[0] & 1;
 }
@@ -151,14 +151,14 @@ static inline void sdo_set_indicated_size(struct can_frame* frame, size_t size)
 	byteorder(&frame->data[SDO_INDICATED_SIZE_IDX], &size, 4);
 }
 
-static inline size_t sdo_get_indicated_size(struct can_frame* frame)
+static inline size_t sdo_get_indicated_size(const struct can_frame* frame)
 {
 	size_t size;
 	byteorder(&size, &frame->data[SDO_INDICATED_SIZE_IDX], 4);
 	return size;
 }
 
-static inline size_t sdo_get_expediated_size(struct can_frame* frame)
+static inline size_t sdo_get_expediated_size(const struct can_frame* frame)
 {
 	int n = (frame->data[0] >> 2) & 3;
 	return 4 - n;
