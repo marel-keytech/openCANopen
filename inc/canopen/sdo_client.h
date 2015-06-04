@@ -2,6 +2,7 @@
 #define _CANOPEN_SDO_CLIENT_H
 
 #include <string.h>
+#include <unistd.h>
 #include <linux/can.h>
 
 enum sdo_req_state {
