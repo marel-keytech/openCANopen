@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -20,6 +21,9 @@ void byteorder(void* dst, const void* src, size_t size)
 		d[i - 1] = s[size - i]; --i;
 	case 2: d[i - 1] = s[size - i]; --i;
 	case 1: d[i - 1] = s[size - i];
+		break;
+	default:
+		abort();
 	}
 }
 #else
