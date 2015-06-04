@@ -174,7 +174,7 @@ static inline void sdo_set_expediated_size(struct can_frame* frame, size_t size)
 static inline int sdo_get_index(struct can_frame* frame)
 {
 	uint16_t value;
-	byteorder(&value, &frame->data[SDO_MULTIPLEXER_IDX], 2);
+	byteorder(&value, &frame->data[SDO_MULTIPLEXER_IDX], sizeof(value));
 	return value;
 }
 
@@ -183,12 +183,12 @@ static inline int sdo_get_subindex(struct can_frame* frame)
 	return frame->data[SDO_MULTIPLEXER_IDX+2];
 }
 
-static inline void sdo_set_index(struct can_frame* frame, int index)
+static inline void sdo_set_index(struct can_frame* frame, uint16_t index)
 {
-	byteorder(&frame->data[SDO_MULTIPLEXER_IDX], &index, 2);
+	byteorder(&frame->data[SDO_MULTIPLEXER_IDX], &index, sizeof(index));
 }
 
-static inline void sdo_set_subindex(struct can_frame* frame, int subindex)
+static inline void sdo_set_subindex(struct can_frame* frame, uint8_t subindex)
 {
 	frame->data[SDO_MULTIPLEXER_IDX+2] = subindex;
 }
