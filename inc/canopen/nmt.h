@@ -31,7 +31,7 @@ static inline int nmt_is_valid(const struct can_frame* frame)
 
 static inline enum nmt_cs nmt_get_cs(const struct can_frame* frame)
 {
-	return frame->data[0];
+	return (enum nmt_cs)frame->data[0];
 }
 
 static inline void nmt_set_cs(struct can_frame* frame, enum nmt_cs cs)
