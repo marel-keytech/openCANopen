@@ -16,7 +16,7 @@ static inline int heartbeat_is_bootup(const struct can_frame* frame)
 
 static inline enum nmt_state heartbeat_get_state(const struct can_frame* frame)
 {
-	return frame->data[0] & 0x7f
+	return frame->data[0] & 0x7f;
 }
 
 static inline void heartbeat_set_state(struct can_frame* frame,
