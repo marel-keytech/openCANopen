@@ -1,6 +1,7 @@
 #ifndef _CANOPEN_SOCKETCAN_H
 #define _CANOPEN_SOCKETCAN_H
 
+#include <sys/socket.h>
 #include <linux/can.h>
 
 #define CANOPEN_SLAVE_FILTER_LENGTH 8
