@@ -244,12 +244,11 @@ static int feed_upload_segment_response(struct sdo_ul_req* self,
 	sdo_clear_frame(cf);
 	sdo_set_cs(cf, SDO_CCS_UL_SEG_REQ);
 
+	self->is_toggled ^= 1;
 	if (self->is_toggled)
 		sdo_toggle(cf);
 
 	cf->can_dlc = 1;
-
-	self->is_toggled ^= 1;
 
 	self->have_frame = 1;
 	return self->have_frame;
@@ -277,7 +276,7 @@ int sdo_ul_req_feed(struct sdo_ul_req* self, const struct can_frame* frame)
 			return sdo_ul_req_abort(self, SDO_ABORT_INVALID_CS);
 
 		if (!sdo_is_end_segment(frame) &&
-		    sdo_is_toggled(frame) == self->is_toggled)
+		    sdo_is_toggled(frame) != self->is_toggled)
 			return sdo_ul_req_abort(self, SDO_ABORT_TOGGLE);
 
 		return feed_upload_segment_response(self, frame);
