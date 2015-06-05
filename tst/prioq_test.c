@@ -178,6 +178,7 @@ static int test_get_smaller_child_right()
 static void heapsort(unsigned long* dst, unsigned long* src, size_t size)
 {
 	struct prioq q;
+	struct prioq_elem elem;
 	int i;
 
 	prioq_init(&q, size);
@@ -187,8 +188,8 @@ static void heapsort(unsigned long* dst, unsigned long* src, size_t size)
 
 	for(i = 0; i < size; ++i)
 	{
-		dst[i] = q.head->priority;
-		prioq_pop(&q);
+		prioq_pop(&q, &elem);
+		dst[i] = elem.priority;
 	}
 
 	prioq_clear(&q);

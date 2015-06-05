@@ -1,12 +1,14 @@
-#include <assert.h>
+#include <errno.h>
 #include "prioq.h"
-
 
 int prioq_init(struct prioq* self, size_t size)
 {
 	self->size = size;
 	self->index = 0;
 	self->head = calloc(size, sizeof(*self->head));
+
+	pthread_mutex_init(&self->mutex, NULL);
+
 	return self->head ? 0 : -1;
 }
 
@@ -15,12 +17,16 @@ int prioq_grow(struct prioq* self, size_t size)
 	if (self->size >= size)
 		return 0;
 
+	_prioq_lock(self);
+
 	struct prioq_elem* new_head = realloc(self->head,
 					      size*sizeof(*self->head));
 	if (!new_head)
 		return -1;
 
 	self->head = new_head;
+
+	_prioq_unlock(self);
 
 	return 1;
 }
@@ -31,6 +37,8 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 		if (prioq_grow(self, self->size*2))
 			return -1;
 
+	_prioq_lock(self);
+
 	struct prioq_elem* elem = &self->head[self->index++];
 
 	elem->priority = priority;
@@ -38,16 +46,26 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 
 	_prioq_bubble_up(self, self->index - 1);
 
+	_prioq_unlock(self);
+
 	return 0;
 }
 
-void prioq_pop(struct prioq* self)
+int prioq_pop(struct prioq* self, struct prioq_elem* elem)
 {
-	assert(self->index > 0);
+	_prioq_lock(self);
 
+	if (self->index == 0)
+		return 0;
+
+	*elem = self->head[0];
 	self->head[0] = self->head[--self->index];
 
 	_prioq_sink_down(self, 0);
+
+	_prioq_unlock(self);
+
+	return 1;
 }
 
 void _prioq_bubble_up(struct prioq* self, unsigned long index)
