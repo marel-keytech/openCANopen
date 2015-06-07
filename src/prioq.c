@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <errno.h>
 #include "prioq.h"
 
@@ -9,8 +8,6 @@ int prioq_init(struct prioq* self, size_t size)
 	self->head = calloc(size, sizeof(*self->head));
 
 	pthread_mutex_init(&self->mutex, NULL);
-	pthread_mutex_init(&self->suspend_mutex, NULL);
-	pthread_cond_init(&self->cond, NULL);
 
 	return self->head ? 0 : -1;
 }
@@ -50,8 +47,6 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 	_prioq_bubble_up(self, self->index - 1);
 
 	_prioq_unlock(self);
-
-	_prioq_resume(self);
 
 	return 0;
 }
@@ -117,21 +112,5 @@ void _prioq_sink_down(struct prioq* self, unsigned long index)
 
 	_prioq_swap(parent, child);
 	_prioq_sink_down(self, smaller_child);
-}
-
-void prioq_wait(struct prioq* self)
-{
-	assert_perror(pthread_mutex_lock(&self->suspend_mutex));
-	while(self->index == 0)
-		assert_perror(pthread_cond_wait(&self->cond,
-						&self->suspend_mutex));
-	assert_perror(pthread_mutex_unlock(&self->suspend_mutex));
-}
-
-void _prioq_resume(struct prioq* self)
-{
-//	assert_perror(pthread_mutex_lock(&self->suspend_mutex));
-	assert_perror(pthread_cond_broadcast(&self->cond));
-//	assert_perror(pthread_mutex_unlock(&self->suspend_mutex));
 }
 

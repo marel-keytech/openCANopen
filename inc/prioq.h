@@ -15,8 +15,6 @@ struct prioq {
 	size_t size;
 	unsigned long index;
 	pthread_mutex_t mutex;
-	pthread_mutex_t suspend_mutex;
-	pthread_cond_t cond;
 	struct prioq_elem* head;
 };
 
@@ -24,9 +22,7 @@ int prioq_init(struct prioq* self, size_t size);
 
 static inline void prioq_clear(struct prioq* self)
 {
-	pthread_cond_destroy(&self->cond);
 	pthread_mutex_destroy(&self->mutex);
-	pthread_mutex_destroy(&self->suspend_mutex);
 	free(self->head);
 }
 
@@ -71,9 +67,6 @@ static inline void _prioq_unlock(struct prioq* self)
 unsigned long _prioq_get_smaller_child(struct prioq* self, unsigned long index);
 void _prioq_bubble_up(struct prioq* self, unsigned long index);
 void _prioq_sink_down(struct prioq* self, unsigned long index);
-
-void prioq_wait(struct prioq* self);
-void _prioq_resume(struct prioq* self);
 
 #endif /* PRIOQ_H_ */
 
