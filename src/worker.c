@@ -42,38 +42,29 @@ static inline void unlock()
 	pthread_mutex_unlock(&mutex_);
 }
 
-static void wait_for_jobs()
+static void* thread_fn(void* context)
 {
-	lock();
-	while (!please_exit_ && njobs_ > 0)
-		pthread_cond_wait(&cond_, &mutex_);
-	unlock();
-}
-
-static void decrement_njobs()
-{
-	lock();
-	njobs_ -= njobs_ > 0 ? 1 : 0;
-	unlock();
-}
-
-static void* thread_fn(void* unused)
-{
-	(void)unused;
-	struct prioq_elem elem;
+	int id = (int)context;
 
 	while (1) {
-		wait_for_jobs();
+		lock();
+		while (njobs_ == 0 && !please_exit_)
+			pthread_cond_wait(&cond_, &mutex_);
+
+		njobs_ -= njobs_ > 0 ? 1 : 0;
+		unlock();
 
 		if (please_exit_)
 			break;
 
-		while (prioq_pop(&job_queue_, &elem)) {
-			decrement_njobs();
-			struct job* job = (struct job*)elem.data;
-			job->fn(job->context);
-			job_del(job);
-		}
+		struct prioq_elem elem;
+		int have_job = prioq_pop(&job_queue_, &elem);
+		assert(have_job);
+
+		struct job* job = (struct job*)elem.data;
+		job->fn(job->context);
+		job_del(job);
+
 	}
 
 	return NULL;
@@ -90,7 +81,7 @@ static int start_threads(size_t stacksize)
 		pthread_attr_setstacksize(&attr, stacksize);
 
 	for (i = 0; i < nthreads_; ++i)
-		pthread_create(&threads_[i], &attr, thread_fn, NULL);
+		pthread_create(&threads_[i], &attr, thread_fn, (void*)i);
 
 	pthread_attr_destroy(&attr);
 	return 0;
@@ -136,8 +127,8 @@ static void clear_jobs()
 
 static void reap_threads()
 {
-	pthread_cond_broadcast(&cond_);
 	please_exit_ = 1;
+	pthread_cond_broadcast(&cond_);
 
 	for (int i = 0; i < nthreads_; ++i)
 		pthread_join(threads_[i], NULL);
