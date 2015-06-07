@@ -55,14 +55,13 @@ static int start_threads(size_t stacksize)
 	int i;
 	pthread_attr_t attr;
 
-	assert_perror(pthread_attr_init(&attr));
+	pthread_attr_init(&attr);
 
 	if (stacksize > 0)
-		assert_perror(pthread_attr_setstacksize(&attr, stacksize));
+		pthread_attr_setstacksize(&attr, stacksize);
 
 	for (i = 0; i < nthreads_; ++i)
-		assert_perror(pthread_create(&threads_[i], &attr, thread_fn,
-					     NULL));
+		pthread_create(&threads_[i], &attr, thread_fn, NULL);
 
 	pthread_attr_destroy(&attr);
 	return 0;
@@ -103,8 +102,8 @@ static void reap_threads()
 	int i;
 	for (i = 0; i < nthreads_; ++i)
 	{
-		assert_perror(pthread_cancel(threads_[i]));
-		assert_perror(pthread_join(threads_[i], NULL));
+		pthread_cancel(threads_[i]);
+		pthread_join(threads_[i], NULL);
 	}
 }
 
