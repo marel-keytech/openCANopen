@@ -3,7 +3,6 @@
 #include "tst.h"
 #include "canopen/sdo.h"
 #include "canopen/sdo_client.h"
-#include "canopen/sdo_client_priv.h"
 
 static int test_make_dl_request_1_byte()
 {
