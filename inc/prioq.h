@@ -56,12 +56,12 @@ static inline void _prioq_swap(struct prioq_elem* a, struct prioq_elem* b)
 
 static inline void _prioq_lock(struct prioq* self)
 {
-	assert_perror(pthread_mutex_lock(&self->mutex));
+	pthread_mutex_lock(&self->mutex);
 }
 
 static inline void _prioq_unlock(struct prioq* self)
 {
-	assert_perror(pthread_mutex_unlock(&self->mutex));
+	pthread_mutex_unlock(&self->mutex);
 }
 
 unsigned long _prioq_get_smaller_child(struct prioq* self, unsigned long index);
