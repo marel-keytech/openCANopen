@@ -189,7 +189,7 @@ static void heapsort(unsigned long* dst, unsigned long* src, size_t size)
 
 	for(i = 0; i < size; ++i)
 	{
-		prioq_pop(&q, &elem);
+		prioq_pop(&q, &elem, 0);
 		dst[i] = elem.priority;
 	}
 
@@ -241,7 +241,7 @@ static int test_heapsort_w_duplicates()
 static int get_data(struct prioq* q)
 {
 	struct prioq_elem elem;
-	prioq_pop(q, &elem);
+	prioq_pop(q, &elem, 0);
 	return (int)elem.data;
 }
 

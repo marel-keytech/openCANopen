@@ -1,5 +1,7 @@
 #include <limits.h>
 #include <errno.h>
+#include <pthread.h>
+#include <stdint.h>
 #include "prioq.h"
 
 int prioq_init(struct prioq* self, size_t size)
@@ -12,6 +14,14 @@ int prioq_init(struct prioq* self, size_t size)
 	pthread_mutex_init(&self->mutex, NULL);
 
 	return self->head ? 0 : -1;
+}
+
+void prioq_clear(struct prioq* self)
+{
+	pthread_mutex_destroy(&self->mutex);
+	pthread_mutex_destroy(&self->suspend_mutex);
+	pthread_cond_destroy(&self->suspend_cond);
+	free(self->head);
 }
 
 int prioq_grow(struct prioq* self, size_t size)
@@ -51,15 +61,76 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 
 	_prioq_unlock(self);
 
+	pthread_mutex_lock(&self->suspend_mutex);
+	pthread_cond_broadcast(&self->suspend_cond);
+	pthread_mutex_unlock(&self->suspend_mutex);
+
 	return 0;
 }
 
-int prioq_pop(struct prioq* self, struct prioq_elem* elem)
+uint64_t timespec_to_ns(struct timespec* ts)
 {
-	_prioq_lock(self);
+	return ts->tv_sec * 1000000000 + ts->tv_nsec;
+}
 
-	if (self->index == 0)
-		return 0;
+struct timespec ns_to_timespec(uint64_t ns)
+{
+	struct timespec ts;
+	ts.tv_nsec = ns % 1000000000;
+	ts.tv_sec = ns / 1000000000;
+	return ts;
+}
+
+void add_to_timespec(struct timespec* ts, uint64_t addition)
+{
+	*ts = ns_to_timespec(timespec_to_ns(ts) + addition);
+}
+
+int block_if_empty(struct prioq* self, int timeout)
+{
+	struct timespec deadline;
+	int r = 0;
+
+	if (timeout >= 0) {
+		clock_gettime(CLOCK_MONOTONIC, &deadline);
+		add_to_timespec(&deadline, timeout * 1000000);
+	}
+
+	pthread_mutex_lock(&self->suspend_mutex);
+	if (timeout < 0) {
+		while (self->index == 0)
+			pthread_cond_wait(&self->suspend_cond,
+					  &self->suspend_mutex);
+	} else {
+		while (self->index == 0)
+			if (pthread_cond_timedwait(&self->suspend_cond,
+						   &self->suspend_mutex,
+						   &deadline) == ETIMEDOUT) {
+				r = ETIMEDOUT;
+				goto done;
+			}
+	}
+
+done:
+	pthread_mutex_unlock(&self->suspend_mutex);
+	return r;
+}
+
+int prioq_pop(struct prioq* self, struct prioq_elem* elem, int timeout)
+{
+	if (timeout == 0) {
+		if (self->index == 0) {
+			errno = EAGAIN;
+			return -1;
+		}
+	} else {
+		if (block_if_empty(self, timeout) == ETIMEDOUT) {
+			errno = ETIMEDOUT;
+			return -1;
+		}
+	}
+
+	_prioq_lock(self);
 
 	*elem = self->head[0];
 	self->head[0] = self->head[--self->index];

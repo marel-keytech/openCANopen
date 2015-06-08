@@ -5,10 +5,6 @@
 static struct prioq job_queue_;
 static int nthreads_;
 static pthread_t* threads_;
-static pthread_mutex_t mutex_;
-static pthread_cond_t cond_;
-static unsigned long njobs_;
-static int please_exit_;
 
 struct job {
 	void (*fn)(void*);
@@ -32,34 +28,17 @@ static void job_del(struct job* job)
 	free(job);
 }
 
-static inline void lock()
-{
-	pthread_mutex_lock(&mutex_);
-}
-
-static inline void unlock()
-{
-	pthread_mutex_unlock(&mutex_);
-}
-
 static void* thread_fn(void* context)
 {
 	int id = (int)context;
 
 	while (1) {
-		lock();
-		while (njobs_ == 0 && !please_exit_)
-			pthread_cond_wait(&cond_, &mutex_);
-
-		njobs_ -= njobs_ > 0 ? 1 : 0;
-		unlock();
-
-		if (please_exit_)
-			break;
-
 		struct prioq_elem elem;
-		int have_job = prioq_pop(&job_queue_, &elem);
-		assert(have_job);
+		if (prioq_pop(&job_queue_, &elem, -1) < 0)
+			continue;
+
+		if (elem.data == NULL)
+			break;
 
 		struct job* job = (struct job*)elem.data;
 		job->fn(job->context);
@@ -89,14 +68,8 @@ static int start_threads(size_t stacksize)
 
 int worker_init(int nthreads, size_t qsize, size_t stacksize)
 {
-	njobs_ = 0;
-	please_exit_ = 0;
-
 	if (prioq_init(&job_queue_, qsize) < 0)
 		return -1;
-
-	pthread_mutex_init(&mutex_, NULL);
-	pthread_cond_init(&cond_, NULL);
 
 	nthreads_ = nthreads;
 	threads_ = calloc(nthreads_, sizeof(pthread_t));
@@ -111,8 +84,6 @@ int worker_init(int nthreads, size_t qsize, size_t stacksize)
 thread_start_failure:
 	free(threads_);
 thread_alloc_failure:
-	pthread_cond_destroy(&cond_);
-	pthread_mutex_destroy(&mutex_);
 	prioq_clear(&job_queue_);
 	return -1;
 }
@@ -121,14 +92,15 @@ static void clear_jobs()
 {
 	struct prioq_elem elem;
 
-	while (prioq_pop(&job_queue_, &elem))
-		job_del(elem.data);
+	while (prioq_pop(&job_queue_, &elem, 0) == 0)
+		if (elem.data)
+			job_del(elem.data);
 }
 
 static void reap_threads()
 {
-	please_exit_ = 1;
-	pthread_cond_broadcast(&cond_);
+	for (int i = 0; i < nthreads_; ++i)
+		prioq_insert(&job_queue_, 0, NULL);
 
 	for (int i = 0; i < nthreads_; ++i)
 		pthread_join(threads_[i], NULL);
@@ -140,16 +112,6 @@ void worker_deinit()
 	free(threads_);
 	clear_jobs();
 	prioq_clear(&job_queue_);
-	pthread_cond_destroy(&cond_);
-	pthread_mutex_destroy(&mutex_);
-}
-
-static void increment_njobs()
-{
-	lock();
-	++njobs_;
-	pthread_cond_broadcast(&cond_);
-	unlock();
 }
 
 int worker_add_job(unsigned long priority, void (*job_fn)(void*), void* context)
@@ -160,8 +122,6 @@ int worker_add_job(unsigned long priority, void (*job_fn)(void*), void* context)
 
 	if (prioq_insert(&job_queue_, priority, job) < 0)
 		return -1;
-
-	increment_njobs();
 
 	return 0;
 }

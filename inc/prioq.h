@@ -17,22 +17,20 @@ struct prioq {
 	unsigned long sequence;
 	unsigned long index;
 	pthread_mutex_t mutex;
+	pthread_mutex_t suspend_mutex;
+	pthread_cond_t suspend_cond;
 	struct prioq_elem* head;
 };
 
 int prioq_init(struct prioq* self, size_t size);
 
-static inline void prioq_clear(struct prioq* self)
-{
-	pthread_mutex_destroy(&self->mutex);
-	free(self->head);
-}
+void prioq_clear(struct prioq* self);
 
 int prioq_grow(struct prioq* self, size_t size);
 
 int prioq_insert(struct prioq* self, unsigned long priority, void* data);
 
-int prioq_pop(struct prioq* self, struct prioq_elem* elem);
+int prioq_pop(struct prioq* self, struct prioq_elem* elem, int timeout);
 
 static inline unsigned long _prioq_parent(unsigned long index)
 {
