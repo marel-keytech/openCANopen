@@ -1,3 +1,4 @@
+#include <limits.h>
 #include "prioq.h"
 #include "tst.h"
 
@@ -237,6 +238,64 @@ static int test_heapsort_w_duplicates()
 	return 0;
 }
 
+static int get_data(struct prioq* q)
+{
+	struct prioq_elem elem;
+	prioq_pop(q, &elem);
+	return (int)elem.data;
+}
+
+static int test_stability()
+{
+	struct prioq q;
+	prioq_init(&q, 42);
+
+	prioq_insert(&q, 2, (void*)4);
+	prioq_insert(&q, 2, (void*)5);
+	prioq_insert(&q, 2, (void*)6);
+
+	prioq_insert(&q, 1, (void*)1);
+	prioq_insert(&q, 1, (void*)2);
+	prioq_insert(&q, 1, (void*)3);
+
+	ASSERT_INT_EQ(1, get_data(&q));
+	ASSERT_INT_EQ(2, get_data(&q));
+	ASSERT_INT_EQ(3, get_data(&q));
+	ASSERT_INT_EQ(4, get_data(&q));
+	ASSERT_INT_EQ(5, get_data(&q));
+	ASSERT_INT_EQ(6, get_data(&q));
+
+	prioq_clear(&q);
+	return 0;
+}
+
+static int test_rollover_stability()
+{
+	struct prioq q;
+	prioq_init(&q, 42);
+	q.sequence = ULONG_MAX - 1;
+
+	prioq_insert(&q, 2, (void*)4);
+	prioq_insert(&q, 2, (void*)5);
+	prioq_insert(&q, 2, (void*)6);
+	prioq_insert(&q, 2, (void*)7);
+
+	prioq_insert(&q, 1, (void*)1);
+	prioq_insert(&q, 1, (void*)2);
+	prioq_insert(&q, 1, (void*)3);
+
+	ASSERT_INT_EQ(1, get_data(&q));
+	ASSERT_INT_EQ(2, get_data(&q));
+	ASSERT_INT_EQ(3, get_data(&q));
+	ASSERT_INT_EQ(4, get_data(&q));
+	ASSERT_INT_EQ(5, get_data(&q));
+	ASSERT_INT_EQ(6, get_data(&q));
+	ASSERT_INT_EQ(7, get_data(&q));
+
+	prioq_clear(&q);
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -254,6 +313,8 @@ int main()
 	RUN_TEST(test_get_smaller_child_right);
 	RUN_TEST(test_heapsort_wo_duplicates);
 	RUN_TEST(test_heapsort_w_duplicates);
+	RUN_TEST(test_stability);
+	RUN_TEST(test_rollover_stability);
 	return r;
 }
 

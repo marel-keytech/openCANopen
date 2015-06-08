@@ -8,11 +8,13 @@
 
 struct prioq_elem {
 	unsigned long priority;
+	unsigned long sequence_;
 	void* data;
 };
 
 struct prioq {
 	size_t size;
+	unsigned long sequence;
 	unsigned long index;
 	pthread_mutex_t mutex;
 	struct prioq_elem* head;
