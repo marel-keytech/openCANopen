@@ -64,6 +64,8 @@ static inline void _prioq_unlock(struct prioq* self)
 	pthread_mutex_unlock(&self->mutex);
 }
 
+int _prioq_is_seq_lt(unsigned long a, unsigned long b);
+
 unsigned long _prioq_get_smaller_child(struct prioq* self, unsigned long index);
 void _prioq_bubble_up(struct prioq* self, unsigned long index);
 void _prioq_sink_down(struct prioq* self, unsigned long index);

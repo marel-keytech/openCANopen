@@ -152,17 +152,15 @@ static inline int is_on_1st_quadrant(unsigned long i)
 	return ULONG_MAX / 4 * 3 < i && i <= ULONG_MAX;
 }
 
-static int is_seq_lt(struct prioq_elem* a, struct prioq_elem* b)
+int _prioq_is_seq_lt(unsigned long a, unsigned long b)
 {
-	if (is_on_1st_quadrant(a->sequence_)
-	 && is_on_4th_quadrant(b->sequence_))
+	if (is_on_1st_quadrant(a) && is_on_4th_quadrant(b))
 		return 1;
 
-	if (is_on_4th_quadrant(a->sequence_)
-	 && is_on_1st_quadrant(b->sequence_))
+	if (is_on_4th_quadrant(a) && is_on_1st_quadrant(b))
 		return 0;
 
-	return a->sequence_ < b->sequence_;
+	return a < b;
 }
 
 static inline int is_lt(struct prioq_elem* a, struct prioq_elem* b)
@@ -173,7 +171,7 @@ static inline int is_lt(struct prioq_elem* a, struct prioq_elem* b)
 	if (a->priority > b->priority)
 		return 0;
 
-	return is_seq_lt(a, b);
+	return _prioq_is_seq_lt(a->sequence_, b->sequence_);
 }
 
 void _prioq_bubble_up(struct prioq* self, unsigned long index)

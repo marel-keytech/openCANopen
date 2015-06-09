@@ -269,7 +269,7 @@ static int test_stability()
 	return 0;
 }
 
-static int test_rollover_stability()
+static int test_stability_w_rollover()
 {
 	struct prioq q;
 	prioq_init(&q, 42);
@@ -296,6 +296,25 @@ static int test_rollover_stability()
 	return 0;
 }
 
+#define QUADRANT (ULONG_MAX / 4)
+
+static int test_rollover()
+{
+	ASSERT_TRUE(_prioq_is_seq_lt(QUADRANT, QUADRANT+1));
+	ASSERT_TRUE(_prioq_is_seq_lt(QUADRANT*2, QUADRANT*2+1));
+	ASSERT_TRUE(_prioq_is_seq_lt(QUADRANT*3, QUADRANT*3+1));
+	ASSERT_TRUE(_prioq_is_seq_lt(QUADRANT*4, QUADRANT*0));
+
+	ASSERT_FALSE(_prioq_is_seq_lt(QUADRANT+1, QUADRANT));
+	ASSERT_FALSE(_prioq_is_seq_lt(QUADRANT*2+1, QUADRANT*2));
+	ASSERT_FALSE(_prioq_is_seq_lt(QUADRANT*3+1, QUADRANT*3));
+	ASSERT_FALSE(_prioq_is_seq_lt(QUADRANT*0, QUADRANT*4));
+
+	ASSERT_TRUE(_prioq_is_seq_lt(QUADRANT*4-42, QUADRANT*0+42));
+
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -314,7 +333,8 @@ int main()
 	RUN_TEST(test_heapsort_wo_duplicates);
 	RUN_TEST(test_heapsort_w_duplicates);
 	RUN_TEST(test_stability);
-	RUN_TEST(test_rollover_stability);
+	RUN_TEST(test_stability_w_rollover);
+	RUN_TEST(test_rollover);
 	return r;
 }
 
