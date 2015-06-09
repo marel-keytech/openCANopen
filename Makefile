@@ -44,6 +44,9 @@ tst/test_prioq: src/prioq.o tst/prioq_test.o
 tst/test_worker: src/prioq.o src/worker.o tst/worker_test.o
 	$(CC) $^ -pthread -o $@
 
+tst/test_network: src/canopen.o src/byteorder.o src/network.o tst/network_test.o
+	$(CC) $^ -o $@
+
 fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_common.o \
 	  src/sdo_srv.o src/byteorder.o
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
@@ -53,7 +56,8 @@ dlsdo: src/dlsdo.o src/canopen.o src/socketcan.o src/sdo_common.o \
 	$(CC) $^ $(LDFLAGS) -o $@
 
 .PHONY:
-test: tst/test_sdo_srv tst/test_sdo_client tst/test_prioq tst/test_worker
+test: tst/test_sdo_srv tst/test_sdo_client tst/test_prioq tst/test_worker \
+	tst/test_network
 	run-parts tst
 
 install:
