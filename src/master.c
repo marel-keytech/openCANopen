@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,8 @@
 #include "canopen/network.h"
 #include "canopen/nmt.h"
 #include "canopen/heartbeat.h"
+#include "canopen/emcy.h"
+#include "mux.h"
 
 #include "legacy-driver.h"
 
@@ -20,7 +23,14 @@ static char nodes_seen_[128];
 static void* master_iface_;
 static void* driver_manager_;
 
-static void* driver_[128];
+static struct ml_handler mux_handler_;
+
+struct canopen_node {
+	void* driver;
+	struct sdo_channel sdo_channel;
+};
+
+static struct canopen_node node_[128];
 
 void clean_node_name(char* name, size_t size)
 {
@@ -99,22 +109,34 @@ const char* get_name(int nodeid)
 	return name;
 }
 
-static void load_driver(int nodeid)
+static int load_driver(int nodeid)
 {
 	void* driver = NULL;
+	struct canopen_node* node = &node_[nodeid];
+
+	if (sdo_channel_init(&node->sdo_channel) < 0)
+		return -1;
 
 	uint32_t device_type = get_device_type(nodeid);
 	if (device_type == 0)
-		return;
+		goto failure;
 
 	const char* name = get_name(nodeid);
 	if (!name)
-		return;
+		goto failure;
 
 	if (legacy_driver_manager_create_handler(driver_manager_, name,
 						 device_type, master_iface_,
-						 &driver) >= 0)
-		driver_[nodeid] = driver;
+						 &driver) < 0)
+		goto failure;
+
+	node->driver = driver;
+
+	return 0;
+
+failure:
+	sdo_channel_clear(&node->sdo_channel);
+	return -1;
 }
 
 static void run_bootup_sequence(void* context)
@@ -128,10 +150,99 @@ static void run_bootup_sequence(void* context)
 			load_driver(i);
 }
 
+static int handle_bootup(struct canopen_node* node)
+{
+	/* TODO */
+	return 0;
+}
+
+static int handle_emcy(struct canopen_node* node, const struct can_frame* frame)
+{
+	if (frame->can_dlc == 0)
+		return handle_bootup(node);
+
+	if (frame->can_dlc != 8)
+		return -1;
+
+	legacy_driver_iface_process_emr(node->driver,
+					emcy_get_code(frame),
+					emcy_get_register(frame),
+					emcy_get_manufacturer_error(frame));
+
+	return 0;
+}
+
+static int handle_heartbeat(struct canopen_node* node,
+			     const struct can_frame* frame)
+{
+	if (heartbeat_is_bootup(frame))
+		return handle_bootup(node);
+
+	/* TODO */
+	return 0;
+}
+
+static void mux_handler_fn(int fd, void* context)
+{
+	(void)context;
+
+	struct can_frame cf;
+	struct canopen_msg msg;
+
+	net_read_frame(fd, &cf, -1);
+
+	canopen_get_object_type(&msg, &cf);
+
+	assert(msg.id < 128);
+
+	struct canopen_node* node = &node_[msg.id];
+	void* driver = node->driver;
+
+	switch (msg.object)
+	{
+	case CANOPEN_NMT:
+		break; /* TODO: this is illegal */
+	case CANOPEN_TPDO1:
+		legacy_driver_iface_process_pdo(driver, 1, cf.data, cf.can_dlc);
+		break;
+	case CANOPEN_TPDO2:
+		legacy_driver_iface_process_pdo(driver, 2, cf.data, cf.can_dlc);
+		break;
+	case CANOPEN_TPDO3:
+		legacy_driver_iface_process_pdo(driver, 3, cf.data, cf.can_dlc);
+		break;
+	case CANOPEN_TPDO4:
+		legacy_driver_iface_process_pdo(driver, 4, cf.data, cf.can_dlc);
+		break;
+	case CANOPEN_TSDO:
+		sdo_channel_feed(node, &cf);
+		break;
+	case CANOPEN_EMCY:
+		handle_emcy(node, &cf);
+		break;
+	case CANOPEN_HEARTBEAT:
+		handle_heartbeat(node, &cf);
+		break;
+	default:
+		break;
+	}
+}
+
+static void init_multiplexer()
+{
+	ml_handler_init(&mux_handler_);
+	mux_handler_.fd = socket_;
+	mux_handler_.fn = mux_handler_fn;
+	ml_handler_start(&mux_handler_);
+}
+
 static void on_bootup_done(void* context)
 {
 	(void)context;
-	net__send_nmt(socket_, NMT_CS_ENTER_PREOPERATIONAL, 0);
+
+	init_multiplexer();
+
+	net__send_nmt(socket_, NMT_CS_START, 0);
 }
 
 static int initialize()
@@ -171,7 +282,7 @@ static int run_appbase(int* argc, char* argv[])
 
 static int master_set_node_state(int nodeid, int state)
 {
-	net__send_nmt(socket_, state, nodeid);
+	/* not allowed */
 	return 0;
 }
 
@@ -234,7 +345,7 @@ int main(int argc, char* argv[])
 	const char* iface = argv[1];
 
 	memset(nodes_seen_, 0, sizeof(nodes_seen_));
-	memset(driver_, 0, sizeof(driver_));
+	memset(node_, 0, sizeof(node_));
 
 	socket_ = socketcan_open(iface);
 	if (socket_ < 0)
