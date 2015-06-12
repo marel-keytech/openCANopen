@@ -46,7 +46,8 @@ struct canopen_msg {
 	enum canopen_object object;
 };
 
-int canopen_get_object_type(struct canopen_msg* msg, struct can_frame* frame);
+int canopen_get_object_type(struct canopen_msg* msg,
+			    const struct can_frame* frame);
 
 #endif /* _CANOPEN_H */
 

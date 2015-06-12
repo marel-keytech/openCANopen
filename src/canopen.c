@@ -4,7 +4,8 @@
 
 #include "canopen.h"
 
-int canopen_get_object_type(struct canopen_msg* msg, struct can_frame* frame)
+int canopen_get_object_type(struct canopen_msg* msg,
+			    const struct can_frame* frame)
 {
 	enum canopen_range id = (enum canopen_range)frame->can_id;
 
@@ -74,7 +75,7 @@ int canopen_get_object_type(struct canopen_msg* msg, struct can_frame* frame)
 		msg->object = CANOPEN_UNSPEC;
 		return -1;
 	}
-} 
+}
 
 int canopen_get_object_type_simple(struct canopen_msg* msg,
 				   struct can_frame* frame, int nodeid)
