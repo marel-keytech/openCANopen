@@ -2,6 +2,7 @@
 #define CANOPEN_NETWORK_H_
 
 #include <fcntl.h>
+#include <stdint.h>
 
 /* Reset the network and see which nodes respond to the reset signal.
  *
@@ -33,6 +34,11 @@ ssize_t net_write(int fd, const void* src, size_t size, int timeout);
 /* A wrapper around 'read' with ms timeout
  */
 ssize_t net_read(int fd, void* dst, size_t size, int timeout);
+
+ssize_t net_write_frame(int fd, const struct can_frame* cf, int timeout);
+ssize_t net_read_frame(int fd, struct can_frame* cf, int timeout);
+ssize_t net_filtered_read_frame(int fd, struct can_frame* cf, int timeout,
+				uint32_t can_id);
 
 /* Make socket non-blocking
  */

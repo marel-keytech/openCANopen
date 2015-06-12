@@ -20,11 +20,37 @@ ssize_t net_write(int fd, const void* src, size_t size, int timeout)
 	return -1;
 }
 
+ssize_t net_write_frame(int fd, const struct can_frame* cf, int timeout)
+{
+	return net_write(fd, cf, sizeof(*cf), timeout);
+}
+
 ssize_t net_read(int fd, void* dst, size_t size, int timeout)
 {
 	struct pollfd pollfd = { .fd = fd, .events = POLLIN, .revents = 0 };
 	if (poll(&pollfd, 1, timeout) == 1)
 		return read(fd, dst, size);
+	return -1;
+}
+
+ssize_t net_read_frame(int fd, struct can_frame* cf, int timeout)
+{
+	return net_read(fd, cf, sizeof(*cf), timeout);
+}
+
+ssize_t net_filtered_read_frame(int fd, struct can_frame* cf, int timeout,
+				uint32_t can_id)
+{
+	int t = net__gettime_ms();
+	int t_end = t + timeout;
+
+	while (1) {
+		if (net_read_frame(fd, cf, t_end - t) < 0)
+			return -1;
+
+		t = net__gettime_ms();
+	}
+
 	return -1;
 }
 
