@@ -109,7 +109,7 @@ int legacy_driver_iface_initialize(void* obj)
 }
 
 int legacy_driver_iface_process_emr(void* obj, int code, int reg,
-				    int manufacturer_error)
+				    uint64_t manufacturer_error)
 {
 	auto iface = (CanIOHandlerInterface*)obj;
 	return iface->processEmr(code, reg, manufacturer_error);

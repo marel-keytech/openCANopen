@@ -2,6 +2,7 @@
 #define LEGACY_DRIVER_H_
 
 #include <unistd.h>
+#include <stdint.h>
 
 struct legacy_master_iface {
 	int (*send_pdo)(int nodeid, int n, unsigned char* data, size_t size);
@@ -28,7 +29,7 @@ int legacy_driver_delete_handler(void* obj, int profile_number,
 int legacy_driver_iface_initialize(void* iface);
 
 int legacy_driver_iface_process_emr(void* iface, int code, int reg,
-				    int manufacturer_error);
+				    uint64_t manufacturer_error);
 
 int legacy_driver_iface_process_sdo(void* obj, int index, int subindex,
 				    unsigned char* data, size_t size);
