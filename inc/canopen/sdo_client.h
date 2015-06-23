@@ -15,7 +15,10 @@ enum sdo_req_state {
 	SDO_REQ_DONE,
 };
 
+enum sdo_req_type { SDO_REQ_DL, SDO_REQ_UL };
+
 struct sdo_req {
+	enum sdo_req_type type;
 	enum sdo_req_state state;
 	struct can_frame frame;
 	int is_toggled;
@@ -42,6 +45,8 @@ int sdo_ul_req_next_frame(struct sdo_req* self, struct can_frame* out);
 
 int sdo_dl_req_feed(struct sdo_req* self, const struct can_frame* frame);
 int sdo_ul_req_feed(struct sdo_req* self, const struct can_frame* frame);
+
+int sdo_req_feed(struct sdo_req* self, const struct can_frame* frame);
 
 #endif /* _CANOPEN_SDO_CLIENT_H */
 

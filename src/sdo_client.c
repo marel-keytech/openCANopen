@@ -57,6 +57,8 @@ int sdo_request_download(struct sdo_req* self, int index, int subindex,
 	memset(self, 0, sizeof(*self));
 	struct can_frame* cf = &self->frame;
 
+	self->type = SDO_REQ_DL;
+
 	self->index = index;
 	self->subindex = subindex;
 
@@ -160,6 +162,8 @@ int sdo_request_upload(struct sdo_req* self, int index, int subindex)
 {
 	memset(self, 0, sizeof(*self));
 	struct can_frame* cf = &self->frame;
+
+	self->type = SDO_REQ_UL;
 
 	self->state = SDO_REQ_INIT;
 	self->index = index;
@@ -273,5 +277,17 @@ int sdo_ul_req_feed(struct sdo_req* self, const struct can_frame* frame)
 	}
 	abort();
 
+	return -1;
+}
+
+int sdo_req_feed(struct sdo_req* self, const struct can_frame* frame)
+{
+	switch (self->type)
+	{
+	case SDO_REQ_DL: return sdo_dl_req_feed(self, frame);
+	case SDO_REQ_UL: return sdo_ul_req_feed(self, frame);
+	default: break;
+	}
+	abort();
 	return -1;
 }
