@@ -8,19 +8,7 @@
 #define CAN_MAX_DLC 8
 #endif
 
-static int sdo_dl_req_abort(struct sdo_req* self, enum sdo_abort_code code)
-{
-	struct can_frame* cf = &self->frame;
-
-	sdo_abort(cf, SDO_ABORT_TOGGLE, self->index, self->subindex);
-
-	self->state = SDO_REQ_ABORTED;
-	self->have_frame = 1;
-
-	return self->have_frame;
-}
-
-static int sdo_ul_req_abort(struct sdo_req* self, enum sdo_abort_code code)
+static int sdo_req_abort(struct sdo_req* self, enum sdo_abort_code code)
 {
 	struct can_frame* cf = &self->frame;
 
@@ -134,7 +122,7 @@ int sdo_dl_req_feed(struct sdo_req* self, const struct can_frame* frame)
 	case SDO_REQ_INIT:
 	case SDO_REQ_INIT_EXPEDIATED:
 		if (sdo_get_cs(frame) != SDO_SCS_DL_INIT_RES)
-			return sdo_dl_req_abort(self, SDO_ABORT_INVALID_CS);
+			return sdo_req_abort(self, SDO_ABORT_INVALID_CS);
 
 		if (self->state == SDO_REQ_INIT_EXPEDIATED) {
 			self->state = SDO_REQ_DONE;
@@ -146,11 +134,11 @@ int sdo_dl_req_feed(struct sdo_req* self, const struct can_frame* frame)
 
 	case SDO_REQ_SEG:
 		if (self->is_toggled != sdo_is_toggled(frame))
-			return sdo_dl_req_abort(self, SDO_ABORT_TOGGLE);
+			return sdo_req_abort(self, SDO_ABORT_TOGGLE);
 
 	case SDO_REQ_END_SEGMENT:
 		if (sdo_get_cs(frame) != SDO_SCS_DL_SEG_RES)
-			return sdo_dl_req_abort(self, SDO_ABORT_INVALID_CS);
+			return sdo_req_abort(self, SDO_ABORT_INVALID_CS);
 
 		if (self->state == SDO_REQ_END_SEGMENT) {
 			self->state = SDO_REQ_DONE;
@@ -265,7 +253,7 @@ int sdo_ul_req_feed(struct sdo_req* self, const struct can_frame* frame)
 	switch (self->state) {
 	case SDO_REQ_INIT:
 		if (sdo_get_cs(frame) != SDO_SCS_UL_INIT_RES)
-			return sdo_ul_req_abort(self, SDO_ABORT_INVALID_CS);
+			return sdo_req_abort(self, SDO_ABORT_INVALID_CS);
 
 		return sdo_is_expediated(frame)
 		       ? feed_expediated_init_upload_response(self, frame)
@@ -273,11 +261,11 @@ int sdo_ul_req_feed(struct sdo_req* self, const struct can_frame* frame)
 
 	case SDO_REQ_SEG:
 		if (sdo_get_cs(frame) != SDO_SCS_UL_SEG_RES)
-			return sdo_ul_req_abort(self, SDO_ABORT_INVALID_CS);
+			return sdo_req_abort(self, SDO_ABORT_INVALID_CS);
 
 		if (!sdo_is_end_segment(frame) &&
 		    sdo_is_toggled(frame) != self->is_toggled)
-			return sdo_ul_req_abort(self, SDO_ABORT_TOGGLE);
+			return sdo_req_abort(self, SDO_ABORT_TOGGLE);
 
 		return feed_upload_segment_response(self, frame);
 	default:
