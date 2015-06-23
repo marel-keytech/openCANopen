@@ -6,7 +6,7 @@
 
 static int test_make_dl_request_1_byte()
 {
-	struct sdo_dl_req req;
+	struct sdo_req req;
 	memset(&req, 0, sizeof(req));
 	sdo_request_download(&req, 0x1000, 42, "x", 1);
 
@@ -26,7 +26,7 @@ static int test_make_dl_request_1_byte()
 
 static int test_make_dl_request_4_bytes()
 {
-	struct sdo_dl_req req;
+	struct sdo_req req;
 	memset(&req, 0, sizeof(req));
 	sdo_request_download(&req, 0x1000, 42, "foo", 4);
 
@@ -46,7 +46,7 @@ static int test_make_dl_request_4_bytes()
 
 static int test_make_dl_request_5_bytes()
 {
-	struct sdo_dl_req req;
+	struct sdo_req req;
 	memset(&req, 0, sizeof(req));
 	sdo_request_download(&req, 0x1000, 42, (void*)0xdeadbeef, 5);
 
@@ -68,7 +68,7 @@ static int test_make_dl_request_5_bytes()
 
 static int test_expediated_download_success()
 {
-	struct sdo_dl_req req;
+	struct sdo_req req;
 	struct can_frame rcf;
 
 	sdo_clear_frame(&rcf);
@@ -88,7 +88,7 @@ static int test_expediated_download_success()
 
 static int test_expediated_download_abort()
 {
-	struct sdo_dl_req req;
+	struct sdo_req req;
 	struct can_frame rcf;
 
 	sdo_clear_frame(&rcf);
@@ -106,7 +106,7 @@ static int test_expediated_download_abort()
 
 static int test_segmented_download_success_one_segment()
 {
-	struct sdo_dl_req req;
+	struct sdo_req req;
 	struct can_frame rcf;
 
 	sdo_clear_frame(&rcf);
@@ -137,7 +137,7 @@ static int test_segmented_download_success_one_segment()
 
 static int test_segmented_download_success_two_segments()
 {
-	struct sdo_dl_req req;
+	struct sdo_req req;
 	struct can_frame rcf;
 
 	sdo_clear_frame(&rcf);
@@ -178,7 +178,7 @@ static int test_segmented_download_success_two_segments()
 
 static int test_segmented_download_abort_one_segment()
 {
-	struct sdo_dl_req req;
+	struct sdo_req req;
 	struct can_frame rcf;
 
 	sdo_clear_frame(&rcf);
@@ -208,7 +208,7 @@ static int test_segmented_download_abort_one_segment()
 
 static int test_make_ul_request()
 {
-	struct sdo_ul_req req;
+	struct sdo_req req;
 	memset(&req, 0, sizeof(req));
 	sdo_request_upload(&req, 0x1000, 42);
 
@@ -227,7 +227,7 @@ static int test_make_ul_request()
 
 static int test_expediated_upload_1_byte_size_indicated()
 {
-	struct sdo_ul_req req;
+	struct sdo_req req;
 	struct can_frame rcf;
 
 	sdo_clear_frame(&rcf);
@@ -257,7 +257,7 @@ static int test_expediated_upload_1_byte_size_indicated()
 
 static int test_expediated_upload_1_byte_size_not_indicated()
 {
-	struct sdo_ul_req req;
+	struct sdo_req req;
 	struct can_frame rcf;
 
 
@@ -285,7 +285,7 @@ static int test_expediated_upload_1_byte_size_not_indicated()
 
 static int test_segmented_upload_7_bytes_size_indicated()
 {
-	struct sdo_ul_req req;
+	struct sdo_req req;
 	struct can_frame rcf;
 
 	ASSERT_TRUE(sdo_request_upload(&req, 0x1000, 42));

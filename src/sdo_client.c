@@ -8,7 +8,7 @@
 #define CAN_MAX_DLC 8
 #endif
 
-static int sdo_dl_req_abort(struct sdo_dl_req* self, enum sdo_abort_code code)
+static int sdo_dl_req_abort(struct sdo_req* self, enum sdo_abort_code code)
 {
 	struct can_frame* cf = &self->frame;
 
@@ -20,7 +20,7 @@ static int sdo_dl_req_abort(struct sdo_dl_req* self, enum sdo_abort_code code)
 	return self->have_frame;
 }
 
-static int sdo_ul_req_abort(struct sdo_ul_req* self, enum sdo_abort_code code)
+static int sdo_ul_req_abort(struct sdo_req* self, enum sdo_abort_code code)
 {
 	struct can_frame* cf = &self->frame;
 
@@ -32,7 +32,7 @@ static int sdo_ul_req_abort(struct sdo_ul_req* self, enum sdo_abort_code code)
 	return self->have_frame;
 }
 
-static void request_segmented_download(struct sdo_dl_req* self, int index,
+static void request_segmented_download(struct sdo_req* self, int index,
 				       int subindex, const void* addr,
 				       size_t size)
 {
@@ -40,7 +40,7 @@ static void request_segmented_download(struct sdo_dl_req* self, int index,
 
 	self->state = SDO_REQ_INIT;
 
-	self->addr = addr;
+	self->addr = (char*)addr;
 	self->size = size;
 
 	cf->can_dlc = CAN_MAX_DLC;
@@ -48,7 +48,7 @@ static void request_segmented_download(struct sdo_dl_req* self, int index,
 	sdo_set_indicated_size(cf, size);
 }
 
-static void request_expediated_download(struct sdo_dl_req* self, int index,
+static void request_expediated_download(struct sdo_req* self, int index,
 				        int subindex, const void* addr,
 				        size_t size)
 {
@@ -63,7 +63,7 @@ static void request_expediated_download(struct sdo_dl_req* self, int index,
 	memcpy(&cf->data[SDO_EXPEDIATED_DATA_IDX], addr, size);
 }
 
-int sdo_request_download(struct sdo_dl_req* self, int index, int subindex,
+int sdo_request_download(struct sdo_req* self, int index, int subindex,
 			 const void* addr, size_t size)
 {
 	memset(self, 0, sizeof(*self));
@@ -87,7 +87,7 @@ int sdo_request_download(struct sdo_dl_req* self, int index, int subindex,
 	return self->have_frame;
 }
 
-static int request_download_segment(struct sdo_dl_req* self,
+static int request_download_segment(struct sdo_req* self,
 				    const struct can_frame* frame)
 {
 	struct can_frame* cf = &self->frame;
@@ -122,7 +122,7 @@ static int request_download_segment(struct sdo_dl_req* self,
 	return self->have_frame;
 }
 
-int sdo_dl_req_feed(struct sdo_dl_req* self, const struct can_frame* frame)
+int sdo_dl_req_feed(struct sdo_req* self, const struct can_frame* frame)
 {
 	if (sdo_get_cs(frame) == SDO_SCS_ABORT) {
 		self->state = SDO_REQ_REMOTE_ABORT;
@@ -168,7 +168,7 @@ int sdo_dl_req_feed(struct sdo_dl_req* self, const struct can_frame* frame)
 	return -1;
 }
 
-int sdo_request_upload(struct sdo_ul_req* self, int index, int subindex)
+int sdo_request_upload(struct sdo_req* self, int index, int subindex)
 {
 	memset(self, 0, sizeof(*self));
 	struct can_frame* cf = &self->frame;
@@ -187,7 +187,7 @@ int sdo_request_upload(struct sdo_ul_req* self, int index, int subindex)
 	return self->have_frame;
 }
 
-static int feed_expediated_init_upload_response(struct sdo_ul_req* self,
+static int feed_expediated_init_upload_response(struct sdo_req* self,
 						const struct can_frame* frame)
 {
 	if (sdo_is_size_indicated(frame))
@@ -204,7 +204,7 @@ static int feed_expediated_init_upload_response(struct sdo_ul_req* self,
 	return self->have_frame;
 }
 
-static int feed_segmented_init_upload_response(struct sdo_ul_req* self,
+static int feed_segmented_init_upload_response(struct sdo_req* self,
 					       const struct can_frame* frame)
 {
 	struct can_frame* cf = &self->frame;
@@ -221,7 +221,7 @@ static int feed_segmented_init_upload_response(struct sdo_ul_req* self,
 	return self->have_frame;
 }
 
-static int feed_upload_segment_response(struct sdo_ul_req* self,
+static int feed_upload_segment_response(struct sdo_req* self,
 					const struct can_frame* frame)
 {
 	struct can_frame* cf = &self->frame;
@@ -254,7 +254,7 @@ static int feed_upload_segment_response(struct sdo_ul_req* self,
 	return self->have_frame;
 }
 
-int sdo_ul_req_feed(struct sdo_ul_req* self, const struct can_frame* frame)
+int sdo_ul_req_feed(struct sdo_req* self, const struct can_frame* frame)
 {
 	if (sdo_get_cs(frame) == SDO_SCS_ABORT) {
 		self->state = SDO_REQ_REMOTE_ABORT;
