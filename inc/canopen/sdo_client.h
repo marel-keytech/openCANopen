@@ -15,7 +15,7 @@ enum sdo_req_state {
 	SDO_REQ_DONE,
 };
 
-enum sdo_req_type { SDO_REQ_DL, SDO_REQ_UL };
+enum sdo_req_type { SDO_REQ_NONE = 0, SDO_REQ_DL, SDO_REQ_UL };
 
 struct sdo_req {
 	enum sdo_req_type type;

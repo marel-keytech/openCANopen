@@ -93,7 +93,9 @@ static int request_download_segment(struct sdo_req* self,
 		self->is_toggled ^= 1;
 
 	size_t segment_size = MIN(SDO_SEGMENT_MAX_SIZE, self->size - self->pos);
-	assert(segment_size > 0);
+	if (segment_size == 0)
+		return -1;
+
 	sdo_set_segment_size(cf, segment_size);
 
 	memcpy(&cf->data[SDO_SEGMENT_IDX], &self->addr[self->pos],segment_size);
@@ -286,6 +288,7 @@ int sdo_req_feed(struct sdo_req* self, const struct can_frame* frame)
 	{
 	case SDO_REQ_DL: return sdo_dl_req_feed(self, frame);
 	case SDO_REQ_UL: return sdo_ul_req_feed(self, frame);
+	case SDO_REQ_NONE: return -1;
 	default: break;
 	}
 	abort();
