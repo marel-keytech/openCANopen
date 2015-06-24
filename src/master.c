@@ -13,9 +13,11 @@
 #include "canopen/nmt.h"
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
-#include "mux.h"
+#include "sdo_fifo.h"
 
 #include "legacy-driver.h"
+
+#define SDO_FIFO_LENGTH 64
 
 static int socket_ = -1;
 static char nodes_seen_[128];
@@ -27,10 +29,20 @@ static struct ml_handler mux_handler_;
 
 struct canopen_node {
 	void* driver;
-	struct sdo_channel sdo_channel;
+	struct sdo_req sdo_req;
+	pthread_mutex_t sdo_channel;
+	struct sdo_fifo sdo_fifo;
+	int is_sdo_locked;
 };
 
 static struct canopen_node node_[128];
+
+static char upload_buffer_[4096]; /* TODO: make dynamic */
+
+static inline int get_node_id(const struct canopen_node* node)
+{
+	return ((char*)node - (char*)node_) / sizeof(node_);
+}
 
 void clean_node_name(char* name, size_t size)
 {
@@ -52,7 +64,7 @@ void clean_node_name(char* name, size_t size)
 ssize_t sdo_read_limited(int nodeid, int index, int subindex, void* buf,
 			 size_t size)
 {
-	struct sdo_ul_req req;
+	struct sdo_req req;
 	struct can_frame cf;
 
 	sdo_request_upload(&req, index, subindex);
@@ -114,7 +126,9 @@ static int load_driver(int nodeid)
 	void* driver = NULL;
 	struct canopen_node* node = &node_[nodeid];
 
-	if (sdo_channel_init(&node->sdo_channel) < 0)
+	memset(node, 0, sizeof(*node));
+
+	if (pthread_mutex_init(&node->sdo_channel, NULL) < 0)
 		return -1;
 
 	uint32_t device_type = get_device_type(nodeid);
@@ -135,7 +149,7 @@ static int load_driver(int nodeid)
 	return 0;
 
 failure:
-	sdo_channel_clear(&node->sdo_channel);
+	pthread_mutex_destroy(&node->sdo_channel);
 	return -1;
 }
 
@@ -182,6 +196,93 @@ static int handle_heartbeat(struct canopen_node* node,
 	return 0;
 }
 
+static int schedule_dl_sdo(struct canopen_node* node, struct sdo_elem* sdo)
+{
+	struct sdo_req* req = &node->sdo_req;
+
+	if (!sdo_request_download(req, sdo->index, sdo->subindex,
+				  sdo->data->data, sdo->data->size))
+		return -1;
+
+	req->frame.can_id = get_node_id(node) + R_RSDO;
+	net_write_frame(socket_, &node->sdo_req.frame, -1);
+
+	node->is_sdo_locked = 1;
+	return 0;
+}
+
+static int schedule_ul_sdo(struct canopen_node* node, struct sdo_elem* sdo)
+{
+	struct sdo_req* req = &node->sdo_req;
+
+	if (!sdo_request_upload(req, sdo->index, sdo->subindex))
+		return -1;
+
+	req->frame.can_id = get_node_id(node) + R_RSDO;
+	req->addr = upload_buffer_;
+	req->size = sizeof(upload_buffer_);
+	req->pos = 0;
+
+	net_write_frame(socket_, &req->frame, -1);
+
+	node->is_sdo_locked = 1;
+	return 0;
+}
+
+static int schedule_sdo(struct canopen_node* node)
+{
+	struct sdo_fifo* fifo = &node->sdo_fifo;
+	if (node->is_sdo_locked)
+		return 0;
+
+	if (sdo_fifo_length(fifo) == 0)
+		return 0;
+
+	struct sdo_elem* head = sdo_fifo_head(fifo);
+
+	switch (head->type)
+	{
+	case SDO_ELEM_DL: return schedule_dl_sdo(node, head);
+	case SDO_ELEM_UL: return schedule_ul_sdo(node, head);
+	}
+
+	return -1;
+}
+
+static int handle_tsdo(struct canopen_node* node, const struct can_frame* frame)
+{
+	struct sdo_req* req = &node->sdo_req;
+	struct sdo_fifo* fifo = &node->sdo_fifo;
+
+	if (sdo_req_feed(req, frame))
+		net_write_frame(socket_, &req->frame, -1);
+
+	if (!node->is_sdo_locked)
+		return -1;
+
+	if (req->state != SDO_REQ_DONE && req->state >= 0)
+		return 0;
+
+	if (req->type == SDO_REQ_DL) {
+		free(sdo_fifo_head(fifo)->data);
+	} else /* if (req->type == SDO_REQ_UL) */ {
+		if (sdo_fifo_length(fifo) == 0)
+			return -1;
+
+		int index = sdo_fifo_head(fifo)->index;
+		int subindex = sdo_fifo_head(fifo)->subindex;
+
+		legacy_driver_iface_process_sdo(node->driver, index, subindex,
+						(unsigned char*)req->addr,
+						req->pos);
+	}
+
+	sdo_fifo_dequeue(fifo);
+	node->is_sdo_locked = 0;
+
+	return schedule_sdo(node);
+}
+
 static void mux_handler_fn(int fd, void* context)
 {
 	(void)context;
@@ -215,7 +316,7 @@ static void mux_handler_fn(int fd, void* context)
 		legacy_driver_iface_process_pdo(driver, 4, cf.data, cf.can_dlc);
 		break;
 	case CANOPEN_TSDO:
-		sdo_channel_feed(node, &cf);
+		handle_tsdo(node, &cf);
 		break;
 	case CANOPEN_EMCY:
 		handle_emcy(node, &cf);
@@ -288,15 +389,32 @@ static int master_set_node_state(int nodeid, int state)
 
 static int master_request_sdo(int nodeid, int index, int subindex)
 {
-	/* TODO: Create fifo queue for sdo per node */
-	return 0;
+	struct canopen_node* node = &node_[nodeid];
+
+	if (sdo_fifo_enqueue(&node->sdo_fifo, SDO_ELEM_UL, index, subindex,
+			     NULL) < 0)
+		return -1;
+
+	return schedule_sdo(node);
 }
 
 static int master_send_sdo(int nodeid, int index, int subindex,
 			   unsigned char* data, size_t size)
 {
-	/* TODO: Create fifo queue for sdo per node */
-	return 0;
+	struct canopen_node* node = &node_[nodeid];
+
+	struct sdo_elem_data* payload = malloc(sizeof(*payload) + size);
+	if (!payload)
+		return -1;
+
+	payload->size = size;
+	memcpy(payload->data, data, size);
+
+	if (sdo_fifo_enqueue(&node->sdo_fifo, SDO_ELEM_DL, index, subindex,
+			     payload) < 0)
+		return -1;
+
+	return schedule_sdo(node);
 }
 
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)
@@ -348,10 +466,13 @@ int main(int argc, char* argv[])
 	memset(node_, 0, sizeof(node_));
 
 	socket_ = socketcan_open(iface);
-	if (socket_ < 0)
+	if (socket_ < 0) {
+		perror("Could not open interface");
 		return 1;
+	}
 
 	net_dont_block(socket_);
+	net_fix_sndbuf(socket_);
 
 	rc = master_iface_init();
 	if (rc != 0)
@@ -367,6 +488,8 @@ int main(int argc, char* argv[])
 		rc = 1;
 		goto worker_failure;
 	}
+
+	ml_init();
 
 	rc = run_appbase(&argc, argv);
 
