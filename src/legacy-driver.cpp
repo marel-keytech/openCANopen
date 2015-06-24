@@ -65,7 +65,11 @@ extern "C" {
 
 void* legacy_master_iface_new(struct legacy_master_iface* callbacks)
 {
-	return new LegacyMasterInterface(callbacks);
+	try {
+		return new LegacyMasterInterface(callbacks);
+	} catch (...) {
+		return NULL;
+	}
 }
 
 void legacy_master_iface_delete(void* obj)
@@ -75,7 +79,11 @@ void legacy_master_iface_delete(void* obj)
 
 void* legacy_driver_manager_new()
 {
-	return new DriverManager;
+	try {
+		return new DriverManager;
+	} catch (...) {
+		return NULL;
+	}
 }
 
 void legacy_driver_manager_delete(void* obj)
@@ -89,9 +97,13 @@ int legacy_driver_manager_create_handler(void* obj, const char* name,
 					 void** driver_iface)
 {
 	auto man = (DriverManager*)obj;
-	return man->createHandler(name, profile_number,
-				  (CanMasterInterface*)master_iface,
-				  (CanIOHandlerInterface**)driver_iface);
+	try {
+		return man->createHandler(name, profile_number,
+					  (CanMasterInterface*)master_iface,
+					  (CanIOHandlerInterface**)driver_iface);
+	} catch (...) {
+		return -1;
+	}
 }
 
 int legacy_driver_delete_handler(void* obj, int profile_number,
@@ -99,27 +111,43 @@ int legacy_driver_delete_handler(void* obj, int profile_number,
 {
 	auto man = (DriverManager*)obj;
 	auto iface = (CanIOHandlerInterface*)driver_interface;
-	return man->deleteHandler(profile_number, iface);
+	try {
+		return man->deleteHandler(profile_number, iface);
+	} catch (...) {
+		return -1;
+	}
 }
 
 int legacy_driver_iface_initialize(void* obj)
 {
 	auto iface = (CanIOHandlerInterface*)obj;
-	return iface->initialize();
+	try {
+		return iface->initialize();
+	} catch (...) {
+		return -1;
+	}
 }
 
 int legacy_driver_iface_process_emr(void* obj, int code, int reg,
 				    uint64_t manufacturer_error)
 {
 	auto iface = (CanIOHandlerInterface*)obj;
-	return iface->processEmr(code, reg, manufacturer_error);
+	try {
+		return iface->processEmr(code, reg, manufacturer_error);
+	} catch (...) {
+		return -1;
+	}
 }
 
 int legacy_driver_iface_process_sdo(void* obj, int index, int subindex,
 				    unsigned char* data, size_t size)
 {
 	auto iface = (CanIOHandlerInterface*)obj;
-	return iface->processSdo(index, subindex, data, size);
+	try {
+		return iface->processSdo(index, subindex, data, size);
+	} catch (...) {
+		return -1;
+	}
 }
 
 int legacy_driver_iface_process_pdo(void* obj, int n, unsigned char* data,
@@ -127,11 +155,15 @@ int legacy_driver_iface_process_pdo(void* obj, int n, unsigned char* data,
 {
 	auto iface = (CanIOHandlerInterface*)obj;
 
-	switch (n) {
-	case 1: return iface->processPdo1(data, size);
-	case 2: return iface->processPdo2(data, size);
-	case 3: return iface->processPdo3(data, size);
-	case 4: return iface->processPdo4(data, size);
+	try {
+		switch (n) {
+		case 1: return iface->processPdo1(data, size);
+		case 2: return iface->processPdo2(data, size);
+		case 3: return iface->processPdo3(data, size);
+		case 4: return iface->processPdo4(data, size);
+		}
+	} catch (...) {
+		return -1;
 	}
 
 	abort();
@@ -141,7 +173,11 @@ int legacy_driver_iface_process_pdo(void* obj, int n, unsigned char* data,
 int legacy_driver_iface_process_node_state(void* obj, int state)
 {
 	auto iface = (CanIOHandlerInterface*)obj;
-	return iface->processNodeState(state);
+	try {
+		return iface->processNodeState(state);
+	} catch (...) {
+		return -1;
+	}
 }
 
 } /* end of extern "C" */
