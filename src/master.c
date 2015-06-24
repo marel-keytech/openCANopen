@@ -292,12 +292,16 @@ static void mux_handler_fn(int fd, void* context)
 
 	net_read_frame(fd, &cf, -1);
 
-	canopen_get_object_type(&msg, &cf);
+	if (canopen_get_object_type(&msg, &cf) < 0)
+		return;
 
 	assert(msg.id < 128);
 
 	struct canopen_node* node = &node_[msg.id];
 	void* driver = node->driver;
+
+	if (!node->driver)
+		return;
 
 	switch (msg.object)
 	{
