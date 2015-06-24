@@ -1,5 +1,7 @@
-CC := clang
-CFLAGS := -Wall -g -std=c99 -D_GNU_SOURCE -O0 -Iinc/ -I/usr/include/lua5.1
+CC := gcc
+CXX := g++
+CFLAGS := -Wall -g -std=c99 -D_GNU_SOURCE -O0 -Iinc/ -I/usr/include/lua5.1/
+CXXFLAGS := -Wall -g -std=c++11 -D_GNU_SOURCE -O0 -Iinc/
 LDFLAGS := -lrt
 
 MAJOR = 0
@@ -21,9 +23,19 @@ $(LIBCANOPEN): src/canopen.o
 libcanopen.so: $(LIBCANOPEN)
 	ln -fs $(LIBCANOPEN) libcanopen.so
 
+canopen-master: src/master.o src/sdo_common.o src/sdo_client.o src/byteorder.o \
+		src/prioq.o src/worker.o src/network.o src/canopen.o \
+		src/socketcan.o src/main-loop.o src/legacy-driver.o \
+		src/DriverManager.o src/Driver.o
+	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -leloop -ldl -o $@
+
 .PHONY: .c.o
 .c.o:
 	$(CC) -c $(CFLAGS) $< -o $@
+
+.PHONY: .cpp.o
+.cpp.o:
+	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 .PHONY: clean
 clean:
@@ -47,6 +59,9 @@ tst/test_worker: src/prioq.o src/worker.o tst/worker_test.o
 tst/test_network: src/canopen.o src/byteorder.o src/network.o tst/network_test.o
 	$(CC) $^ -o $@
 
+tst/test_sdo_fifo: tst/sdo_fifo_test.o
+	$(CC) $^ -o $@
+
 fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_common.o \
 	  src/sdo_srv.o src/byteorder.o
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
@@ -57,7 +72,7 @@ dlsdo: src/dlsdo.o src/canopen.o src/socketcan.o src/sdo_common.o \
 
 .PHONY:
 test: tst/test_sdo_srv tst/test_sdo_client tst/test_prioq tst/test_worker \
-	tst/test_network
+	tst/test_network tst/test_sdo_fifo
 	run-parts tst
 
 install:
