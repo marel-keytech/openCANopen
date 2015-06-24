@@ -1,6 +1,6 @@
 CC := gcc
 CXX := g++
-CFLAGS := -Wall -g -std=c99 -D_GNU_SOURCE -O0 -Iinc/ -I/usr/include/lua5.1/
+CFLAGS := -Wall -g -std=c99 -D_GNU_SOURCE -O0 -fexceptions -Iinc/ -I/usr/include/lua5.1/
 CXXFLAGS := -Wall -g -std=c++11 -D_GNU_SOURCE -O0 -Iinc/
 LDFLAGS := -lrt
 
