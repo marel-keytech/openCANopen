@@ -35,6 +35,8 @@ int ml_init()
 	job_handler_.fn = ml__job_handler_fn;
 	job_handler_.fd = job_read_fd_;
 
+	ml_handler_start(&job_handler_);
+
 	return 0;
 }
 
@@ -157,6 +159,6 @@ static void ml__job_fn(void* context)
 
 int ml_job_enqueue(struct ml_job* job)
 {
-	return worker_add_job(job->priority, ml__job_fn, job->context);
+	return worker_add_job(job->priority, ml__job_fn, job);
 }
 
