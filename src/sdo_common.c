@@ -23,6 +23,8 @@ const char* sdo_strerror(enum sdo_abort_code code)
 	switch (code) {
 	case SDO_ABORT_TOGGLE:
 		return "Toggle bit not alternated";
+	case SDO_ABORT_TIMEOUT:
+		return "SDO protocol timed out";
 	case SDO_ABORT_INVALID_CS:
 		return "Client/server command specifier not valid or unknown";
 	case SDO_ABORT_NOMEM:
