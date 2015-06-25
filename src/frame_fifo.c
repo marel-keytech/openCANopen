@@ -52,6 +52,10 @@ void frame_fifo_enqueue(struct frame_fifo* self, const struct can_frame* frame)
 		++self->count;
 
 	frame_fifo__unlock(self);
+
+	pthread_mutex_lock(&self->suspend_mutex_);
+	pthread_cond_broadcast(&self->suspend_cond_);
+	pthread_mutex_unlock(&self->suspend_mutex_);
 }
 
 static inline uint64_t timespec_to_ns(struct timespec* ts)
@@ -61,8 +65,9 @@ static inline uint64_t timespec_to_ns(struct timespec* ts)
 
 static inline struct timespec ns_to_timespec(uint64_t ns)
 {
-	struct timespec ts = { .tv_nsec = ns % nSEC_IN_SEC,
-			       .tv_sec = ns / nSEC_IN_SEC };
+	struct timespec ts;
+	ts.tv_nsec = ns % nSEC_IN_SEC;
+	ts.tv_sec = ns / nSEC_IN_SEC;
 	return ts;
 }
 
@@ -129,5 +134,12 @@ int frame_fifo_dequeue(struct frame_fifo* self, struct can_frame* frame,
 	frame_fifo__unlock(self);
 
 	return 1;
+}
+
+void frame_fifo_flush(struct frame_fifo* self)
+{
+	self->count = 0;
+	self->start = 0;
+	self->stop = 0;
 }
 

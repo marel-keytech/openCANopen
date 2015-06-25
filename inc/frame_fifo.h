@@ -51,4 +51,6 @@ void frame_fifo__unlock(struct frame_fifo* self)
 	pthread_mutex_unlock(&self->lock_mutex_);
 }
 
+void frame_fifo_flush(struct frame_fifo* self);
+
 #endif /* FRAME_FIFO_H_ */
