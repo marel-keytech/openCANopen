@@ -55,7 +55,7 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 
 	_prioq_bubble_up(self, self->index - 1);
 
-	pthread_cond_broadcast(&self->suspend_cond);
+	pthread_cond_signal(&self->suspend_cond);
 
 	_prioq_unlock(self);
 
@@ -64,14 +64,14 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 
 uint64_t timespec_to_ns(struct timespec* ts)
 {
-	return ts->tv_sec * 1000000000 + ts->tv_nsec;
+	return ts->tv_sec * 1000000000ULL + ts->tv_nsec;
 }
 
 struct timespec ns_to_timespec(uint64_t ns)
 {
 	struct timespec ts;
-	ts.tv_nsec = ns % 1000000000;
-	ts.tv_sec = ns / 1000000000;
+	ts.tv_nsec = ns % 1000000000ULL;
+	ts.tv_sec = ns / 1000000000ULL;
 	return ts;
 }
 
@@ -84,21 +84,20 @@ int block_if_empty(struct prioq* self, int timeout)
 {
 	struct timespec deadline;
 
-	if (timeout >= 0) {
-		clock_gettime(CLOCK_MONOTONIC, &deadline);
-		add_to_timespec(&deadline, timeout * 1000000);
-	}
-
 	if (timeout < 0) {
 		while (self->index == 0)
 			pthread_cond_wait(&self->suspend_cond,
 					  &self->mutex);
 	} else {
+		clock_gettime(CLOCK_REALTIME, &deadline);
+		add_to_timespec(&deadline, timeout * 1000000LL);
+
 		while (self->index == 0)
 			if (pthread_cond_timedwait(&self->suspend_cond,
 						   &self->mutex,
 						   &deadline) == ETIMEDOUT)
-				return ETIMEDOUT;
+				if (self->index == 0)
+					return ETIMEDOUT;
 	}
 
 	return 0;
