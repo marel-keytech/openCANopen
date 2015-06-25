@@ -8,6 +8,7 @@
 #include "main-loop.h"
 #include "socketcan.h"
 #include "canopen.h"
+#include "canopen/sdo.h"
 #include "canopen/sdo_client.h"
 #include "canopen/network.h"
 #include "canopen/nmt.h"
@@ -89,8 +90,12 @@ ssize_t sdo_read_fifo(int nodeid, int index, int subindex, void* buf,
 	req.size = size;
 
 	while (1) {
-		if (frame_fifo_dequeue(fifo, &cf, 100) < 0)
-			return -1; /* TODO: send sdo timeout abort */
+		if (frame_fifo_dequeue(fifo, &cf, 100) < 0) {
+			sdo_abort(&cf, SDO_ABORT_TIMEOUT, index, subindex);
+			cf.can_id = R_RSDO + nodeid;
+			net_write_frame(socket_, &cf, -1);
+			return -1;
+		}
 
 		if (sdo_ul_req_feed(&req, &cf) < 0)
 			return -1;
