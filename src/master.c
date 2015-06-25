@@ -89,8 +89,7 @@ ssize_t sdo_read_fifo(int nodeid, int index, int subindex, void* buf,
 	req.size = size;
 
 	while (1) {
-		/* TODO: fix timeout and make this time out */
-		if (frame_fifo_dequeue(fifo, &cf, -1) < 0)
+		if (frame_fifo_dequeue(fifo, &cf, 100) < 0)
 			return -1; /* TODO: send sdo timeout abort */
 
 		if (sdo_ul_req_feed(&req, &cf) < 0)
