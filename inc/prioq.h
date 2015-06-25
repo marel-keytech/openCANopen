@@ -17,7 +17,6 @@ struct prioq {
 	unsigned long sequence;
 	unsigned long index;
 	pthread_mutex_t mutex;
-	pthread_mutex_t suspend_mutex;
 	pthread_cond_t suspend_cond;
 	struct prioq_elem* head;
 };

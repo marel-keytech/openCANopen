@@ -12,6 +12,7 @@ int prioq_init(struct prioq* self, size_t size)
 	self->head = calloc(size, sizeof(*self->head));
 
 	pthread_mutex_init(&self->mutex, NULL);
+	pthread_cond_init(&self->suspend_cond, NULL);
 
 	return self->head ? 0 : -1;
 }
@@ -19,7 +20,6 @@ int prioq_init(struct prioq* self, size_t size)
 void prioq_clear(struct prioq* self)
 {
 	pthread_mutex_destroy(&self->mutex);
-	pthread_mutex_destroy(&self->suspend_mutex);
 	pthread_cond_destroy(&self->suspend_cond);
 	free(self->head);
 }
@@ -29,8 +29,6 @@ int prioq_grow(struct prioq* self, size_t size)
 	if (self->size >= size)
 		return 0;
 
-	_prioq_lock(self);
-
 	struct prioq_elem* new_head = realloc(self->head,
 					      size*sizeof(*self->head));
 	if (!new_head)
@@ -38,18 +36,16 @@ int prioq_grow(struct prioq* self, size_t size)
 
 	self->head = new_head;
 
-	_prioq_unlock(self);
-
 	return 1;
 }
 
 int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 {
+	_prioq_lock(self);
+
 	if (self->index >= self->size)
 		if (prioq_grow(self, self->size*2))
 			return -1;
-
-	_prioq_lock(self);
 
 	struct prioq_elem* elem = &self->head[self->index++];
 
@@ -59,11 +55,9 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 
 	_prioq_bubble_up(self, self->index - 1);
 
-	_prioq_unlock(self);
-
-	pthread_mutex_lock(&self->suspend_mutex);
 	pthread_cond_broadcast(&self->suspend_cond);
-	pthread_mutex_unlock(&self->suspend_mutex);
+
+	_prioq_unlock(self);
 
 	return 0;
 }
@@ -89,48 +83,44 @@ void add_to_timespec(struct timespec* ts, uint64_t addition)
 int block_if_empty(struct prioq* self, int timeout)
 {
 	struct timespec deadline;
-	int r = 0;
 
 	if (timeout >= 0) {
 		clock_gettime(CLOCK_MONOTONIC, &deadline);
 		add_to_timespec(&deadline, timeout * 1000000);
 	}
 
-	pthread_mutex_lock(&self->suspend_mutex);
 	if (timeout < 0) {
 		while (self->index == 0)
 			pthread_cond_wait(&self->suspend_cond,
-					  &self->suspend_mutex);
+					  &self->mutex);
 	} else {
 		while (self->index == 0)
 			if (pthread_cond_timedwait(&self->suspend_cond,
-						   &self->suspend_mutex,
-						   &deadline) == ETIMEDOUT) {
-				r = ETIMEDOUT;
-				goto done;
-			}
+						   &self->mutex,
+						   &deadline) == ETIMEDOUT)
+				return ETIMEDOUT;
 	}
 
-done:
-	pthread_mutex_unlock(&self->suspend_mutex);
-	return r;
+	return 0;
 }
 
 int prioq_pop(struct prioq* self, struct prioq_elem* elem, int timeout)
 {
+	_prioq_lock(self);
+
 	if (timeout == 0) {
 		if (self->index == 0) {
 			errno = EAGAIN;
-			return -1;
+			goto failure;
 		}
 	} else {
 		if (block_if_empty(self, timeout) == ETIMEDOUT) {
 			errno = ETIMEDOUT;
-			return -1;
+			goto failure;
 		}
 	}
 
-	_prioq_lock(self);
+	assert(self->index > 0);
 
 	*elem = self->head[0];
 	self->head[0] = self->head[--self->index];
@@ -138,8 +128,11 @@ int prioq_pop(struct prioq* self, struct prioq_elem* elem, int timeout)
 	_prioq_sink_down(self, 0);
 
 	_prioq_unlock(self);
-
 	return 1;
+
+failure:
+	_prioq_unlock(self);
+	return -1;
 }
 
 /*
