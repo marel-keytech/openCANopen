@@ -124,7 +124,7 @@ uint32_t get_device_type(int nodeid)
 
 const char* get_name(int nodeid)
 {
-	static char name[256];
+	static __thread char name[256];
 
 	if (sdo_read_fifo(nodeid, 0x1008, 0, name, sizeof(name)) < 0)
 		return NULL;
@@ -136,10 +136,15 @@ const char* get_name(int nodeid)
 
 static int load_driver(int nodeid)
 {
-	void* driver = NULL;
 	struct canopen_node* node = &node_[nodeid];
 
-	memset(node, 0, sizeof(*node));
+	if (node->driver) {
+		legacy_driver_delete_handler(driver_manager_, node->device_type,
+					     node->driver);
+		node->driver = NULL;
+	}
+
+	void* driver = NULL;
 
 	if (pthread_mutex_init(&node->sdo_channel, NULL) < 0)
 		return -1;
@@ -211,12 +216,6 @@ static int handle_bootup(struct canopen_node* node)
 {
 	if (ignore_bootup_)
 		return 0;
-
-	if (node->driver) {
-		legacy_driver_delete_handler(driver_manager_, node->device_type,
-					     node->driver);
-		node->driver = NULL;
-	}
 
 	return schedule_load_driver(get_node_id(node));
 }
@@ -597,7 +596,7 @@ int main(int argc, char* argv[])
 		goto driver_manager_failure;
 	}
 
-	if (worker_init(1, 1024, 1024*1024) != 0) {
+	if (worker_init(4, 1024, 1024*1024) != 0) {
 		rc = 1;
 		goto worker_failure;
 	}
