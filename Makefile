@@ -26,7 +26,7 @@ libcanopen.so: $(LIBCANOPEN)
 canopen-master: src/master.o src/sdo_common.o src/sdo_client.o src/byteorder.o \
 		src/prioq.o src/worker.o src/network.o src/canopen.o \
 		src/socketcan.o src/main-loop.o src/legacy-driver.o \
-		src/DriverManager.o src/Driver.o
+		src/DriverManager.o src/Driver.o src/frame_fifo.o
 	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -leloop -ldl -o $@
 
 .PHONY: .c.o

@@ -14,6 +14,7 @@
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
 #include "sdo_fifo.h"
+#include "frame_fifo.h"
 
 #include "legacy-driver.h"
 
@@ -22,6 +23,8 @@
 static int socket_ = -1;
 static char nodes_seen_[128];
 
+static int ignore_bootup_ = 1;
+
 static void* master_iface_;
 static void* driver_manager_;
 
@@ -29,10 +32,17 @@ static struct ml_handler mux_handler_;
 
 struct canopen_node {
 	void* driver;
+	struct frame_fifo frame_fifo;
 	struct sdo_req sdo_req;
 	pthread_mutex_t sdo_channel;
 	struct sdo_fifo sdo_fifo;
 	int is_sdo_locked;
+	int device_type;
+};
+
+struct driver_load_job {
+	struct ml_job job;
+	int nodeid;
 };
 
 static struct canopen_node node_[128];
@@ -41,7 +51,7 @@ static char upload_buffer_[4096]; /* TODO: make dynamic */
 
 static inline int get_node_id(const struct canopen_node* node)
 {
-	return ((char*)node - (char*)node_) / sizeof(node_);
+	return ((char*)node - (char*)node_) / sizeof(struct canopen_node);
 }
 
 void clean_node_name(char* name, size_t size)
@@ -61,11 +71,13 @@ void clean_node_name(char* name, size_t size)
 
 }
 
-ssize_t sdo_read_limited(int nodeid, int index, int subindex, void* buf,
-			 size_t size)
+ssize_t sdo_read_fifo(int nodeid, int index, int subindex, void* buf,
+		      size_t size)
 {
 	struct sdo_req req;
 	struct can_frame cf;
+	struct canopen_node* node = &node_[nodeid];
+	struct frame_fifo* fifo = &node->frame_fifo;
 
 	sdo_request_upload(&req, index, subindex);
 	req.frame.can_id = R_RSDO + nodeid;
@@ -77,8 +89,9 @@ ssize_t sdo_read_limited(int nodeid, int index, int subindex, void* buf,
 	req.size = size;
 
 	while (1) {
-		if (net_filtered_read_frame(socket_, &cf, 100, R_TSDO + nodeid) < 0)
-			return -1;
+		/* TODO: fix timeout and make this time out */
+		if (frame_fifo_dequeue(fifo, &cf, -1) < 0)
+			return -1; /* TODO: send sdo timeout abort */
 
 		if (sdo_ul_req_feed(&req, &cf) < 0)
 			return -1;
@@ -102,8 +115,8 @@ uint32_t get_device_type(int nodeid)
 {
 	uint32_t device_type = 0;
 
-	if (sdo_read_limited(nodeid, 0x1000, 0, &device_type,
-			     sizeof(device_type)) < 0)
+	if (sdo_read_fifo(nodeid, 0x1000, 0, &device_type,
+			  sizeof(device_type)) < 0)
 		return 0;
 
 	return device_type;
@@ -113,7 +126,7 @@ const char* get_name(int nodeid)
 {
 	static char name[256];
 
-	if (sdo_read_limited(nodeid, 0x1008, 0, name, sizeof(name)) < 0)
+	if (sdo_read_fifo(nodeid, 0x1008, 0, name, sizeof(name)) < 0)
 		return NULL;
 
 	clean_node_name(name, sizeof(name));
@@ -145,6 +158,7 @@ static int load_driver(int nodeid)
 		goto failure;
 
 	node->driver = driver;
+	node->device_type = device_type;
 
 	return 0;
 
@@ -153,21 +167,58 @@ failure:
 	return -1;
 }
 
-static void run_bootup_sequence(void* context)
+static void run_net_probe(void* context)
 {
 	(void)context;
 
 	net_probe(socket_, nodes_seen_, 1, 127, 1000);
+}
 
-	for (int i = 1; i < 128; ++i)
-		if (nodes_seen_[i])
-			load_driver(i);
+static void run_load_driver(void* context)
+{
+	struct driver_load_job* job = context;
+	load_driver(job->nodeid);
+}
+
+static int schedule_load_driver(int nodeid)
+{
+	struct driver_load_job* load_job = malloc(sizeof(*load_job));
+	if (!load_job)
+		return -1;
+
+	struct ml_job* job = (struct ml_job*)load_job;
+
+	ml_job_init(job);
+
+	job->priority = nodeid;
+	job->context = job;
+	job->work_fn = run_load_driver;
+	job->after_work_fn = free;
+	load_job->nodeid = nodeid;
+
+	if (ml_job_enqueue(job) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	ml_job_clear(job);
+	free(job);
+	return -1;
 }
 
 static int handle_bootup(struct canopen_node* node)
 {
-	/* TODO */
-	return 0;
+	if (ignore_bootup_)
+		return 0;
+
+	if (node->driver) {
+		legacy_driver_delete_handler(driver_manager_, node->device_type,
+					     node->driver);
+		node->driver = NULL;
+	}
+
+	return schedule_load_driver(get_node_id(node));
 }
 
 static int handle_emcy(struct canopen_node* node, const struct can_frame* frame)
@@ -283,6 +334,28 @@ static int handle_tsdo(struct canopen_node* node, const struct can_frame* frame)
 	return schedule_sdo(node);
 }
 
+static void handle_not_loaded(struct canopen_node* node,
+			      const struct canopen_msg* msg,
+			      const struct can_frame* frame)
+{
+	switch (msg->object)
+	{
+	case CANOPEN_NMT:
+		break; /* TODO: this is illegal */
+	case CANOPEN_EMCY:
+		handle_emcy(node, frame);
+		break;
+	case CANOPEN_HEARTBEAT:
+		handle_heartbeat(node, frame);
+		break;
+	case CANOPEN_TSDO:
+		frame_fifo_enqueue(&node->frame_fifo, frame);
+		break;
+	default:
+		break;
+	}
+}
+
 static void mux_handler_fn(int fd, void* context)
 {
 	(void)context;
@@ -300,8 +373,10 @@ static void mux_handler_fn(int fd, void* context)
 	struct canopen_node* node = &node_[msg.id];
 	void* driver = node->driver;
 
-	if (!node->driver)
+	if (!driver) {
+		handle_not_loaded(node, &msg, &cf);
 		return;
+	}
 
 	switch (msg.object)
 	{
@@ -341,13 +416,33 @@ static void init_multiplexer()
 	ml_handler_start(&mux_handler_);
 }
 
+static void run_bootup(void* context)
+{
+	(void)context;
+
+	for (int i = 1; i < 128; ++i)
+		if (nodes_seen_[i])
+			load_driver(i);
+}
+
 static void on_bootup_done(void* context)
+{
+	(void)context;
+	net__send_nmt(socket_, NMT_CS_START, 0);
+	ignore_bootup_ = 0;
+}
+
+static void on_net_probe_done(void* context)
 {
 	(void)context;
 
 	init_multiplexer();
 
-	net__send_nmt(socket_, NMT_CS_START, 0);
+	static struct ml_job job;
+	ml_job_init(&job);
+	job.work_fn = run_bootup;
+	job.after_work_fn = on_bootup_done;
+	ml_job_enqueue(&job);
 }
 
 static int initialize()
@@ -366,8 +461,8 @@ static int on_tickermaster_alive()
 
 	static struct ml_job job;
 	ml_job_init(&job);
-	job.work_fn = run_bootup_sequence;
-	job.after_work_fn = on_bootup_done;
+	job.work_fn = run_net_probe;
+	job.after_work_fn = on_net_probe_done;
 	ml_job_enqueue(&job);
 
 	return 0;
@@ -461,6 +556,18 @@ static int master_iface_init()
 	return master_iface_ ? 0 : 1;
 }
 
+static void init_frame_queues()
+{
+	for (int i = 0; i < 128; ++i)
+		frame_fifo_init(&node_[i].frame_fifo);
+}
+
+static void clear_frame_queues()
+{
+	for (int i = 0; i < 128; ++i)
+		frame_fifo_clear(&node_[i].frame_fifo);
+}
+
 int main(int argc, char* argv[])
 {
 	int rc = 0;
@@ -468,6 +575,8 @@ int main(int argc, char* argv[])
 
 	memset(nodes_seen_, 0, sizeof(nodes_seen_));
 	memset(node_, 0, sizeof(node_));
+
+	init_frame_queues();
 
 	socket_ = socketcan_open(iface);
 	if (socket_ < 0) {
@@ -488,7 +597,7 @@ int main(int argc, char* argv[])
 		goto driver_manager_failure;
 	}
 
-	if (worker_init(4, 1024, 0) != 0) {
+	if (worker_init(1, 1024, 1024*1024) != 0) {
 		rc = 1;
 		goto worker_failure;
 	}
@@ -508,6 +617,8 @@ driver_manager_failure:
 master_iface_failure:
 	if (socket_ >= 0)
 		close(socket_);
+
+	clear_frame_queues();
 
 	return rc;
 }
