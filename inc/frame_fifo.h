@@ -10,10 +10,8 @@
 #include "socketcan.h"
 
 struct frame_fifo {
-	pthread_mutex_t lock_mutex_;
-
+	pthread_mutex_t mutex_;
 	pthread_cond_t suspend_cond_;
-	pthread_mutex_t suspend_mutex_;
 
 	size_t count;
 	unsigned int start, stop;
@@ -42,13 +40,13 @@ size_t frame_fifo_length(const struct frame_fifo* self)
 static inline
 void frame_fifo__lock(struct frame_fifo* self)
 {
-	pthread_mutex_lock(&self->lock_mutex_);
+	pthread_mutex_lock(&self->mutex_);
 }
 
 static inline
 void frame_fifo__unlock(struct frame_fifo* self)
 {
-	pthread_mutex_unlock(&self->lock_mutex_);
+	pthread_mutex_unlock(&self->mutex_);
 }
 
 void frame_fifo_flush(struct frame_fifo* self);

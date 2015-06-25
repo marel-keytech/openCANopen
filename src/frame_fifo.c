@@ -12,8 +12,7 @@ int frame_fifo_init(struct frame_fifo* self)
 	self->start = 0;
 	self->stop = 0;
 
-	pthread_mutex_init(&self->lock_mutex_, NULL);
-	pthread_mutex_init(&self->suspend_mutex_, NULL);
+	pthread_mutex_init(&self->mutex_, NULL);
 	pthread_cond_init(&self->suspend_cond_, NULL);
 
 	return 0;
@@ -21,8 +20,7 @@ int frame_fifo_init(struct frame_fifo* self)
 
 void frame_fifo_clear(struct frame_fifo* self)
 {
-	pthread_mutex_destroy(&self->lock_mutex_);
-	pthread_mutex_destroy(&self->suspend_mutex_);
+	pthread_mutex_destroy(&self->mutex_);
 	pthread_cond_destroy(&self->suspend_cond_);
 }
 
@@ -51,11 +49,9 @@ void frame_fifo_enqueue(struct frame_fifo* self, const struct can_frame* frame)
 	else
 		++self->count;
 
-	frame_fifo__unlock(self);
-
-	pthread_mutex_lock(&self->suspend_mutex_);
 	pthread_cond_broadcast(&self->suspend_cond_);
-	pthread_mutex_unlock(&self->suspend_mutex_);
+
+	frame_fifo__unlock(self);
 }
 
 static inline uint64_t timespec_to_ns(struct timespec* ts)
@@ -79,61 +75,55 @@ static inline void add_to_timespec(struct timespec* ts, uint64_t addition)
 static int block_while_empty(struct frame_fifo* self, int timeout)
 {
 	struct timespec deadline;
-	int r = 0;
 
 	if (timeout >= 0) {
 		clock_gettime(CLOCK_MONOTONIC, &deadline);
 		add_to_timespec(&deadline, msec_to_nsec(timeout));
 	}
 
-	pthread_mutex_lock(&self->suspend_mutex_);
-
 	if (timeout < 0) {
 		while (self->count == 0)
 			pthread_cond_wait(&self->suspend_cond_,
-					  &self->suspend_mutex_);
+					  &self->mutex_);
 	} else {
 		while (self->count == 0)
 			if (pthread_cond_timedwait(&self->suspend_cond_,
-						   &self->suspend_mutex_,
-						   &deadline) == ETIMEDOUT) {
-				r = ETIMEDOUT;
-				goto done;
-			}
+						   &self->mutex_,
+						   &deadline) == ETIMEDOUT)
+				return  ETIMEDOUT;
 	}
 
-done:
-	pthread_mutex_unlock(&self->suspend_mutex_);
-	return r;
+	return 0;
 }
 
 int frame_fifo_dequeue(struct frame_fifo* self, struct can_frame* frame,
 		       int timeout)
 {
+	frame_fifo__lock(self);
+
 	if (timeout == 0) {
 		if (self->count == 0) {
 			errno = EAGAIN;
-			return -1;
+			goto failure;
 		}
 	} else {
 		if (block_while_empty(self, timeout) == ETIMEDOUT) {
 			errno = ETIMEDOUT;
-			return -1;
+			goto failure;
 		}
 	}
 
 	*frame = *frame_fifo_head(self);
 
-	frame_fifo__lock(self);
-
-	if (self->count > 0) {
-		advance_start(self);
-		--self->count;
-	}
+	advance_start(self);
+	--self->count;
 
 	frame_fifo__unlock(self);
-
 	return 1;
+
+failure:
+	frame_fifo__unlock(self);
+	return -1;
 }
 
 void frame_fifo_flush(struct frame_fifo* self)
