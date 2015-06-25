@@ -2,9 +2,9 @@
 #include <time.h>
 #include "frame_fifo.h"
 
-#define nSEC_IN_SEC 1000000000
+#define nSEC_IN_SEC 1000000000ULL
 
-#define msec_to_nsec(t) ((t) * 1000000)
+#define msec_to_nsec(t) ((t) * 1000000ULL)
 
 int frame_fifo_init(struct frame_fifo* self)
 {
@@ -49,7 +49,7 @@ void frame_fifo_enqueue(struct frame_fifo* self, const struct can_frame* frame)
 	else
 		++self->count;
 
-	pthread_cond_broadcast(&self->suspend_cond_);
+	pthread_cond_signal(&self->suspend_cond_);
 
 	frame_fifo__unlock(self);
 }
@@ -75,22 +75,21 @@ static inline void add_to_timespec(struct timespec* ts, uint64_t addition)
 static int block_while_empty(struct frame_fifo* self, int timeout)
 {
 	struct timespec deadline;
-
-	if (timeout >= 0) {
-		clock_gettime(CLOCK_MONOTONIC, &deadline);
-		add_to_timespec(&deadline, msec_to_nsec(timeout));
-	}
+	int rc;
 
 	if (timeout < 0) {
 		while (self->count == 0)
 			pthread_cond_wait(&self->suspend_cond_,
 					  &self->mutex_);
 	} else {
+		clock_gettime(CLOCK_REALTIME, &deadline);
+		add_to_timespec(&deadline, msec_to_nsec(timeout));
+
 		while (self->count == 0)
-			if (pthread_cond_timedwait(&self->suspend_cond_,
-						   &self->mutex_,
-						   &deadline) == ETIMEDOUT)
-				return  ETIMEDOUT;
+			rc = pthread_cond_timedwait(&self->suspend_cond_,
+						    &self->mutex_, &deadline);
+				if (self->count == 0)
+					return ETIMEDOUT;
 	}
 
 	return 0;
