@@ -142,22 +142,30 @@ int prioq_pop(struct prioq* self, struct prioq_elem* elem, int timeout)
 	return 1;
 }
 
-static inline int is_on_4th_quadrant(unsigned long i)
+/*
+ * Imagine the integer runs in a circle in the middle of a field and the
+ * quadrants on the field are thusly named:
+ *
+ * 4 | 1
+ * -----
+ * 3 | 2
+ */
+static inline int is_on_1st_quadrant(unsigned long i)
 {
 	return i <= ULONG_MAX / 4;
 }
 
-static inline int is_on_1st_quadrant(unsigned long i)
+static inline int is_on_4th_quadrant(unsigned long i)
 {
 	return ULONG_MAX / 4 * 3 < i && i <= ULONG_MAX;
 }
 
 int _prioq_is_seq_lt(unsigned long a, unsigned long b)
 {
-	if (is_on_1st_quadrant(a) && is_on_4th_quadrant(b))
+	if (is_on_4th_quadrant(a) && is_on_1st_quadrant(b))
 		return 1;
 
-	if (is_on_4th_quadrant(a) && is_on_1st_quadrant(b))
+	if (is_on_1st_quadrant(a) && is_on_4th_quadrant(b))
 		return 0;
 
 	return a < b;
