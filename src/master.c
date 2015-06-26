@@ -474,9 +474,16 @@ static int handle_heartbeat(struct canopen_node* node,
 	if (heartbeat_is_bootup(frame))
 		return handle_bootup(node);
 
-	if (master_state_ > MASTER_STATE_STARTUP
-	 && node->is_heartbeat_supported)
-		restart_heartbeat_timer(get_node_id(node));
+	if (master_state_ == MASTER_STATE_STARTUP)
+		return 0;
+
+	int nodeid = get_node_id(node);
+
+	restart_heartbeat_timer(nodeid);
+
+	/* Make sure the node is in operational state */
+	if (heartbeat_get_state(frame) != NMT_STATE_OPERATIONAL)
+		net__send_nmt(socket_, NMT_CS_START, nodeid);
 
 	return 0;
 }
