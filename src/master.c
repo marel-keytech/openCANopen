@@ -46,6 +46,7 @@ struct canopen_node {
 	int device_type;
 	int is_heartbeat_supported;
 	struct ml_timer heartbeat_timer;
+	struct ml_timer ping_timer;
 };
 
 struct driver_load_job {
@@ -63,6 +64,12 @@ struct sdo_job {
 	int subindex;
 	unsigned char* data;
 	size_t size;
+};
+
+struct ping_job {
+	struct ml_job job;
+	int nodeid;
+	int ok;
 };
 
 static struct canopen_node node_[128];
@@ -226,16 +233,30 @@ static void stop_heartbeat_timer(int nodeid)
 	ml_timer_stop(timer);
 }
 
+static void stop_ping_timer(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+	struct ml_timer* timer = &node->ping_timer;
+	ml_timer_stop(timer);
+}
+
 static void unload_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
+
+	if (node->is_heartbeat_supported)
+		stop_heartbeat_timer(nodeid);
+	else
+		stop_ping_timer(nodeid);
+
 	legacy_driver_delete_handler(driver_manager_, node->device_type,
 				     node->driver);
 	node->driver = NULL;
 	node->device_type = 0;
 	node->is_heartbeat_supported = 0;
 
-	stop_heartbeat_timer(nodeid);
+
+	net__send_nmt(socket_, NMT_CS_RESET_NODE, nodeid);
 }
 
 static void on_heartbeat_timeout(void* context)
@@ -256,6 +277,8 @@ static int start_heartbeat_timer(int nodeid)
 	timer->timeout = HEARTBEAT_TIMEOUT;
 	timer->fn = on_heartbeat_timeout;
 
+	ml_timer_start(timer);
+
 	return 0;
 }
 
@@ -263,6 +286,76 @@ static int restart_heartbeat_timer(int nodeid)
 {
 	stop_heartbeat_timer(nodeid);
 	return start_heartbeat_timer(nodeid);
+}
+
+static void run_ping_job(void* context)
+{
+	struct ping_job* job = context;
+
+	uint32_t dummy;
+	if (sdo_read_fifo(job->nodeid, 0x1000, 0, &dummy, sizeof(dummy)) < 0)
+		job->ok = 0;
+	else
+		job->ok = 1;
+}
+
+static void on_ping_job_done(void* context)
+{
+	struct ping_job* job = context;
+
+	if (!job->ok)
+		unload_driver(job->nodeid);
+}
+
+static int schedule_ping_job(int nodeid)
+{
+	struct ping_job* ping_job = malloc(sizeof(*ping_job));
+	if (!ping_job)
+		return -1;
+
+	struct ml_job* job = (struct ml_job*)ping_job;
+
+	ml_job_init(job);
+
+	job->priority = 127 + nodeid;
+	job->context = job;
+	job->work_fn = run_ping_job;
+	job->after_work_fn = on_ping_job_done;
+	ping_job->nodeid = nodeid;
+	ping_job->ok = 0;
+
+	if (ml_job_enqueue(job) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	ml_job_clear(job);
+	free(job);
+	return -1;
+}
+
+static void on_ping_timeout(void* context)
+{
+	struct canopen_node* node = context;
+	schedule_ping_job(get_node_id(node));
+}
+
+static int start_ping_timer(int nodeid, int period)
+{
+	struct canopen_node* node = &node_[nodeid];
+	struct ml_timer* timer = &node->ping_timer;
+
+	ml_timer_init(timer);
+
+	timer->is_periodic = 1;
+	timer->context = node;
+	timer->timeout = period;
+	timer->fn = on_ping_timeout;
+
+	ml_timer_start(timer);
+
+	return 0;
 }
 
 static int load_driver(int nodeid)
@@ -294,6 +387,8 @@ static int load_driver(int nodeid)
 	int is_heartbeat_supported = node_supports_heartbeat(nodeid);
 	if (is_heartbeat_supported)
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD);
+	else
+		start_ping_timer(nodeid, HEARTBEAT_PERIOD);
 
 	node->driver = driver;
 	node->device_type = device_type;
@@ -596,7 +691,7 @@ static int schedule_sdo_job(int nodeid, enum sdo_job_type type, int index,
 	job->priority = nodeid;
 	job->context = job;
 	job->work_fn = run_sdo_job;
-	job->after_work_fn = free;
+	job->after_work_fn = on_sdo_job_done;
 
 	sdo_job->type = type;
 	sdo_job->nodeid = nodeid;
@@ -632,16 +727,12 @@ failure:
 
 static int master_request_sdo(int nodeid, int index, int subindex)
 {
-	struct canopen_node* node = &node_[nodeid];
-
 	return schedule_sdo_job(nodeid, SDO_JOB_UL, index, subindex, NULL, 0);
 }
 
 static int master_send_sdo(int nodeid, int index, int subindex,
 			   unsigned char* data, size_t size)
 {
-	struct canopen_node* node = &node_[nodeid];
-
 	return schedule_sdo_job(nodeid, SDO_JOB_DL, index, subindex, data,
 				subindex);
 }
