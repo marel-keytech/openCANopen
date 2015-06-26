@@ -21,10 +21,18 @@
 
 #define SDO_FIFO_LENGTH 64
 
+#define HEARTBEAT_PERIOD 10000 /* ms */
+#define HEARTBEAT_TIMEOUT 11000 /* ms */
+
 static int socket_ = -1;
 static char nodes_seen_[128];
 
-static int ignore_bootup_ = 1;
+enum master_state {
+	MASTER_STATE_STARTUP = 0,
+	MASTER_STATE_RUNNING
+};
+
+static enum master_state master_state_ = MASTER_STATE_STARTUP;
 
 static void* master_iface_;
 static void* driver_manager_;
@@ -39,6 +47,8 @@ struct canopen_node {
 	struct sdo_fifo sdo_fifo;
 	int is_sdo_locked;
 	int device_type;
+	int is_heartbeat_supported;
+	struct ml_timer heartbeat_timer;
 };
 
 struct driver_load_job {
@@ -72,47 +82,96 @@ void clean_node_name(char* name, size_t size)
 
 }
 
+void sdo_channel_lock(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+	pthread_mutex_lock(&node->sdo_channel);
+}
+
+void sdo_channel_unlock(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+	pthread_mutex_unlock(&node->sdo_channel);
+}
+
+int sdo_timeout(int nodeid, int index, int subindex)
+{
+	struct can_frame cf;
+	sdo_clear_frame(&cf);
+	sdo_abort(&cf, SDO_ABORT_TIMEOUT, index, subindex);
+	cf.can_id = R_RSDO + nodeid;
+	net_write_frame(socket_, &cf, -1);
+	return -1;
+}
+
+int sdo_process_request(int nodeid, struct frame_fifo* fifo,
+			struct sdo_req* req)
+{
+	struct can_frame cf;
+
+	while (1) {
+		if (frame_fifo_dequeue(fifo, &cf, 100) < 0)
+			return sdo_timeout(nodeid, req->index, req->subindex);
+
+		sdo_req_feed(req, &cf);
+
+		if (req->have_frame) {
+			req->frame.can_id = R_RSDO + nodeid;
+			net_write_frame(socket_, &req->frame, -1);
+		}
+
+		if (req->state == SDO_REQ_DONE)
+			break;
+
+		if (req->state < 0)
+			return -1;
+	}
+
+	return req->pos;
+}
+
 ssize_t sdo_read_fifo(int nodeid, int index, int subindex, void* buf,
 		      size_t size)
 {
 	struct sdo_req req;
-	struct can_frame cf;
 	struct canopen_node* node = &node_[nodeid];
 	struct frame_fifo* fifo = &node->frame_fifo;
 
+	sdo_channel_lock(nodeid);
+
 	sdo_request_upload(&req, index, subindex);
 	req.frame.can_id = R_RSDO + nodeid;
-
 	net_write_frame(socket_, &req.frame, -1);
 
 	req.pos = 0;
 	req.addr = buf;
 	req.size = size;
 
-	while (1) {
-		if (frame_fifo_dequeue(fifo, &cf, 100) < 0) {
-			sdo_abort(&cf, SDO_ABORT_TIMEOUT, index, subindex);
-			cf.can_id = R_RSDO + nodeid;
-			net_write_frame(socket_, &cf, -1);
-			return -1;
-		}
+	int rc = sdo_process_request(nodeid, fifo, &req);
 
-		if (sdo_ul_req_feed(&req, &cf) < 0)
-			return -1;
+	sdo_channel_unlock(nodeid);
 
-		req.frame.can_id = R_RSDO + nodeid;
+	return rc;
+}
 
-		if (req.have_frame)
-			net_write_frame(socket_, &req.frame, -1);
+ssize_t sdo_write_fifo(int nodeid, int index, int subindex, const void* buf,
+		       size_t size)
+{
+	struct sdo_req req;
+	struct canopen_node* node = &node_[nodeid];
+	struct frame_fifo* fifo = &node->frame_fifo;
 
-		if (req.state == SDO_REQ_DONE)
-			break;
+	sdo_channel_lock(nodeid);
 
-		if (req.state < 0)
-			return -1;
-	}
+	sdo_request_download(&req, index, subindex, buf, size);
+	req.frame.can_id = R_RSDO + nodeid;
+	net_write_frame(socket_, &req.frame, -1);
 
-	return req.pos;
+	int rc = sdo_process_request(nodeid, fifo, &req);
+
+	sdo_channel_unlock(nodeid);
+
+	return rc;
 }
 
 uint32_t get_device_type(int nodeid)
@@ -124,6 +183,21 @@ uint32_t get_device_type(int nodeid)
 		return 0;
 
 	return device_type;
+}
+
+int node_supports_heartbeat(int nodeid)
+{
+	uint16_t dummy;
+
+	if (sdo_read_fifo(nodeid, 0x1017, 0, &dummy, sizeof(dummy)) < 0)
+		return 0;
+
+	return 1;
+}
+
+static inline int set_heartbeat_period(int nodeid, uint16_t period)
+{
+	return sdo_write_fifo(nodeid, 0x1017, 0, &period, sizeof(period));
 }
 
 const char* get_name(int nodeid)
@@ -138,15 +212,58 @@ const char* get_name(int nodeid)
 	return name;
 }
 
+static void stop_heartbeat_timer(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+	struct ml_timer* timer = &node->heartbeat_timer;
+	ml_timer_stop(timer);
+}
+
+static void unload_driver(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+	legacy_driver_delete_handler(driver_manager_, node->device_type,
+				     node->driver);
+	node->driver = NULL;
+	node->device_type = 0;
+	node->is_heartbeat_supported = 0;
+
+	stop_heartbeat_timer(nodeid);
+}
+
+static void on_heartbeat_timeout(void* context)
+{
+	struct canopen_node* node = context;
+	unload_driver(get_node_id(node));
+}
+
+static int start_heartbeat_timer(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+	struct ml_timer* timer = &node->heartbeat_timer;
+
+	ml_timer_init(timer);
+
+	timer->is_periodic = 0;
+	timer->context = node;
+	timer->timeout = HEARTBEAT_TIMEOUT;
+	timer->fn = on_heartbeat_timeout;
+
+	return 0;
+}
+
+static int restart_heartbeat_timer(int nodeid)
+{
+	stop_heartbeat_timer(nodeid);
+	return start_heartbeat_timer(nodeid);
+}
+
 static int load_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
 
-	if (node->driver) {
-		legacy_driver_delete_handler(driver_manager_, node->device_type,
-					     node->driver);
-		node->driver = NULL;
-	}
+	if (node->driver)
+		unload_driver(nodeid);
 
 	void* driver = NULL;
 
@@ -161,13 +278,22 @@ static int load_driver(int nodeid)
 	if (!name)
 		goto failure;
 
+
 	if (legacy_driver_manager_create_handler(driver_manager_, name,
 						 device_type, master_iface_,
 						 &driver) < 0)
 		goto failure;
 
+	int is_heartbeat_supported = node_supports_heartbeat(nodeid);
+	if (is_heartbeat_supported)
+		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD);
+
 	node->driver = driver;
 	node->device_type = device_type;
+	node->is_heartbeat_supported = is_heartbeat_supported;
+
+	if (master_state_ > MASTER_STATE_STARTUP)
+		net__send_nmt(socket_, NMT_CS_START, nodeid);
 
 	return 0;
 
@@ -218,7 +344,7 @@ failure:
 
 static int handle_bootup(struct canopen_node* node)
 {
-	if (ignore_bootup_)
+	if (master_state_ == MASTER_STATE_STARTUP)
 		return 0;
 
 	return schedule_load_driver(get_node_id(node));
@@ -246,7 +372,10 @@ static int handle_heartbeat(struct canopen_node* node,
 	if (heartbeat_is_bootup(frame))
 		return handle_bootup(node);
 
-	/* TODO */
+	if (master_state_ > MASTER_STATE_STARTUP
+	 && node->is_heartbeat_supported)
+		restart_heartbeat_timer(get_node_id(node));
+
 	return 0;
 }
 
@@ -432,7 +561,7 @@ static void on_bootup_done(void* context)
 {
 	(void)context;
 	net__send_nmt(socket_, NMT_CS_START, 0);
-	ignore_bootup_ = 0;
+	master_state_ = MASTER_STATE_RUNNING;
 }
 
 static void on_net_probe_done(void* context)
