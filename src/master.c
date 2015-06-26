@@ -14,7 +14,6 @@
 #include "canopen/nmt.h"
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
-#include "sdo_fifo.h"
 #include "frame_fifo.h"
 
 #include "legacy-driver.h"
@@ -44,8 +43,6 @@ struct canopen_node {
 	struct frame_fifo frame_fifo;
 	struct sdo_req sdo_req;
 	pthread_mutex_t sdo_channel;
-	struct sdo_fifo sdo_fifo;
-	int is_sdo_locked;
 	int device_type;
 	int is_heartbeat_supported;
 	struct ml_timer heartbeat_timer;
@@ -56,9 +53,19 @@ struct driver_load_job {
 	int nodeid;
 };
 
-static struct canopen_node node_[128];
+enum sdo_job_type { SDO_JOB_DL, SDO_JOB_UL };
 
-static char upload_buffer_[4096]; /* TODO: make dynamic */
+struct sdo_job {
+	struct ml_job job;
+	enum sdo_job_type type;
+	int nodeid;
+	int index;
+	int subindex;
+	unsigned char* data;
+	size_t size;
+};
+
+static struct canopen_node node_[128];
 
 static inline int get_node_id(const struct canopen_node* node)
 {
@@ -379,93 +386,6 @@ static int handle_heartbeat(struct canopen_node* node,
 	return 0;
 }
 
-static int schedule_dl_sdo(struct canopen_node* node, struct sdo_elem* sdo)
-{
-	struct sdo_req* req = &node->sdo_req;
-
-	if (!sdo_request_download(req, sdo->index, sdo->subindex,
-				  sdo->data->data, sdo->data->size))
-		return -1;
-
-	req->frame.can_id = get_node_id(node) + R_RSDO;
-	net_write_frame(socket_, &node->sdo_req.frame, -1);
-
-	node->is_sdo_locked = 1;
-	return 0;
-}
-
-static int schedule_ul_sdo(struct canopen_node* node, struct sdo_elem* sdo)
-{
-	struct sdo_req* req = &node->sdo_req;
-
-	if (!sdo_request_upload(req, sdo->index, sdo->subindex))
-		return -1;
-
-	req->frame.can_id = get_node_id(node) + R_RSDO;
-	req->addr = upload_buffer_;
-	req->size = sizeof(upload_buffer_);
-	req->pos = 0;
-
-	net_write_frame(socket_, &req->frame, -1);
-
-	node->is_sdo_locked = 1;
-	return 0;
-}
-
-static int schedule_sdo(struct canopen_node* node)
-{
-	struct sdo_fifo* fifo = &node->sdo_fifo;
-	if (node->is_sdo_locked)
-		return 0;
-
-	if (sdo_fifo_length(fifo) == 0)
-		return 0;
-
-	struct sdo_elem* head = sdo_fifo_head(fifo);
-
-	switch (head->type)
-	{
-	case SDO_ELEM_DL: return schedule_dl_sdo(node, head);
-	case SDO_ELEM_UL: return schedule_ul_sdo(node, head);
-	}
-
-	return -1;
-}
-
-static int handle_tsdo(struct canopen_node* node, const struct can_frame* frame)
-{
-	struct sdo_req* req = &node->sdo_req;
-	struct sdo_fifo* fifo = &node->sdo_fifo;
-
-	if (sdo_req_feed(req, frame))
-		net_write_frame(socket_, &req->frame, -1);
-
-	if (!node->is_sdo_locked)
-		return -1;
-
-	if (req->state != SDO_REQ_DONE && req->state >= 0)
-		return 0;
-
-	if (req->type == SDO_REQ_DL) {
-		free(sdo_fifo_head(fifo)->data);
-	} else /* if (req->type == SDO_REQ_UL) */ {
-		if (sdo_fifo_length(fifo) == 0)
-			return -1;
-
-		int index = sdo_fifo_head(fifo)->index;
-		int subindex = sdo_fifo_head(fifo)->subindex;
-
-		legacy_driver_iface_process_sdo(node->driver, index, subindex,
-						(unsigned char*)req->addr,
-						req->pos);
-	}
-
-	sdo_fifo_dequeue(fifo);
-	node->is_sdo_locked = 0;
-
-	return schedule_sdo(node);
-}
-
 static void handle_not_loaded(struct canopen_node* node,
 			      const struct canopen_msg* msg,
 			      const struct can_frame* frame)
@@ -527,7 +447,7 @@ static void mux_handler_fn(int fd, void* context)
 		legacy_driver_iface_process_pdo(driver, 4, cf.data, cf.can_dlc);
 		break;
 	case CANOPEN_TSDO:
-		handle_tsdo(node, &cf);
+		frame_fifo_enqueue(&node->frame_fifo, &cf);
 		break;
 	case CANOPEN_EMCY:
 		handle_emcy(node, &cf);
@@ -618,15 +538,103 @@ static int master_set_node_state(int nodeid, int state)
 	return 0;
 }
 
+static void run_ul_sdo_job(struct sdo_job* job)
+{
+	sdo_read_fifo(job->nodeid, job->index, job->subindex, job->data,
+		      job->size);
+}
+
+static void run_dl_sdo_job(struct sdo_job* job)
+{
+	sdo_write_fifo(job->nodeid, job->index, job->subindex, job->data,
+		       job->size);
+}
+
+static void run_sdo_job(void* context)
+{
+	struct sdo_job* job = context;
+
+	switch (job->type)
+	{
+	case SDO_JOB_DL:
+		run_dl_sdo_job(job);
+		break;
+	case SDO_JOB_UL:
+		run_ul_sdo_job(job);
+		break;
+	}
+
+	abort();
+}
+
+static void on_sdo_job_done(void* context)
+{
+	struct sdo_job* job = context;
+	struct canopen_node* node = &node_[job->nodeid];
+
+	if (job->type == SDO_JOB_UL) {
+		legacy_driver_iface_process_sdo(node->driver, job->index,
+						job->subindex, job->data,
+						job->size);
+		free(job->data);
+	}
+
+	free(job);
+}
+
+static int schedule_sdo_job(int nodeid, enum sdo_job_type type, int index,
+			    int subindex, unsigned char* data, size_t size)
+{
+	struct sdo_job* sdo_job = malloc(sizeof(*sdo_job));
+	if (!sdo_job)
+		return -1;
+
+	struct ml_job* job = (struct ml_job*)sdo_job;
+
+	ml_job_init(job);
+
+	job->priority = nodeid;
+	job->context = job;
+	job->work_fn = run_sdo_job;
+	job->after_work_fn = free;
+
+	sdo_job->type = type;
+	sdo_job->nodeid = nodeid;
+	sdo_job->index = index;
+	sdo_job->subindex = subindex;
+
+	if (type == SDO_JOB_DL) {
+		assert(data);
+
+		sdo_job->data = data;
+		sdo_job->size = size;
+	} else {
+		sdo_job->size = 1024;
+		sdo_job->data = malloc(sdo_job->size);
+
+		if (!sdo_job->data)
+			goto failure;
+	}
+
+	if (ml_job_enqueue(job) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	if (type == SDO_JOB_UL)
+		free(sdo_job->data);
+
+	ml_job_clear(job);
+	free(job);
+	return -1;
+}
+
 static int master_request_sdo(int nodeid, int index, int subindex)
 {
 	struct canopen_node* node = &node_[nodeid];
 
-	if (sdo_fifo_enqueue(&node->sdo_fifo, SDO_ELEM_UL, index, subindex,
-			     NULL) < 0)
-		return -1;
-
-	return schedule_sdo(node);
+	return schedule_sdo_job(nodeid, SDO_JOB_UL, index, subindex, NULL, 0);
 }
 
 static int master_send_sdo(int nodeid, int index, int subindex,
@@ -634,18 +642,8 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 {
 	struct canopen_node* node = &node_[nodeid];
 
-	struct sdo_elem_data* payload = malloc(sizeof(*payload) + size);
-	if (!payload)
-		return -1;
-
-	payload->size = size;
-	memcpy(payload->data, data, size);
-
-	if (sdo_fifo_enqueue(&node->sdo_fifo, SDO_ELEM_DL, index, subindex,
-			     payload) < 0)
-		return -1;
-
-	return schedule_sdo(node);
+	return schedule_sdo_job(nodeid, SDO_JOB_DL, index, subindex, data,
+				subindex);
 }
 
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)
