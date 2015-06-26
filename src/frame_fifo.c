@@ -86,8 +86,9 @@ static int block_while_empty(struct frame_fifo* self, int timeout)
 		add_to_timespec(&deadline, msec_to_nsec(timeout));
 
 		while (self->count == 0)
-			rc = pthread_cond_timedwait(&self->suspend_cond_,
-						    &self->mutex_, &deadline);
+			if (pthread_cond_timedwait(&self->suspend_cond_,
+						   &self->mutex_,
+						   &deadline) == ETIMEDOUT)
 				if (self->count == 0)
 					return ETIMEDOUT;
 	}
