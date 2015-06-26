@@ -12,6 +12,7 @@ struct ml_timer {
 	void* context;
 	int timeout;
 	int is_periodic;
+	int is_active;
 	eloop_timer_t handle_;
 };
 

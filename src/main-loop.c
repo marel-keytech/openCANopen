@@ -73,6 +73,9 @@ static eloop_cb_error_t ml__timer_fn(eloop_timer_t handle, void* context)
 	(void)handle;
 	struct ml_timer* timer = (struct ml_timer*)context;
 
+	if (!timer->is_periodic)
+		timer->is_active = 0;
+
 	timer->fn(timer->context);
 
 	return eloop_cb_ok;
@@ -82,6 +85,9 @@ int ml_timer_start(struct ml_timer* timer)
 {
 	eloop_error_t rc;
 
+	if (timer->is_active)
+		return -1;
+
 	rc = eloop_timer_new(eloop_default_loop(),
 			     timer->timeout,
 			     timer->is_periodic,
@@ -89,8 +95,10 @@ int ml_timer_start(struct ml_timer* timer)
 			     NULL,
 			     timer,
 			     &timer->handle_);
-	if (rc == eloop_ok)
+	if (rc == eloop_ok) {
+		timer->is_active = 1;
 		return 0;
+	}
 
 	ml_errno = rc;
 	return -1;
@@ -100,6 +108,10 @@ int ml_timer_stop(struct ml_timer* timer)
 {
 	eloop_error_t rc;
 
+	if (!timer->is_active)
+		return -1;
+
+	timer->is_active = 0;
 	rc = eloop_timer_del(eloop_default_loop(), timer->handle_);
 	if (rc == eloop_ok)
 		return 0;
