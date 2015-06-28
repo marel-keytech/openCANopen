@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include "prioq.h"
+#include "thread-utils.h"
 
 int prioq_init(struct prioq* self, size_t size)
 {
@@ -62,62 +63,14 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 	return 0;
 }
 
-uint64_t timespec_to_ns(struct timespec* ts)
-{
-	return ts->tv_sec * 1000000000ULL + ts->tv_nsec;
-}
-
-struct timespec ns_to_timespec(uint64_t ns)
-{
-	struct timespec ts;
-	ts.tv_nsec = ns % 1000000000ULL;
-	ts.tv_sec = ns / 1000000000ULL;
-	return ts;
-}
-
-void add_to_timespec(struct timespec* ts, uint64_t addition)
-{
-	*ts = ns_to_timespec(timespec_to_ns(ts) + addition);
-}
-
-int block_if_empty(struct prioq* self, int timeout)
-{
-	struct timespec deadline;
-
-	if (timeout < 0) {
-		while (self->index == 0)
-			pthread_cond_wait(&self->suspend_cond,
-					  &self->mutex);
-	} else {
-		clock_gettime(CLOCK_REALTIME, &deadline);
-		add_to_timespec(&deadline, timeout * 1000000LL);
-
-		while (self->index == 0)
-			if (pthread_cond_timedwait(&self->suspend_cond,
-						   &self->mutex,
-						   &deadline) == ETIMEDOUT)
-				if (self->index == 0)
-					return ETIMEDOUT;
-	}
-
-	return 0;
-}
-
 int prioq_pop(struct prioq* self, struct prioq_elem* elem, int timeout)
 {
 	_prioq_lock(self);
 
-	if (timeout == 0) {
-		if (self->index == 0) {
-			errno = EAGAIN;
-			goto failure;
-		}
-	} else {
-		if (block_if_empty(self, timeout) == ETIMEDOUT) {
-			errno = ETIMEDOUT;
-			goto failure;
-		}
-	}
+	int rc = block_thread_while_empty(&self->suspend_cond, &self->mutex,
+					  timeout, self->index == 0);
+	if (rc < 0)
+		goto done;
 
 	assert(self->index > 0);
 
@@ -126,12 +79,10 @@ int prioq_pop(struct prioq* self, struct prioq_elem* elem, int timeout)
 
 	_prioq_sink_down(self, 0);
 
+	rc = 1;
+done:
 	_prioq_unlock(self);
-	return 1;
-
-failure:
-	_prioq_unlock(self);
-	return -1;
+	return rc;
 }
 
 /*
