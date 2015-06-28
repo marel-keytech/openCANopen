@@ -51,19 +51,19 @@ tst/test_sdo_client: src/sdo_common.o src/sdo_client.o src/byteorder.o \
 	$(CC) $^ $(LDFLAGS) -o $@
 
 tst/test_prioq: src/prioq.o tst/prioq_test.o
-	$(CC) $^ -o $@
+	$(CC) $^ $(LDFLAGS) -o $@
 
 tst/test_worker: src/prioq.o src/worker.o tst/worker_test.o
-	$(CC) $^ -pthread -o $@
+	$(CC) $^ $(LDFLAGS) -pthread -o $@
 
 tst/test_network: src/canopen.o src/byteorder.o src/network.o tst/network_test.o
 	$(CC) $^ -o $@
 
 tst/test_sdo_fifo: tst/sdo_fifo_test.o
-	$(CC) $^ -o $@
+	$(CC) $^ $(LDFLAGS) -o $@
 
 tst/test_frame_fifo: src/frame_fifo.c tst/frame_fifo_test.o
-	$(CC) $(CFLAGS) -DFRAME_FIFO_LENGTH=2 $^ -pthread -o $@
+	$(CC) $(CFLAGS) -DFRAME_FIFO_LENGTH=2 $^ $(LDFLAGS) -pthread -o $@
 
 fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_common.o \
 	  src/sdo_srv.o src/byteorder.o
