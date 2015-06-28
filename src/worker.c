@@ -30,7 +30,7 @@ static void job_del(struct job* job)
 
 static void* thread_fn(void* context)
 {
-	int id = (int)context;
+	(void)context;
 
 	while (1) {
 		struct prioq_elem elem;
