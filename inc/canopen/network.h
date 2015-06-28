@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <stdint.h>
 
+struct can_frame;
+
 /* Reset the network and see which nodes respond to the reset signal.
  *
  * nodes_seen must be an array of length 128; prior values are not cleared.
