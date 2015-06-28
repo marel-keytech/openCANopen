@@ -86,8 +86,8 @@ static int test_prioq_swap()
 
 	ASSERT_INT_EQ(2, a.priority);
 	ASSERT_INT_EQ(1, b.priority);
-	ASSERT_INT_EQ('b', (char)a.data);
-	ASSERT_INT_EQ('a', (char)b.data);
+	ASSERT_INT_EQ('b', (int)a.data);
+	ASSERT_INT_EQ('a', (int)b.data);
 
 	return 0;
 }
