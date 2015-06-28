@@ -75,7 +75,6 @@ static inline void add_to_timespec(struct timespec* ts, uint64_t addition)
 static int block_while_empty(struct frame_fifo* self, int timeout)
 {
 	struct timespec deadline;
-	int rc;
 
 	if (timeout < 0) {
 		while (self->count == 0)
