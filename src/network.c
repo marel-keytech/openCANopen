@@ -69,14 +69,11 @@ int net__send_nmt(int fd, int cs, int nodeid)
 	return net_write_frame(fd, &cf, -1);
 }
 
-int net__request_device_type(int fd, int nodeid)
+int net__request_heartbeat(int fd, int nodeid)
 {
 	struct can_frame cf = { 0 };
-	sdo_set_cs(&cf, SDO_CCS_UL_INIT_REQ);
-	sdo_set_index(&cf, 0x1000);
-	sdo_set_subindex(&cf, 0);
-	cf.can_id = R_RSDO + nodeid;
-	cf.can_dlc = 4;
+	cf.can_id = R_HEARTBEAT + nodeid;
+	cf.can_dlc = 0;
 	return net_write_frame(fd, &cf, -1);
 }
 
@@ -104,35 +101,11 @@ int net__wait_for_bootup(int fd, char* nodes_seen, int start, int end,
 		if (!(start <= msg.id && msg.id <= end))
 			continue;
 
-		if (msg.object == CANOPEN_HEARTBEAT && heartbeat_is_bootup(&cf))
-			nodes_seen[msg.id] = 1;
-	}
-
-	return 0;
-}
-
-int net__wait_for_sdo(int fd, char* nodes_seen, int start, int end, int timeout)
-{
-	struct can_frame cf;
-	struct canopen_msg msg;
-
-	int t = net__gettime_ms();
-	int t_end = t + timeout;
-
-	while (net_read(fd, &cf, sizeof(cf), MAX(0, t_end - t)) > 0) {
-		t = net__gettime_ms();
-
-		canopen_get_object_type(&msg, &cf);
-
-		if (!(start <= msg.id && msg.id <= end))
+		if (msg.object != CANOPEN_HEARTBEAT)
 			continue;
 
-		if (msg.object == CANOPEN_TSDO
-		 && sdo_get_cs(&cf) == SDO_SCS_UL_INIT_RES
-		 && sdo_get_index(&cf) == 0x1000
-		 && sdo_get_subindex(&cf) == 0) {
-			nodes_seen[msg.id] = 1;
-		}
+		nodes_seen[msg.id] = 1;
+		t_end = t + timeout;
 	}
 
 	return 0;
@@ -155,9 +128,10 @@ int net_reset_range(int fd, char* nodes_seen, int start, int end, int timeout)
 int net_probe(int fd, char* nodes_seen, int start, int end, int timeout)
 {
 	for (int i = start; i <= end; ++i)
-		net__request_device_type(fd, i);
+		if (!nodes_seen[i])
+			net__request_heartbeat(fd, i);
 
-	return net__wait_for_sdo(fd, nodes_seen, start, end, timeout);
+	return net__wait_for_bootup(fd, nodes_seen, start, end, timeout);
 }
 
 int net_fix_sndbuf(int fd)

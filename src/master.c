@@ -255,7 +255,6 @@ static void unload_driver(int nodeid)
 	node->device_type = 0;
 	node->is_heartbeat_supported = 0;
 
-
 	net__send_nmt(socket_, NMT_CS_RESET_NODE, nodeid);
 }
 
@@ -408,7 +407,8 @@ static void run_net_probe(void* context)
 {
 	(void)context;
 
-	net_probe(socket_, nodes_seen_, 1, 127, 1000);
+	net_reset(socket_, nodes_seen_, 100);
+	net_probe(socket_, nodes_seen_, 1, 127, 100);
 }
 
 static void run_load_driver(void* context)
@@ -611,8 +611,6 @@ static int cleanup()
 
 static int on_tickermaster_alive()
 {
-	net__send_nmt(socket_, NMT_CS_RESET_COMMUNICATION, 0);
-
 	static struct ml_job job;
 	ml_job_init(&job);
 	job.work_fn = run_net_probe;
