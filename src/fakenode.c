@@ -13,6 +13,8 @@
 #include "socketcan.h"
 #include "canopen/sdo_srv.h"
 #include "canopen/byteorder.h"
+#include "canopen/network.h"
+#include "canopen/nmt.h"
 
 static struct sdo_srv sdo_srv_;
 static lua_State* lua_state_;
@@ -154,11 +156,11 @@ static int process_rsdo(int fd, struct canopen_msg* msg,
 static void send_bootup(int fd)
 {
 	struct can_frame cf;
-	cf.can_id = R_EMCY + nodeid_;
-	cf.can_dlc = 0;
-	//cf.can_id = R_HEARTBEAT + nodeid_;
-	//cf.can_dlc = 1;
-	//cf.data[0] = 0;
+	//cf.can_id = R_EMCY + nodeid_;
+	//cf.can_dlc = 0;
+	cf.can_id = R_HEARTBEAT + nodeid_;
+	cf.can_dlc = 1;
+	cf.data[0] = 0;
 
 	while (write(fd, &cf, sizeof(cf)) != sizeof(cf))
 		usleep(1000);
@@ -179,8 +181,21 @@ static int process_nmt(int fd, struct canopen_msg* msg,
 	if (nodeid != 0 && nodeid != nodeid_)
 		return 0;
 
-	if (command == 0x81 || command == 0x82)
-		reset_communication(fd);
+//	if (command == 0x81 || command == 0x82)
+//		reset_communication(fd);
+
+	return 0;
+}
+
+static int process_node_guarding(int fd)
+{
+	struct can_frame cf = { 0 };
+	cf.can_id = R_HEARTBEAT + nodeid_;
+	cf.can_dlc = 1;
+	cf.data[0] = NMT_STATE_OPERATIONAL;
+
+	while (write(fd, &cf, sizeof(cf)) != sizeof(cf))
+		usleep(1000);
 
 	return 0;
 }
@@ -190,6 +205,7 @@ static int process_single_message(int fd, struct canopen_msg* msg,
 {
 	switch (msg->object)
 	{
+	case CANOPEN_HEARTBEAT: return process_node_guarding(fd);
 	case CANOPEN_NMT:  return process_nmt(fd, msg, frame);
 	case CANOPEN_RSDO: return process_rsdo(fd, msg, frame);
 	default: break;
@@ -240,6 +256,8 @@ int main(int argc, char* argv[])
 		perror("Failed to open can interface");
 		goto failure;
 	}
+
+	net_fix_sndbuf(fd);
 
 	send_bootup(fd);
 
