@@ -29,6 +29,11 @@ canopen-master: src/master.o src/sdo_common.o src/sdo_client.o src/byteorder.o \
 		src/DriverManager.o src/Driver.o src/frame_fifo.o
 	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -leloop -ldl -o $@
 
+canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
+	      src/network.o src/canopen.o src/socketcan.o
+	$(CC) $^ $(LDFLAGS) -o $@
+
+
 .PHONY: .c.o
 .c.o:
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -66,7 +71,7 @@ tst/test_frame_fifo: src/frame_fifo.c tst/frame_fifo_test.o
 	$(CC) $(CFLAGS) -DFRAME_FIFO_LENGTH=2 $^ $(LDFLAGS) -pthread -o $@
 
 fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_common.o \
-	  src/sdo_srv.o src/byteorder.o
+	  src/sdo_srv.o src/byteorder.o src/network.o
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
 
 dlsdo: src/dlsdo.o src/canopen.o src/socketcan.o src/sdo_common.o \
