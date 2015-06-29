@@ -32,6 +32,7 @@ void socketcan_make_slave_filters(struct can_filter* f, int nodeid)
 	f[5].can_id = R_RPDO3 + nodeid;
 	f[6].can_id = R_RPDO4 + nodeid;
 	f[7].can_id = R_RSDO + nodeid;
+	f[8].can_id = R_HEARTBEAT + nodeid;
 }
 
 void socketcan_make_master_filters(struct can_filter* f, int nodeid)
