@@ -269,10 +269,13 @@ static const char* state_str(enum nmt_state state)
 
 static int dump_heartbeat(struct canopen_msg* msg, struct can_frame* cf)
 {
+	enum nmt_state state = heartbeat_get_state(cf);
+
 	if (heartbeat_is_bootup(cf)) {
 		printf("HEARTBEAT %d bootup\n", msg->id);
+	} else if (state == 1) {
+		printf("HEARTBEAT %d poll\n", msg->id);
 	} else {
-		enum nmt_state state = heartbeat_get_state(cf);
 		printf("HEARTBEAT %d state=%s\n", msg->id, state_str(state));
 	}
 
