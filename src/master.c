@@ -287,57 +287,18 @@ static int restart_heartbeat_timer(int nodeid)
 	return start_heartbeat_timer(nodeid);
 }
 
-static void run_ping_job(void* context)
-{
-	struct ping_job* job = context;
-
-	uint32_t dummy;
-	if (sdo_read_fifo(job->nodeid, 0x1000, 0, &dummy, sizeof(dummy)) < 0)
-		job->ok = 0;
-	else
-		job->ok = 1;
-}
-
-static void on_ping_job_done(void* context)
-{
-	struct ping_job* job = context;
-
-	if (!job->ok)
-		unload_driver(job->nodeid);
-}
-
-static int schedule_ping_job(int nodeid)
-{
-	struct ping_job* ping_job = malloc(sizeof(*ping_job));
-	if (!ping_job)
-		return -1;
-
-	struct ml_job* job = (struct ml_job*)ping_job;
-
-	ml_job_init(job);
-
-	job->priority = 127 + nodeid;
-	job->context = job;
-	job->work_fn = run_ping_job;
-	job->after_work_fn = on_ping_job_done;
-	ping_job->nodeid = nodeid;
-	ping_job->ok = 0;
-
-	if (ml_job_enqueue(job) < 0)
-		goto failure;
-
-	return 0;
-
-failure:
-	ml_job_clear(job);
-	free(job);
-	return -1;
-}
-
 static void on_ping_timeout(void* context)
 {
 	struct canopen_node* node = context;
-	schedule_ping_job(get_node_id(node));
+	int nodeid = get_node_id(node);
+
+	struct can_frame cf = { 0 };
+
+	cf.can_id = R_HEARTBEAT + nodeid;
+	cf.can_dlc = 1;
+	heartbeat_set_state(&cf, 1);
+
+	net_write_frame(socket_, &cf, -1);
 }
 
 static int start_ping_timer(int nodeid, int period)
@@ -383,10 +344,10 @@ static int load_driver(int nodeid)
 						 &driver) < 0)
 		goto failure;
 
-	int is_heartbeat_supported = node_supports_heartbeat(nodeid);
-	if (is_heartbeat_supported)
-		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD);
-	else
+	int is_heartbeat_supported =
+		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
+
+	if (!is_heartbeat_supported)
 		start_ping_timer(nodeid, HEARTBEAT_PERIOD);
 
 	node->driver = driver;
@@ -471,6 +432,9 @@ static int handle_emcy(struct canopen_node* node, const struct can_frame* frame)
 static int handle_heartbeat(struct canopen_node* node,
 			     const struct can_frame* frame)
 {
+	if (!heartbeat_is_valid(frame))
+		return -1;
+
 	if (heartbeat_is_bootup(frame))
 		return handle_bootup(node);
 
