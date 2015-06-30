@@ -223,7 +223,8 @@ static int feed_upload_segment_response(struct sdo_req* self,
 	size_t size = sdo_is_size_indicated(frame) ? sdo_get_segment_size(frame)
 						   : SDO_SEGMENT_MAX_SIZE;
 
-	assert(self->size - self->pos >= size);
+	if (!(self->size - self->pos >= size))
+		return sdo_req_abort(self, SDO_ABORT_TOO_LONG);
 
 	memcpy(&self->addr[self->pos], &frame->data[SDO_SEGMENT_IDX], size);
 
