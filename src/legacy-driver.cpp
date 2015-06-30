@@ -14,6 +14,7 @@ public:
 	LegacyMasterInterface(const struct legacy_master_iface* iface)
 		: self(*iface)
 	{
+		this->nodeId = iface->nodeid;
 	}
 
 	virtual int sendPdo1(unsigned char* data, size_t size)

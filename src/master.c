@@ -33,13 +33,13 @@ enum master_state {
 
 static enum master_state master_state_ = MASTER_STATE_STARTUP;
 
-static void* master_iface_;
 static void* driver_manager_;
 
 static struct ml_handler mux_handler_;
 
 struct canopen_node {
 	void* driver;
+	void* master_iface;
 	struct frame_fifo frame_fifo;
 	struct sdo_req sdo_req;
 	pthread_mutex_t sdo_channel;
@@ -71,6 +71,14 @@ struct ping_job {
 	int nodeid;
 	int ok;
 };
+
+static void* master_iface_init(int nodeid);
+static int master_request_sdo(int nodeid, int index, int subindex);
+static int master_send_sdo(int nodeid, int index, int subindex,
+			   unsigned char* data, size_t size);
+static int send_pdo(int nodeid, int type, unsigned char* data, size_t size);
+static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size);
+
 
 static struct canopen_node node_[128];
 
@@ -251,7 +259,11 @@ static void unload_driver(int nodeid)
 
 	legacy_driver_delete_handler(driver_manager_, node->device_type,
 				     node->driver);
+
+	legacy_master_iface_delete(node->master_iface);
+
 	node->driver = NULL;
+	node->master_iface = NULL;
 	node->device_type = 0;
 	node->is_heartbeat_supported = 0;
 
@@ -338,11 +350,18 @@ static int load_driver(int nodeid)
 	if (!name)
 		goto failure;
 
+	void* master_iface = master_iface_init(nodeid);
+	if (!master_iface)
+		goto failure;
 
 	if (legacy_driver_manager_create_handler(driver_manager_, name,
-						 device_type, master_iface_,
+						 device_type, master_iface,
 						 &driver) < 0)
 		goto failure;
+
+	if (legacy_driver_iface_initialize(driver) < 0)
+		goto driver_init_failure;
+
 
 	int is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
@@ -353,12 +372,17 @@ static int load_driver(int nodeid)
 	node->driver = driver;
 	node->device_type = device_type;
 	node->is_heartbeat_supported = is_heartbeat_supported;
+	node->master_iface = master_iface;
 
 	if (master_state_ > MASTER_STATE_STARTUP)
 		net__send_nmt(socket_, NMT_CS_START, nodeid);
 
 	return 0;
 
+driver_handler_failure:
+	legacy_master_iface_delete(master_iface);
+driver_init_failure:
+	legacy_driver_delete_handler(driver_manager_, device_type, driver);
 failure:
 	pthread_mutex_destroy(&node->sdo_channel);
 	return -1;
@@ -417,6 +441,9 @@ static int handle_emcy(struct canopen_node* node, const struct can_frame* frame)
 {
 	if (frame->can_dlc == 0)
 		return handle_bootup(node);
+
+	if (!node->driver)
+		return -1;
 
 	if (frame->can_dlc != 8)
 		return -1;
@@ -733,17 +760,16 @@ static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size)
 	return -1;
 }
 
-static int master_iface_init()
+static void* master_iface_init(int nodeid)
 {
 	struct legacy_master_iface cb;
 	cb.set_node_state = master_set_node_state;
 	cb.request_sdo = master_request_sdo;
 	cb.send_sdo = master_send_sdo;
 	cb.send_pdo = master_send_pdo;
+	cb.nodeid = nodeid;
 
-	master_iface_ = legacy_master_iface_new(&cb);
-
-	return master_iface_ ? 0 : 1;
+	return legacy_master_iface_new(&cb);
 }
 
 static void init_frame_queues()
@@ -777,10 +803,6 @@ int main(int argc, char* argv[])
 	net_dont_block(socket_);
 	net_fix_sndbuf(socket_);
 
-	rc = master_iface_init();
-	if (rc != 0)
-		goto master_iface_failure;
-
 	driver_manager_ = legacy_driver_manager_new();
 	if (!driver_manager_) {
 		rc = 1;
@@ -802,9 +824,6 @@ worker_failure:
 	legacy_driver_manager_delete(driver_manager_);
 
 driver_manager_failure:
-	legacy_master_iface_delete(master_iface_);
-
-master_iface_failure:
 	if (socket_ >= 0)
 		close(socket_);
 

@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 struct legacy_master_iface {
+	int nodeid;
 	int (*send_pdo)(int nodeid, int n, unsigned char* data, size_t size);
 	int (*send_sdo)(int nodeid, int index, int subindex,
 			unsigned char* data, size_t size);
