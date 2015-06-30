@@ -359,9 +359,11 @@ static int load_driver(int nodeid)
 						 &driver) < 0)
 		goto failure;
 
+	node->driver = driver;
+	node->master_iface = master_iface;
+
 	if (legacy_driver_iface_initialize(driver) < 0)
 		goto driver_init_failure;
-
 
 	int is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
@@ -369,10 +371,8 @@ static int load_driver(int nodeid)
 	if (!is_heartbeat_supported)
 		start_ping_timer(nodeid, HEARTBEAT_PERIOD);
 
-	node->driver = driver;
 	node->device_type = device_type;
 	node->is_heartbeat_supported = is_heartbeat_supported;
-	node->master_iface = master_iface;
 
 	if (master_state_ > MASTER_STATE_STARTUP)
 		net__send_nmt(socket_, NMT_CS_START, nodeid);
@@ -383,8 +383,12 @@ driver_handler_failure:
 	legacy_master_iface_delete(master_iface);
 driver_init_failure:
 	legacy_driver_delete_handler(driver_manager_, device_type, driver);
+
+	node->driver = NULL;
+	node->master_iface = NULL;
 failure:
 	pthread_mutex_destroy(&node->sdo_channel);
+
 	return -1;
 }
 
@@ -653,9 +657,9 @@ static void run_sdo_job(void* context)
 	case SDO_JOB_UL:
 		run_ul_sdo_job(job);
 		break;
+	default:
+		abort();
 	}
-
-	abort();
 }
 
 static void on_sdo_job_done(void* context)
@@ -663,13 +667,11 @@ static void on_sdo_job_done(void* context)
 	struct sdo_job* job = context;
 	struct canopen_node* node = &node_[job->nodeid];
 
-	if (job->type == SDO_JOB_UL) {
-		legacy_driver_iface_process_sdo(node->driver, job->index,
-						job->subindex, job->data,
-						job->size);
-		free(job->data);
-	}
+	legacy_driver_iface_process_sdo(node->driver, job->index,
+					job->subindex, job->data,
+					job->size);
 
+	free(job->data);
 	free(job);
 }
 
@@ -689,6 +691,7 @@ static int schedule_sdo_job(int nodeid, enum sdo_job_type type, int index,
 	job->work_fn = run_sdo_job;
 	job->after_work_fn = on_sdo_job_done;
 
+	sdo_job->data = NULL;
 	sdo_job->type = type;
 	sdo_job->nodeid = nodeid;
 	sdo_job->index = index;
@@ -697,12 +700,15 @@ static int schedule_sdo_job(int nodeid, enum sdo_job_type type, int index,
 	if (type == SDO_JOB_DL) {
 		assert(data);
 
-		sdo_job->data = data;
 		sdo_job->size = size;
+		sdo_job->data = malloc(sdo_job->size);
+		if (!sdo_job->data)
+			goto failure;
+
+		memcpy(sdo_job->data, data, size);
 	} else {
 		sdo_job->size = 1024;
 		sdo_job->data = malloc(sdo_job->size);
-
 		if (!sdo_job->data)
 			goto failure;
 	}
@@ -713,9 +719,7 @@ static int schedule_sdo_job(int nodeid, enum sdo_job_type type, int index,
 	return 0;
 
 failure:
-	if (type == SDO_JOB_UL)
-		free(sdo_job->data);
-
+	free(sdo_job->data);
 	ml_job_clear(job);
 	free(job);
 	return -1;
@@ -730,7 +734,7 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 			   unsigned char* data, size_t size)
 {
 	return schedule_sdo_job(nodeid, SDO_JOB_DL, index, subindex, data,
-				subindex);
+				size);
 }
 
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)
