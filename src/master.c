@@ -37,14 +37,31 @@ static void* driver_manager_;
 
 static struct ml_handler mux_handler_;
 
+enum sdo_com_mode {
+	SDO_COM_NONE = 0,
+	SDO_COM_SYNC,
+	SDO_COM_ASYNC
+};
+
+struct canopen_node;
+
+typedef void (*sdo_async_fn)(struct canopen_node* node);
+
 struct canopen_node {
 	void* driver;
 	void* master_iface;
+
 	struct frame_fifo frame_fifo;
-	struct sdo_req sdo_req;
+
+	enum sdo_com_mode sdo_mode;
 	pthread_mutex_t sdo_channel;
+	struct sdo_req sdo_req;
+	struct ml_timer sdo_async_timer;
+	sdo_async_fn sdo_async_on_done;
+
 	int device_type;
 	int is_heartbeat_supported;
+
 	struct ml_timer heartbeat_timer;
 	struct ml_timer ping_timer;
 };
@@ -63,6 +80,12 @@ struct sdo_job {
 	int index;
 	int subindex;
 	unsigned char* data;
+	size_t size;
+};
+
+struct sdo_async {
+	int nodeid, index, subindex;
+	void* data;
 	size_t size;
 };
 
@@ -160,6 +183,7 @@ ssize_t sdo_read_fifo(int nodeid, int index, int subindex, void* buf,
 	struct frame_fifo* fifo = &node->frame_fifo;
 
 	sdo_channel_lock(nodeid);
+	node->sdo_mode = SDO_COM_SYNC;
 
 	sdo_request_upload(&req, index, subindex);
 	req.frame.can_id = R_RSDO + nodeid;
@@ -171,9 +195,96 @@ ssize_t sdo_read_fifo(int nodeid, int index, int subindex, void* buf,
 
 	int rc = sdo_process_request(nodeid, fifo, &req);
 
+	node->sdo_mode = SDO_COM_NONE;
 	sdo_channel_unlock(nodeid);
 
 	return rc;
+}
+
+static void on_sdo_async_timeout(void* context)
+{
+	struct canopen_node* node = context;
+	struct sdo_req* req = &node->sdo_req;
+
+	sdo_timeout(get_node_id(node), req->index, req->subindex);
+	memset(&node->sdo_req, 0, sizeof(node->sdo_req));
+	node->sdo_mode = SDO_COM_NONE;
+	sdo_channel_unlock(get_node_id(node));
+}
+
+static int start_sdo_async_timer(struct canopen_node* node)
+{
+	struct ml_timer* timer = &node->sdo_async_timer;
+
+	ml_timer_init(timer);
+
+	timer->is_periodic = 0;
+	timer->context = node;
+	timer->timeout = 100;
+	timer->fn = on_sdo_async_timeout;
+
+	return ml_timer_start(timer);
+}
+
+static inline void stop_sdo_async_timer(struct canopen_node* node)
+{
+	struct ml_timer* timer = &node->sdo_async_timer;
+	ml_timer_stop(timer);
+}
+
+int sdo_read_async(const struct sdo_async* async)
+{
+	struct canopen_node* node = &node_[async->nodeid];
+	struct frame_fifo* fifo = &node->frame_fifo;
+	struct sdo_req* req = &node->sdo_req;
+
+	sdo_channel_lock(async->nodeid);
+	node->sdo_mode = SDO_COM_ASYNC;
+
+	sdo_request_upload(req, async->index, async->subindex);
+	req->frame.can_id = R_RSDO + async->nodeid;
+	if (net_write_frame(socket_, &req->frame, -1) < 0)
+		goto failure;
+
+	req->pos = 0;
+	req->addr = async->data;
+	req->size = async->size;
+
+	if (start_sdo_async_timer(node) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	node->sdo_mode = SDO_COM_NONE;
+	sdo_channel_unlock(async->nodeid);
+	return -1;
+}
+
+int sdo_write_async(const struct sdo_async* async)
+{
+	struct canopen_node* node = &node_[async->nodeid];
+	struct frame_fifo* fifo = &node->frame_fifo;
+	struct sdo_req* req = &node->sdo_req;
+
+	sdo_channel_lock(async->nodeid);
+	node->sdo_mode = SDO_COM_ASYNC;
+
+	sdo_request_download(req, async->index, async->subindex, async->data,
+			     async->size);
+	req->frame.can_id = R_RSDO + async->nodeid;
+	if (net_write_frame(socket_, &req->frame, -1) < 0)
+		goto failure;
+
+	if (start_sdo_async_timer(node) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	node->sdo_mode = SDO_COM_NONE;
+	sdo_channel_unlock(async->nodeid);
+	return -1;
 }
 
 ssize_t sdo_write_fifo(int nodeid, int index, int subindex, const void* buf,
@@ -184,6 +295,7 @@ ssize_t sdo_write_fifo(int nodeid, int index, int subindex, const void* buf,
 	struct frame_fifo* fifo = &node->frame_fifo;
 
 	sdo_channel_lock(nodeid);
+	node->sdo_mode = SDO_COM_SYNC;
 
 	sdo_request_download(&req, index, subindex, buf, size);
 	req.frame.can_id = R_RSDO + nodeid;
@@ -191,6 +303,7 @@ ssize_t sdo_write_fifo(int nodeid, int index, int subindex, const void* buf,
 
 	int rc = sdo_process_request(nodeid, fifo, &req);
 
+	node->sdo_mode = SDO_COM_NONE;
 	sdo_channel_unlock(nodeid);
 
 	return rc;
@@ -485,6 +598,48 @@ static int handle_heartbeat(struct canopen_node* node,
 	return 0;
 }
 
+static void handle_async_sdo(struct canopen_node* node,
+			     const struct can_frame* cf)
+{
+	struct sdo_req* req = &node->sdo_req;
+	int nodeid = get_node_id(node);
+	sdo_async_fn done_fn = node->sdo_async_on_done;
+
+	sdo_req_feed(req, cf);
+
+	if (req->have_frame) {
+		req->frame.can_id = R_RSDO + nodeid;
+		net_write_frame(socket_, &req->frame, -1);
+	}
+
+	if (req->state != SDO_REQ_DONE && req->state >= 0) {
+		stop_sdo_async_timer(node);
+		start_sdo_async_timer(node);
+	} else {
+		done_fn(node);
+		memset(&node->sdo_req, 0, sizeof(node->sdo_req));
+		node->sdo_mode = SDO_COM_NONE;
+		sdo_channel_unlock(get_node_id(node));
+	}
+}
+
+static void handle_sdo(struct canopen_node* node, const struct can_frame* cf)
+{
+	switch (node->sdo_mode)
+	{
+	case SDO_COM_NONE:
+		break;
+	case SDO_COM_SYNC:
+		frame_fifo_enqueue(&node->frame_fifo, cf);
+		break;
+	case SDO_COM_ASYNC:
+		handle_async_sdo(node, cf);
+		break;
+	default:
+		abort();
+	}
+}
+
 static void handle_not_loaded(struct canopen_node* node,
 			      const struct canopen_msg* msg,
 			      const struct can_frame* frame)
@@ -500,7 +655,7 @@ static void handle_not_loaded(struct canopen_node* node,
 		handle_heartbeat(node, frame);
 		break;
 	case CANOPEN_TSDO:
-		frame_fifo_enqueue(&node->frame_fifo, frame);
+		handle_sdo(node, frame);
 		break;
 	default:
 		break;
@@ -546,7 +701,7 @@ static void mux_handler_fn(int fd, void* context)
 		legacy_driver_iface_process_pdo(driver, 4, cf.data, cf.can_dlc);
 		break;
 	case CANOPEN_TSDO:
-		frame_fifo_enqueue(&node->frame_fifo, &cf);
+		handle_sdo(node, &cf);
 		break;
 	case CANOPEN_EMCY:
 		handle_emcy(node, &cf);
