@@ -365,6 +365,8 @@ static int load_driver(int nodeid)
 	if (legacy_driver_iface_initialize(driver) < 0)
 		goto driver_init_failure;
 
+	legacy_driver_iface_process_node_state(driver, 1);
+
 	int is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
 
@@ -813,7 +815,7 @@ int main(int argc, char* argv[])
 		goto driver_manager_failure;
 	}
 
-	if (worker_init(4, 1024, 1024*1024) != 0) {
+	if (worker_init(4, 1024, 4096) != 0) {
 		rc = 1;
 		goto worker_failure;
 	}
