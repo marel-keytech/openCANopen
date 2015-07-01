@@ -35,6 +35,7 @@ int prioq_grow(struct prioq* self, size_t size)
 	if (!new_head)
 		return -1;
 
+	self->size = size;
 	self->head = new_head;
 
 	return 1;
