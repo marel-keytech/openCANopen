@@ -1,8 +1,13 @@
+#ifndef TESTING
+#define TESTING
+#endif
+
 #include <linux/can.h>
 
 #include "tst.h"
 #include "canopen/sdo.h"
 #include "canopen/sdo_client.h"
+#include "canopen.h"
 
 static int test_make_dl_request_1_byte()
 {
@@ -326,10 +331,492 @@ static int test_segmented_upload_7_bytes_size_indicated()
 	return 0;
 }
 
+struct mock_timer {
+	int timeout;
+	int started;
+	int stopped;
+	sdo_proc_fn timeout_fn;
+};
+
+static struct mock_timer mock_timer;
+
+static void mock_start_timer(void* timer, int timeout)
+{
+	struct mock_timer* mock_timer = timer;
+	mock_timer->timeout = timeout;
+	mock_timer->started++;
+}
+
+static void mock_stop_timer(void* timer)
+{
+	struct mock_timer* mock_timer = timer;
+	mock_timer->stopped++;
+}
+
+static void mock_set_timer_fn(void* timer, sdo_proc_fn fn)
+{
+	struct mock_timer* mock_timer = timer;
+	mock_timer->timeout_fn = fn;
+}
+
+static struct can_frame mock_written_frame;
+
+static ssize_t mock_write_frame(const struct can_frame* cf)
+{
+	mock_written_frame = *cf;
+	return sizeof(mock_written_frame);
+}
+
+static void set_proc_callbacks(struct sdo_proc* proc)
+{
+	proc->async_timer = &mock_timer;
+	proc->do_start_timer = mock_start_timer;
+	proc->do_stop_timer = mock_stop_timer;
+	proc->do_set_timer_fn = mock_set_timer_fn;
+	proc->do_write_frame = mock_write_frame;
+}
+
+static void init_mock_proc(struct sdo_proc* proc)
+{
+	memset(&mock_timer, 0, sizeof(mock_timer));
+	memset(proc, 0, sizeof(*proc));
+	set_proc_callbacks(proc);
+	sdo_proc_init(proc);
+}
+
+static int test_proc_init_destroy()
+{
+	struct sdo_proc proc;
+	memset(&proc, 0, sizeof(proc));
+	set_proc_callbacks(&proc);
+	ASSERT_INT_EQ(0, sdo_proc_init(&proc));
+	ASSERT_PTR_EQ(sdo_proc__async_timeout, mock_timer.timeout_fn);
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_feed()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	struct can_frame cf[3];
+	struct can_frame cfr;
+
+	cf[0].can_id = 1;
+	cf[1].can_id = 2;
+	cf[2].can_id = 3;
+
+	sdo_proc_feed(&proc, &cf[0]);
+	sdo_proc_feed(&proc, &cf[1]);
+	sdo_proc_feed(&proc, &cf[2]);
+
+	ASSERT_INT_GE(0, frame_fifo_dequeue(&proc.frame_input, &cfr, 0));
+	ASSERT_INT_EQ(1, cfr.can_id);
+	ASSERT_INT_GE(0, frame_fifo_dequeue(&proc.frame_input, &cfr, 0));
+	ASSERT_INT_EQ(2, cfr.can_id);
+	ASSERT_INT_GE(0, frame_fifo_dequeue(&proc.frame_input, &cfr, 0));
+	ASSERT_INT_EQ(3, cfr.can_id);
+	ASSERT_INT_LT(0, frame_fifo_dequeue(&proc.frame_input, &cfr, 0));
+
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_setup_dl_req()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	char buffer[sizeof(struct sdo_proc__req) + 32];
+	struct sdo_proc__req* rdata = (struct sdo_proc__req*)buffer;
+	proc.current_req_data = rdata;
+
+	proc.nodeid = 11;
+	rdata->index = 0x1234;
+	rdata->subindex = 42;
+	strcpy(rdata->data, "foobar");
+	rdata->size = strlen("foobar") + 1;
+
+	memset(&mock_written_frame, -1, sizeof(mock_written_frame));
+
+	sdo_proc__setup_dl_req(&proc);
+
+	ASSERT_INT_EQ(R_RSDO + 11, mock_written_frame.can_id);
+	ASSERT_INT_EQ(0x1234, sdo_get_index(&mock_written_frame));
+	ASSERT_INT_EQ(42, sdo_get_subindex(&mock_written_frame));
+	ASSERT_INT_EQ(SDO_CCS_DL_INIT_REQ, sdo_get_cs(&mock_written_frame));
+	ASSERT_FALSE(sdo_is_expediated(&mock_written_frame));
+
+	ASSERT_STR_EQ("foobar", proc.req.addr);
+	ASSERT_INT_EQ(strlen("foobar") + 1, proc.req.size);
+
+	proc.current_req_data = NULL;
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_setup_ul_req()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	char buffer[sizeof(struct sdo_proc__req) + 32];
+	struct sdo_proc__req* rdata = (struct sdo_proc__req*)buffer;
+	proc.current_req_data = rdata;
+
+	proc.nodeid = 11;
+	rdata->index = 0x1234;
+	rdata->subindex = 42;
+	rdata->size = 32;
+
+	memset(&mock_written_frame, -1, sizeof(mock_written_frame));
+
+	sdo_proc__setup_ul_req(&proc);
+
+	ASSERT_INT_EQ(R_RSDO + 11, mock_written_frame.can_id);
+	ASSERT_INT_EQ(0x1234, sdo_get_index(&mock_written_frame));
+	ASSERT_INT_EQ(42, sdo_get_subindex(&mock_written_frame));
+	ASSERT_INT_EQ(SDO_CCS_UL_INIT_REQ, sdo_get_cs(&mock_written_frame));
+
+	ASSERT_INT_EQ(0, proc.req.pos);
+	ASSERT_PTR_EQ(rdata->data, proc.req.addr);
+	ASSERT_INT_EQ(32, proc.req.size);
+
+	proc.current_req_data = NULL;
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_try_next_request__empty()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	memset(&mock_written_frame, 0, sizeof(mock_written_frame));
+
+	sdo_proc__try_next_request(&proc);
+
+	ASSERT_INT_EQ(0, mock_written_frame.can_id);
+	ASSERT_FALSE(proc.is_new_req);
+	ASSERT_PTR_EQ(NULL, proc.current_req_data);
+
+	proc.current_req_data = NULL;
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_try_next_request__busy()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	memset(&mock_written_frame, 0, sizeof(mock_written_frame));
+
+	sdo_request_upload(&proc.req, 0x1234, 11);
+
+	int dummy;
+	ptr_fifo_enqueue(&proc.sdo_req_input, &dummy, NULL);
+
+	sdo_proc__try_next_request(&proc);
+
+	ASSERT_INT_EQ(0, mock_written_frame.can_id);
+	ASSERT_FALSE(proc.is_new_req);
+	ASSERT_PTR_EQ(NULL, proc.current_req_data);
+
+	proc.current_req_data = NULL;
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_try_next_request__locked()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	char buffer[sizeof(struct sdo_proc__req) + 32];
+	struct sdo_proc__req* rdata = (struct sdo_proc__req*)buffer;
+
+	proc.nodeid = 11;
+	rdata->type = SDO_REQ_UL;
+	rdata->index = 0x1234;
+	rdata->subindex = 42;
+	rdata->size = 32;
+
+	memset(&mock_written_frame, 0, sizeof(mock_written_frame));
+
+	ptr_fifo_enqueue(&proc.sdo_req_input, rdata, NULL);
+
+	proc.lock_owner = LOCK_OWNER_OTHER;
+	proc.lock_count = 1;
+
+	sdo_proc__try_next_request(&proc);
+
+	ASSERT_INT_EQ(0, mock_written_frame.can_id);
+	ASSERT_FALSE(proc.is_new_req);
+	ASSERT_PTR_EQ(NULL, proc.current_req_data);
+
+	ASSERT_INT_EQ(1, proc.lock_count);
+	ASSERT_INT_EQ(LOCK_OWNER_OTHER, proc.lock_owner);
+
+	proc.current_req_data = NULL;
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_try_next_request__one_sdo()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	char buffer[sizeof(struct sdo_proc__req) + 32];
+	struct sdo_proc__req* rdata = (struct sdo_proc__req*)buffer;
+
+	proc.nodeid = 11;
+	rdata->type = SDO_REQ_UL;
+	rdata->index = 0x1234;
+	rdata->subindex = 42;
+	rdata->size = 32;
+
+	memset(&mock_written_frame, -1, sizeof(mock_written_frame));
+
+	ptr_fifo_enqueue(&proc.sdo_req_input, rdata, NULL);
+
+	sdo_proc__try_next_request(&proc);
+
+	ASSERT_INT_EQ(R_RSDO + 11, mock_written_frame.can_id);
+	ASSERT_INT_EQ(SDO_CCS_UL_INIT_REQ, sdo_get_cs(&mock_written_frame));
+	ASSERT_TRUE(proc.is_new_req);
+	ASSERT_PTR_EQ(rdata, proc.current_req_data);
+
+	proc.current_req_data = NULL;
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+struct mock_sdo_proc {
+	struct sdo_proc proc;
+	int on_done_called;
+};
+
+static void test_proc_async_done_on_done(struct sdo_proc* proc)
+{
+	struct mock_sdo_proc* mproc = (struct mock_sdo_proc*)proc;
+	mproc->on_done_called++;
+}
+
+static int test_proc_async_done()
+{
+	struct mock_sdo_proc mproc;
+	struct sdo_proc* proc = &mproc.proc;
+	init_mock_proc(proc);
+
+	proc->lock_owner = LOCK_OWNER_THIS;
+	proc->lock_count = 1;
+
+	mproc.on_done_called = 0;
+
+	struct sdo_proc__req* rdata = malloc(sizeof(*rdata));
+	proc->current_req_data = rdata;
+	rdata->on_done = test_proc_async_done_on_done;
+
+	sdo_proc__async_done(proc);
+
+	ASSERT_PTR_EQ(NULL, proc->current_req_data);
+
+	ASSERT_INT_EQ(0, proc->lock_count);
+	ASSERT_INT_EQ(LOCK_OWNER_NONE, proc->lock_owner);
+
+	sdo_proc_destroy(proc);
+	return 0;
+}
+
+static int test_proc_async_timeout()
+{
+	struct mock_sdo_proc mproc;
+	struct sdo_proc* proc = &mproc.proc;
+	init_mock_proc(proc);
+
+	proc->lock_owner = LOCK_OWNER_THIS;
+	proc->lock_count = 1;
+
+	mproc.on_done_called = 0;
+
+	struct sdo_proc__req* rdata = malloc(sizeof(*rdata));
+	proc->current_req_data = rdata;
+	rdata->on_done = test_proc_async_done_on_done;
+
+	proc->nodeid = 12;
+	proc->req.index = 0x1234;
+	proc->req.subindex = 7;
+
+	sdo_proc__async_timeout(proc);
+
+	ASSERT_PTR_EQ(NULL, proc->current_req_data);
+	ASSERT_INT_EQ(R_RSDO + 12, mock_written_frame.can_id);
+	ASSERT_INT_EQ(SDO_CCS_ABORT, sdo_get_cs(&mock_written_frame));
+	ASSERT_INT_EQ(SDO_ABORT_TIMEOUT,
+		      sdo_get_abort_code(&mock_written_frame));
+	ASSERT_INT_EQ(0x1234, sdo_get_index(&mock_written_frame));
+	ASSERT_INT_EQ(7, sdo_get_subindex(&mock_written_frame));
+
+	ASSERT_INT_EQ(0, proc->lock_count);
+	ASSERT_INT_EQ(LOCK_OWNER_NONE, proc->lock_owner);
+
+	sdo_proc_destroy(proc);
+	return 0;
+}
+
+static int test_proc_process_frame__empty()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	memset(&mock_written_frame, 0, sizeof(mock_written_frame));
+
+	sdo_proc__process_frame(&proc, NULL);
+
+	ASSERT_INT_EQ(0, mock_written_frame.can_id);
+	ASSERT_INT_EQ(proc.req.state, SDO_REQ_EMPTY);
+
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_is_req_done()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	proc.req.state = SDO_REQ_INIT;
+	ASSERT_FALSE(sdo_proc__is_req_done(&proc));
+	proc.req.state = SDO_REQ_DONE;
+	ASSERT_TRUE(sdo_proc__is_req_done(&proc));
+	proc.req.state = SDO_REQ_ABORTED;
+	ASSERT_TRUE(sdo_proc__is_req_done(&proc));
+
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_start_timer()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	struct sdo_proc__req rdata;
+	rdata.timeout = 1337;
+	proc.current_req_data = &rdata;
+
+	sdo_proc__start_timer(&proc);
+
+	ASSERT_INT_EQ(1, mock_timer.started);
+	ASSERT_INT_EQ(1337, mock_timer.timeout);
+
+	proc.current_req_data = NULL;
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_stop_timer()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	sdo_proc__stop_timer(&proc);
+
+	ASSERT_INT_EQ(1, mock_timer.stopped);
+
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_restart_timer()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	struct sdo_proc__req rdata;
+	rdata.timeout = 1337;
+	proc.current_req_data = &rdata;
+
+	sdo_proc__restart_timer(&proc);
+
+	ASSERT_INT_EQ(1, mock_timer.stopped);
+	ASSERT_INT_EQ(1, mock_timer.started);
+	ASSERT_INT_EQ(1337, mock_timer.timeout);
+
+	proc.current_req_data = NULL;
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_run__locked()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	proc.lock_owner = LOCK_OWNER_OTHER;
+	proc.lock_count = 1;
+
+	ASSERT_INT_LT(0, sdo_proc_run(&proc));
+
+	ASSERT_INT_EQ(LOCK_OWNER_OTHER, proc.lock_owner);
+	ASSERT_INT_EQ(1, proc.lock_count);
+
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_run__empty_req()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	ASSERT_INT_GE(0, sdo_proc_run(&proc));
+
+	ASSERT_INT_EQ(LOCK_OWNER_NONE, proc.lock_owner);
+	ASSERT_INT_EQ(0, proc.lock_count);
+
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
+static int test_proc_run__read__empty_frame_queue()
+{
+	struct sdo_proc proc;
+	init_mock_proc(&proc);
+
+	struct sdo_info info = {
+		.index = 0x1234,
+		.subindex = 7,
+		.on_done = NULL,
+		.timeout = 1337,
+		.size = 32
+	};
+	sdo_proc_async_read(&proc, &info);
+
+	ASSERT_TRUE(proc.is_new_req);
+
+	ASSERT_INT_GE(0, sdo_proc_run(&proc));
+
+	ASSERT_FALSE(proc.is_new_req);
+
+	ASSERT_INT_EQ(LOCK_OWNER_THIS, proc.lock_owner);
+	ASSERT_INT_EQ(1, proc.lock_count);
+
+	ASSERT_INT_EQ(1, mock_timer.started);
+	ASSERT_INT_EQ(1337, mock_timer.timeout);
+
+	sdo_proc_destroy(&proc);
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
 
+	printf("sdo_client:\n");
 	RUN_TEST(test_make_dl_request_1_byte);
 	RUN_TEST(test_make_dl_request_4_bytes);
 	RUN_TEST(test_make_dl_request_5_bytes);
@@ -346,6 +833,26 @@ int main()
 	RUN_TEST(test_expediated_upload_1_byte_size_not_indicated);
 
 	RUN_TEST(test_segmented_upload_7_bytes_size_indicated);
+
+	printf("sdo_proc:\n");
+	RUN_TEST(test_proc_init_destroy);
+	RUN_TEST(test_proc_feed);
+	RUN_TEST(test_proc_setup_dl_req);
+	RUN_TEST(test_proc_setup_ul_req);
+	RUN_TEST(test_proc_try_next_request__empty);
+	RUN_TEST(test_proc_try_next_request__busy);
+	RUN_TEST(test_proc_try_next_request__locked);
+	RUN_TEST(test_proc_try_next_request__one_sdo);
+	RUN_TEST(test_proc_async_done);
+	RUN_TEST(test_proc_async_timeout);
+	RUN_TEST(test_proc_process_frame__empty);
+	RUN_TEST(test_proc_is_req_done);
+	RUN_TEST(test_proc_start_timer);
+	RUN_TEST(test_proc_stop_timer);
+	RUN_TEST(test_proc_restart_timer);
+	RUN_TEST(test_proc_run__locked);
+	RUN_TEST(test_proc_run__empty_req);
+	RUN_TEST(test_proc_run__read__empty_frame_queue);
 
 	return r;
 }

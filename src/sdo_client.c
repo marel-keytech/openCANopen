@@ -1,12 +1,15 @@
 #include <assert.h>
 #include "canopen/sdo.h"
 #include "canopen/sdo_client.h"
+#include "canopen.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 #ifndef CAN_MAX_DLC
 #define CAN_MAX_DLC 8
 #endif
+
+void sdo_proc__async_timeout(struct sdo_proc* self);
 
 static int sdo_req_abort(struct sdo_req* self, enum sdo_abort_code code)
 {
@@ -59,6 +62,7 @@ int sdo_request_download(struct sdo_req* self, int index, int subindex,
 
 	self->type = SDO_REQ_DL;
 
+	self->state = SDO_REQ_INIT;
 	self->index = index;
 	self->subindex = subindex;
 
@@ -295,3 +299,345 @@ int sdo_req_feed(struct sdo_req* self, const struct can_frame* frame)
 	abort();
 	return -1;
 }
+
+static inline void sdo_proc__lock(struct sdo_proc* self)
+{
+#ifndef TESTING
+	pthread_mutex_lock(&self->mutex);
+#else
+	assert(self->lock_owner != LOCK_OWNER_OTHER);
+	self->lock_owner = LOCK_OWNER_THIS;
+	self->lock_count++;
+#endif
+}
+
+static inline int sdo_proc__trylock(struct sdo_proc* self)
+{
+#ifndef TESTING
+	return pthread_mutex_trylock(&self->mutex);
+#else
+	if (self->lock_owner == LOCK_OWNER_OTHER)
+		return -1;
+
+	self->lock_owner = LOCK_OWNER_THIS;
+	self->lock_count++;
+	return 0;
+#endif
+}
+
+static inline void sdo_proc__unlock(struct sdo_proc* self)
+{
+#ifndef TESTING
+	pthread_mutex_unlock(&self->mutex);
+#else
+	assert(self->lock_owner == LOCK_OWNER_THIS);
+	if (--self->lock_count <= 0)
+		self->lock_owner = LOCK_OWNER_NONE;
+#endif
+}
+
+int sdo_proc_init(struct sdo_proc* self)
+{
+	if (frame_fifo_init(&self->frame_input) < 0)
+		return -1;
+
+	if (ptr_fifo_init(&self->sdo_req_input) < 0)
+		goto ptr_fifo_failure;
+
+#ifndef TESTING
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&self->mutex, &attr);
+#else
+	self->lock_owner = LOCK_OWNER_NONE;
+	self->lock_count = 0;
+#endif
+
+	self->do_set_timer_fn(self->async_timer, sdo_proc__async_timeout);
+
+	return 0;
+
+ptr_fifo_failure:
+	frame_fifo_clear(&self->frame_input);
+	return -1;
+}
+
+void sdo_proc_destroy(struct sdo_proc* self)
+{
+	if (self->current_req_data)
+		free(self->current_req_data);
+	ptr_fifo_destroy(&self->sdo_req_input);
+	frame_fifo_clear(&self->frame_input);
+#ifndef TESTING
+	pthread_mutex_destroy(&self->mutex);
+#endif
+}
+
+void sdo_proc_feed(struct sdo_proc* self, const struct can_frame* cf)
+{
+	frame_fifo_enqueue(&self->frame_input, cf);
+}
+
+void sdo_proc__write_req_frame(struct sdo_proc* self)
+{
+	/* TODO: reset the frame fifo before sending. In fact we don't need a
+	 * fifo for the frames because there should only ever be one frame on
+	 * the queue.
+	 */
+	struct sdo_req* req = &self->req;
+	if (req->have_frame) {
+		req->frame.can_id = R_RSDO + self->nodeid;
+		self->do_write_frame(&req->frame);
+	}
+}
+
+void sdo_proc__setup_dl_req(struct sdo_proc* self)
+{
+	struct sdo_req* req = &self->req;
+	struct sdo_proc__req* data = self->current_req_data;
+
+	sdo_request_download(req, data->index, data->subindex, data->data,
+			     data->size);
+	sdo_proc__write_req_frame(self);
+}
+
+void sdo_proc__setup_ul_req(struct sdo_proc* self)
+{
+	struct sdo_req* req = &self->req;
+	struct sdo_proc__req* data = self->current_req_data;
+
+	sdo_request_upload(req, data->index, data->subindex);
+	sdo_proc__write_req_frame(self);
+
+	req->pos = 0;
+	req->addr = data->data;
+	req->size = data->size;
+}
+
+void sdo_proc__try_next_request(struct sdo_proc* self)
+{
+	if (sdo_proc__trylock(self) != 0)
+		return;
+
+	if (self->req.state != SDO_REQ_EMPTY)
+		goto done;
+
+	assert(self->current_req_data == NULL);
+
+	self->current_req_data = ptr_fifo_dequeue(&self->sdo_req_input);
+	if (!self->current_req_data)
+		goto done;
+
+	switch (self->current_req_data->type)
+	{
+	case SDO_REQ_DL: sdo_proc__setup_dl_req(self); break;
+	case SDO_REQ_UL: sdo_proc__setup_ul_req(self); break;
+	default: abort(); break;
+	}
+
+	self->is_new_req = 1; /* tell main thread to keep the lock */
+
+done:
+	sdo_proc__unlock(self);
+}
+
+void sdo_proc__async_done(struct sdo_proc* self)
+{
+	assert(self->current_req_data);
+
+	sdo_proc__stop_timer(self);
+
+	sdo_proc_fn on_done = self->current_req_data->on_done;
+	if (on_done)
+		on_done(self);
+
+	free(self->current_req_data);
+	self->current_req_data = NULL;
+	memset(&self->req, 0, sizeof(self->req));
+	sdo_proc__try_next_request(self);
+	sdo_proc__unlock(self);
+}
+
+void sdo_proc__async_timeout(struct sdo_proc* self)
+{
+	struct can_frame cf;
+	struct sdo_req* req = &self->req;
+	sdo_clear_frame(&cf);
+	sdo_abort(&cf, SDO_ABORT_TIMEOUT, req->index, req->subindex);
+	cf.can_id = R_RSDO + self->nodeid;
+	self->do_write_frame(&cf);
+
+	sdo_proc__async_done(self);
+}
+
+void sdo_proc__process_frame(struct sdo_proc* self, const struct can_frame* cf)
+{
+	struct sdo_req* req = &self->req;
+
+	if (self->req.state == SDO_REQ_EMPTY)
+		return;
+
+	assert(self->current_req_data != NULL);
+
+	sdo_req_feed(req, cf);
+
+	sdo_proc__write_req_frame(self);
+
+	if (sdo_proc__is_req_done(self))
+		sdo_proc__async_done(self);
+	else
+		sdo_proc__restart_timer(self);
+}
+
+
+/* This must be run again later if it fails to lock */
+int sdo_proc_run(struct sdo_proc* self)
+{
+	if (sdo_proc__trylock(self) != 0)
+		return -1;
+
+	struct frame_fifo* fifo = &self->frame_input;
+	struct can_frame cf;
+
+	if (self->req.state == SDO_REQ_EMPTY)
+		goto done;
+
+	assert(self->current_req_data != NULL);
+
+	/* lock must be held by main thread until done/timeout */
+	if (self->is_new_req) {
+		assert(self->req.state == SDO_REQ_INIT
+		    || self->req.state == SDO_REQ_INIT_EXPEDIATED);
+		sdo_proc__lock(self);
+		sdo_proc__start_timer(self);
+		self->is_new_req = 0;
+	}
+
+	while (frame_fifo_dequeue(fifo, &cf, 0) >= 0)
+		sdo_proc__process_frame(self, &cf);
+
+done:
+	sdo_proc__unlock(self);
+	return 0;
+}
+
+int sdo_proc_async_read(struct sdo_proc* self, const struct sdo_info* info)
+{
+	size_t size = 1024; /* TODO: make dynamic */
+	struct sdo_proc__req* req = malloc(sizeof(*req) + size);
+	if (!req)
+		return -1;
+
+	memset(req, 0, sizeof(*req) + size);
+
+	req->type = SDO_REQ_UL;
+	req->index = info->index;
+	req->subindex = info->subindex;
+	req->on_done = info->on_done;
+	req->timeout = info->timeout;
+	req->size = size;
+
+	ptr_fifo_enqueue(&self->sdo_req_input, req, free);
+
+	sdo_proc__try_next_request(self);
+	return 0;
+}
+
+int sdo_proc_async_write(struct sdo_proc* self, const struct sdo_info* info)
+{
+	struct sdo_proc__req* req = malloc(sizeof(*req) + info->size);
+	if (!req)
+		return -1;
+
+	memset(req, 0, sizeof(*req) + info->size);
+
+	req->type = SDO_REQ_DL;
+	req->index = info->index;
+	req->subindex = info->subindex;
+	req->on_done = info->on_done;
+	req->timeout = info->timeout;
+	req->size = info->size;
+
+	memcpy(req->data, info->addr, req->size);
+
+	ptr_fifo_enqueue(&self->sdo_req_input, req, free);
+
+	sdo_proc__try_next_request(self);
+	return 0;
+}
+
+int sdo_proc__sync_timeout(struct sdo_proc* self)
+{
+	struct can_frame cf;
+	struct sdo_req* req = &self->req;
+	sdo_clear_frame(&cf);
+	sdo_abort(&cf, SDO_ABORT_TIMEOUT, req->index, req->subindex);
+	cf.can_id = R_RSDO + self->nodeid;
+	self->do_write_frame(&cf);
+	return -1;
+}
+
+ssize_t sdo_proc__process_request(struct sdo_proc* self, int timeout)
+{
+	struct can_frame cf;
+	struct sdo_req* req = &self->req;
+	struct frame_fifo* fifo = &self->frame_input;
+
+	while (1) {
+		if (frame_fifo_dequeue(fifo, &cf, timeout) < 0)
+			return sdo_proc__sync_timeout(self);
+
+		sdo_req_feed(req, &cf);
+
+		sdo_proc__write_req_frame(self);
+
+		if (req->state == SDO_REQ_DONE)
+			break;
+
+		if (req->state < 0)
+			return -1;
+	}
+
+	return req->pos;
+}
+
+ssize_t sdo_proc_sync_read(struct sdo_proc* self, struct sdo_info* info)
+{
+	struct sdo_req* req = &self->req;
+
+	sdo_proc__lock(self);
+
+	sdo_request_upload(req, info->index, info->subindex);
+	sdo_proc__write_req_frame(self);
+
+	req->pos = 0;
+	req->addr = info->addr;
+	req->size = info->size;
+
+	int rc = sdo_proc__process_request(self, info->timeout);
+
+	req->state = SDO_REQ_EMPTY;
+
+	sdo_proc__unlock(self);
+	return rc;
+}
+
+ssize_t sdo_proc_sync_write(struct sdo_proc* self, const struct sdo_info* info)
+{
+	struct sdo_req* req = &self->req;
+
+	sdo_proc__lock(self);
+
+	sdo_request_download(req, info->index, info->subindex, info->addr,
+			     info->size);
+	sdo_proc__write_req_frame(self);
+
+	int rc = sdo_proc__process_request(self, info->timeout);
+
+	req->state = SDO_REQ_EMPTY;
+
+	sdo_proc__unlock(self);
+	return rc;
+}
+
