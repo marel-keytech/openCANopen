@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include <appcbase.h>
 #include <ctype.h>
 
@@ -15,16 +16,23 @@
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
 #include "frame_fifo.h"
+#include "ptr_fifo.h"
 
 #include "legacy-driver.h"
 
 #define SDO_FIFO_LENGTH 64
 
+#define SDO_TIMEOUT 100 /* ms */
 #define HEARTBEAT_PERIOD 10000 /* ms */
 #define HEARTBEAT_TIMEOUT 11000 /* ms */
 
 static int socket_ = -1;
 static char nodes_seen_[128];
+
+typedef void (*void_cb_fn)(void*);
+
+static int sdo_proc_readfd_, sdo_proc_writefd_;
+struct ml_handler sdo_proc_handler_;
 
 enum master_state {
 	MASTER_STATE_STARTUP = 0,
@@ -37,15 +45,7 @@ static void* driver_manager_;
 
 static struct ml_handler mux_handler_;
 
-enum sdo_com_mode {
-	SDO_COM_NONE = 0,
-	SDO_COM_SYNC,
-	SDO_COM_ASYNC
-};
-
 struct canopen_node;
-
-typedef void (*sdo_async_fn)(struct canopen_node* node);
 
 struct canopen_node {
 	void* driver;
@@ -53,11 +53,8 @@ struct canopen_node {
 
 	struct frame_fifo frame_fifo;
 
-	enum sdo_com_mode sdo_mode;
-	pthread_mutex_t sdo_channel;
-	struct sdo_req sdo_req;
-	struct ml_timer sdo_async_timer;
-	sdo_async_fn sdo_async_on_done;
+	struct sdo_proc sdo_proc;
+	struct ml_timer sdo_timer;
 
 	int device_type;
 	int is_heartbeat_supported;
@@ -69,24 +66,6 @@ struct canopen_node {
 struct driver_load_job {
 	struct ml_job job;
 	int nodeid;
-};
-
-enum sdo_job_type { SDO_JOB_DL, SDO_JOB_UL };
-
-struct sdo_job {
-	struct ml_job job;
-	enum sdo_job_type type;
-	int nodeid;
-	int index;
-	int subindex;
-	unsigned char* data;
-	size_t size;
-};
-
-struct sdo_async {
-	int nodeid, index, subindex;
-	void* data;
-	size_t size;
 };
 
 struct ping_job {
@@ -102,12 +81,73 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size);
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size);
 
-
 static struct canopen_node node_[128];
 
 static inline int get_node_id(const struct canopen_node* node)
 {
 	return ((char*)node - (char*)node_) / sizeof(struct canopen_node);
+}
+
+static inline struct canopen_node*
+get_node_from_proc(struct sdo_proc* proc)
+{
+	void* addr = (char*)proc - offsetof(struct canopen_node, sdo_proc);
+	return addr;
+}
+
+static inline int read_sdo_proc_pipe()
+{
+	char nodeid;
+	return read(sdo_proc_readfd_, &nodeid, sizeof(nodeid)) > 0 ? nodeid
+								   : -1;
+}
+
+static inline void schedule_sdo_proc_run(unsigned char nodeid)
+{
+	write(sdo_proc_writefd_, &nodeid, sizeof(nodeid));
+}
+
+static void sdo_proc_handler_fn(int fd, void* context)
+{
+	(void)fd;
+	(void)context;
+
+	int nodeid = read_sdo_proc_pipe();
+	struct canopen_node* node = &node_[nodeid];
+
+	if (sdo_proc_run(&node->sdo_proc) < 0)
+		schedule_sdo_proc_run(get_node_id(node)); /* defer */
+}
+
+static int open_sdo_proc_pipe()
+{
+	int fds[2];
+
+	if (pipe(fds) < 0)
+		return -1;
+
+	sdo_proc_readfd_ = fds[0];
+	sdo_proc_writefd_ = fds[1];
+
+	net_dont_block(sdo_proc_readfd_);
+
+	ml_handler_init(&sdo_proc_handler_);
+
+	sdo_proc_handler_.fn = sdo_proc_handler_fn;
+	sdo_proc_handler_.context = NULL;
+	sdo_proc_handler_.fd = sdo_proc_readfd_;
+
+	ml_handler_start(&sdo_proc_handler_);
+
+	return 0;
+}
+
+static void close_sdo_proc_pipe()
+{
+	ml_handler_stop(&sdo_proc_handler_);
+	ml_handler_clear(&sdo_proc_handler_);
+	close(sdo_proc_readfd_);
+	close(sdo_proc_writefd_);
 }
 
 void clean_node_name(char* name, size_t size)
@@ -127,194 +167,20 @@ void clean_node_name(char* name, size_t size)
 
 }
 
-void sdo_channel_lock(int nodeid)
-{
-	struct canopen_node* node = &node_[nodeid];
-	pthread_mutex_lock(&node->sdo_channel);
-}
-
-void sdo_channel_unlock(int nodeid)
-{
-	struct canopen_node* node = &node_[nodeid];
-	pthread_mutex_unlock(&node->sdo_channel);
-}
-
-int sdo_timeout(int nodeid, int index, int subindex)
-{
-	struct can_frame cf;
-	sdo_clear_frame(&cf);
-	sdo_abort(&cf, SDO_ABORT_TIMEOUT, index, subindex);
-	cf.can_id = R_RSDO + nodeid;
-	net_write_frame(socket_, &cf, -1);
-	return -1;
-}
-
-int sdo_process_request(int nodeid, struct frame_fifo* fifo,
-			struct sdo_req* req)
-{
-	struct can_frame cf;
-
-	while (1) {
-		if (frame_fifo_dequeue(fifo, &cf, 100) < 0)
-			return sdo_timeout(nodeid, req->index, req->subindex);
-
-		sdo_req_feed(req, &cf);
-
-		if (req->have_frame) {
-			req->frame.can_id = R_RSDO + nodeid;
-			net_write_frame(socket_, &req->frame, -1);
-		}
-
-		if (req->state == SDO_REQ_DONE)
-			break;
-
-		if (req->state < 0)
-			return -1;
-	}
-
-	return req->pos;
-}
-
-ssize_t sdo_read_fifo(int nodeid, int index, int subindex, void* buf,
-		      size_t size)
-{
-	struct sdo_req req;
-	struct canopen_node* node = &node_[nodeid];
-	struct frame_fifo* fifo = &node->frame_fifo;
-
-	sdo_channel_lock(nodeid);
-	node->sdo_mode = SDO_COM_SYNC;
-
-	sdo_request_upload(&req, index, subindex);
-	req.frame.can_id = R_RSDO + nodeid;
-	net_write_frame(socket_, &req.frame, -1);
-
-	req.pos = 0;
-	req.addr = buf;
-	req.size = size;
-
-	int rc = sdo_process_request(nodeid, fifo, &req);
-
-	node->sdo_mode = SDO_COM_NONE;
-	sdo_channel_unlock(nodeid);
-
-	return rc;
-}
-
-static void on_sdo_async_timeout(void* context)
-{
-	struct canopen_node* node = context;
-	struct sdo_req* req = &node->sdo_req;
-
-	sdo_timeout(get_node_id(node), req->index, req->subindex);
-	memset(&node->sdo_req, 0, sizeof(node->sdo_req));
-	node->sdo_mode = SDO_COM_NONE;
-	sdo_channel_unlock(get_node_id(node));
-}
-
-static int start_sdo_async_timer(struct canopen_node* node)
-{
-	struct ml_timer* timer = &node->sdo_async_timer;
-
-	ml_timer_init(timer);
-
-	timer->is_periodic = 0;
-	timer->context = node;
-	timer->timeout = 100;
-	timer->fn = on_sdo_async_timeout;
-
-	return ml_timer_start(timer);
-}
-
-static inline void stop_sdo_async_timer(struct canopen_node* node)
-{
-	struct ml_timer* timer = &node->sdo_async_timer;
-	ml_timer_stop(timer);
-}
-
-int sdo_read_async(const struct sdo_async* async)
-{
-	struct canopen_node* node = &node_[async->nodeid];
-	struct frame_fifo* fifo = &node->frame_fifo;
-	struct sdo_req* req = &node->sdo_req;
-
-	sdo_channel_lock(async->nodeid);
-	node->sdo_mode = SDO_COM_ASYNC;
-
-	sdo_request_upload(req, async->index, async->subindex);
-	req->frame.can_id = R_RSDO + async->nodeid;
-	if (net_write_frame(socket_, &req->frame, -1) < 0)
-		goto failure;
-
-	req->pos = 0;
-	req->addr = async->data;
-	req->size = async->size;
-
-	if (start_sdo_async_timer(node) < 0)
-		goto failure;
-
-	return 0;
-
-failure:
-	node->sdo_mode = SDO_COM_NONE;
-	sdo_channel_unlock(async->nodeid);
-	return -1;
-}
-
-int sdo_write_async(const struct sdo_async* async)
-{
-	struct canopen_node* node = &node_[async->nodeid];
-	struct frame_fifo* fifo = &node->frame_fifo;
-	struct sdo_req* req = &node->sdo_req;
-
-	sdo_channel_lock(async->nodeid);
-	node->sdo_mode = SDO_COM_ASYNC;
-
-	sdo_request_download(req, async->index, async->subindex, async->data,
-			     async->size);
-	req->frame.can_id = R_RSDO + async->nodeid;
-	if (net_write_frame(socket_, &req->frame, -1) < 0)
-		goto failure;
-
-	if (start_sdo_async_timer(node) < 0)
-		goto failure;
-
-	return 0;
-
-failure:
-	node->sdo_mode = SDO_COM_NONE;
-	sdo_channel_unlock(async->nodeid);
-	return -1;
-}
-
-ssize_t sdo_write_fifo(int nodeid, int index, int subindex, const void* buf,
-		       size_t size)
-{
-	struct sdo_req req;
-	struct canopen_node* node = &node_[nodeid];
-	struct frame_fifo* fifo = &node->frame_fifo;
-
-	sdo_channel_lock(nodeid);
-	node->sdo_mode = SDO_COM_SYNC;
-
-	sdo_request_download(&req, index, subindex, buf, size);
-	req.frame.can_id = R_RSDO + nodeid;
-	net_write_frame(socket_, &req.frame, -1);
-
-	int rc = sdo_process_request(nodeid, fifo, &req);
-
-	node->sdo_mode = SDO_COM_NONE;
-	sdo_channel_unlock(nodeid);
-
-	return rc;
-}
-
 uint32_t get_device_type(int nodeid)
 {
+	struct canopen_node* node = &node_[nodeid];
 	uint32_t device_type = 0;
 
-	if (sdo_read_fifo(nodeid, 0x1000, 0, &device_type,
-			  sizeof(device_type)) < 0)
+	struct sdo_info sdo_info = {
+		.index = 0x1000,
+		.subindex = 0,
+		.timeout = SDO_TIMEOUT,
+		.addr = &device_type,
+		.size = sizeof(device_type)
+	};
+
+	if (sdo_proc_sync_read(&node->sdo_proc, &sdo_info) < 0)
 		return 0;
 
 	return device_type;
@@ -322,24 +188,49 @@ uint32_t get_device_type(int nodeid)
 
 int node_supports_heartbeat(int nodeid)
 {
+	struct canopen_node* node = &node_[nodeid];
 	uint16_t dummy;
 
-	if (sdo_read_fifo(nodeid, 0x1017, 0, &dummy, sizeof(dummy)) < 0)
-		return 0;
+	struct sdo_info sdo_info = {
+		.index = 0x1017,
+		.subindex = 0,
+		.timeout = SDO_TIMEOUT,
+		.addr = &dummy,
+		.size = sizeof(dummy)
+	};
 
-	return 1;
+	return sdo_proc_sync_read(&node->sdo_proc, &sdo_info) < 0 ? 0 : 1;
 }
 
 static inline int set_heartbeat_period(int nodeid, uint16_t period)
 {
-	return sdo_write_fifo(nodeid, 0x1017, 0, &period, sizeof(period));
+	struct canopen_node* node = &node_[nodeid];
+
+	struct sdo_info sdo_info = {
+		.index = 0x1017,
+		.subindex = 0,
+		.timeout = SDO_TIMEOUT,
+		.addr = &period,
+		.size = sizeof(period)
+	};
+
+	return sdo_proc_sync_write(&node->sdo_proc, &sdo_info);
 }
 
 const char* get_name(int nodeid)
 {
+	struct canopen_node* node = &node_[nodeid];
 	static __thread char name[256];
 
-	if (sdo_read_fifo(nodeid, 0x1008, 0, name, sizeof(name)) < 0)
+	struct sdo_info sdo_info = {
+		.index = 0x1008,
+		.subindex = 0,
+		.timeout = SDO_TIMEOUT,
+		.addr = name,
+		.size = sizeof(name)
+	};
+
+	if (sdo_proc_sync_read(&node->sdo_proc, &sdo_info) < 0)
 		return NULL;
 
 	clean_node_name(name, sizeof(name));
@@ -374,6 +265,8 @@ static void unload_driver(int nodeid)
 				     node->driver);
 
 	legacy_master_iface_delete(node->master_iface);
+
+	sdo_proc_destroy(&node->sdo_proc);
 
 	node->driver = NULL;
 	node->master_iface = NULL;
@@ -443,6 +336,29 @@ static int start_ping_timer(int nodeid, int period)
 	return 0;
 }
 
+void start_sdo_timer(void* timer, int timeout)
+{
+	struct ml_timer* x = timer;
+	x->timeout = timeout,
+	ml_timer_start(timer);
+}
+
+void stop_sdo_timer(void* timer)
+{
+	ml_timer_stop(timer);
+}
+
+void set_sdo_timeout_fn(void* timer, sdo_proc_fn fn)
+{
+	struct ml_timer* x = timer;
+	x->fn = (void_cb_fn)fn;
+}
+
+ssize_t write_frame(const struct can_frame* frame)
+{
+	return net_write_frame(socket_, frame, -1);
+}
+
 static int load_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
@@ -452,7 +368,21 @@ static int load_driver(int nodeid)
 
 	void* driver = NULL;
 
-	if (pthread_mutex_init(&node->sdo_channel, NULL) < 0)
+	ml_timer_init(&node->sdo_timer);
+
+	struct sdo_proc* sdo_proc = &node->sdo_proc;
+	memset(sdo_proc, 0, sizeof(*sdo_proc));
+
+	node->sdo_timer.context = sdo_proc;
+
+	sdo_proc->nodeid = nodeid;
+	sdo_proc->async_timer = &node->sdo_timer;
+	sdo_proc->do_start_timer = start_sdo_timer;
+	sdo_proc->do_stop_timer = stop_sdo_timer;
+	sdo_proc->do_set_timer_fn = set_sdo_timeout_fn;
+	sdo_proc->do_write_frame = write_frame;
+
+	if (sdo_proc_init(&node->sdo_proc) < 0)
 		return -1;
 
 	uint32_t device_type = get_device_type(nodeid);
@@ -494,7 +424,6 @@ static int load_driver(int nodeid)
 
 	return 0;
 
-driver_handler_failure:
 	legacy_master_iface_delete(master_iface);
 driver_init_failure:
 	legacy_driver_delete_handler(driver_manager_, device_type, driver);
@@ -502,7 +431,8 @@ driver_init_failure:
 	node->driver = NULL;
 	node->master_iface = NULL;
 failure:
-	pthread_mutex_destroy(&node->sdo_channel);
+	sdo_proc_destroy(&node->sdo_proc);
+	ml_timer_clear(&node->sdo_timer);
 
 	return -1;
 }
@@ -598,46 +528,13 @@ static int handle_heartbeat(struct canopen_node* node,
 	return 0;
 }
 
-static void handle_async_sdo(struct canopen_node* node,
-			     const struct can_frame* cf)
-{
-	struct sdo_req* req = &node->sdo_req;
-	int nodeid = get_node_id(node);
-	sdo_async_fn done_fn = node->sdo_async_on_done;
-
-	sdo_req_feed(req, cf);
-
-	if (req->have_frame) {
-		req->frame.can_id = R_RSDO + nodeid;
-		net_write_frame(socket_, &req->frame, -1);
-	}
-
-	if (req->state != SDO_REQ_DONE && req->state >= 0) {
-		stop_sdo_async_timer(node);
-		start_sdo_async_timer(node);
-	} else {
-		done_fn(node);
-		memset(&node->sdo_req, 0, sizeof(node->sdo_req));
-		node->sdo_mode = SDO_COM_NONE;
-		sdo_channel_unlock(get_node_id(node));
-	}
-}
-
 static void handle_sdo(struct canopen_node* node, const struct can_frame* cf)
 {
-	switch (node->sdo_mode)
-	{
-	case SDO_COM_NONE:
-		break;
-	case SDO_COM_SYNC:
-		frame_fifo_enqueue(&node->frame_fifo, cf);
-		break;
-	case SDO_COM_ASYNC:
-		handle_async_sdo(node, cf);
-		break;
-	default:
-		abort();
-	}
+	struct sdo_proc* sdo_proc = &node->sdo_proc;
+	sdo_proc_feed(sdo_proc, cf);
+
+	if (sdo_proc_run(&node->sdo_proc) < 0)
+		schedule_sdo_proc_run(get_node_id(node)); /* defer */
 }
 
 static void handle_not_loaded(struct canopen_node* node,
@@ -790,108 +687,71 @@ static int master_set_node_state(int nodeid, int state)
 	return 0;
 }
 
-static void run_ul_sdo_job(struct sdo_job* job)
-{
-	sdo_read_fifo(job->nodeid, job->index, job->subindex, job->data,
-		      job->size);
-}
 
-static void run_dl_sdo_job(struct sdo_job* job)
+static void on_master_sdo_request_done(struct sdo_proc* sdo_proc)
 {
-	sdo_write_fifo(job->nodeid, job->index, job->subindex, job->data,
-		       job->size);
-}
+	struct canopen_node* node = get_node_from_proc(sdo_proc);
+	void* driver = node->driver;
+	struct sdo_req* req = &sdo_proc->req;
 
-static void run_sdo_job(void* context)
-{
-	struct sdo_job* job = context;
-
-	switch (job->type)
-	{
-	case SDO_JOB_DL:
-		run_dl_sdo_job(job);
-		break;
-	case SDO_JOB_UL:
-		run_ul_sdo_job(job);
-		break;
-	default:
+	if (sdo_proc->req.state < 0) {
+		legacy_driver_iface_process_sdo(driver,
+						req->index,
+						req->subindex,
+						NULL, 0);
+	} else if (sdo_proc->req.state == SDO_REQ_DONE) {
+		legacy_driver_iface_process_sdo(driver,
+						req->index,
+						req->subindex,
+						(unsigned char*)req->addr,
+						req->pos);
+	} else {
 		abort();
 	}
 }
 
-static void on_sdo_job_done(void* context)
-{
-	struct sdo_job* job = context;
-	struct canopen_node* node = &node_[job->nodeid];
-
-	legacy_driver_iface_process_sdo(node->driver, job->index,
-					job->subindex, job->data,
-					job->size);
-
-	free(job->data);
-	free(job);
-}
-
-static int schedule_sdo_job(int nodeid, enum sdo_job_type type, int index,
-			    int subindex, unsigned char* data, size_t size)
-{
-	struct sdo_job* sdo_job = malloc(sizeof(*sdo_job));
-	if (!sdo_job)
-		return -1;
-
-	struct ml_job* job = (struct ml_job*)sdo_job;
-
-	ml_job_init(job);
-
-	job->priority = nodeid;
-	job->context = job;
-	job->work_fn = run_sdo_job;
-	job->after_work_fn = on_sdo_job_done;
-
-	sdo_job->data = NULL;
-	sdo_job->type = type;
-	sdo_job->nodeid = nodeid;
-	sdo_job->index = index;
-	sdo_job->subindex = subindex;
-
-	if (type == SDO_JOB_DL) {
-		assert(data);
-
-		sdo_job->size = size;
-		sdo_job->data = malloc(sdo_job->size);
-		if (!sdo_job->data)
-			goto failure;
-
-		memcpy(sdo_job->data, data, size);
-	} else {
-		sdo_job->size = 1024;
-		sdo_job->data = malloc(sdo_job->size);
-		if (!sdo_job->data)
-			goto failure;
-	}
-
-	if (ml_job_enqueue(job) < 0)
-		goto failure;
-
-	return 0;
-
-failure:
-	free(sdo_job->data);
-	ml_job_clear(job);
-	free(job);
-	return -1;
-}
-
 static int master_request_sdo(int nodeid, int index, int subindex)
 {
-	return schedule_sdo_job(nodeid, SDO_JOB_UL, index, subindex, NULL, 0);
+	struct canopen_node* node = &node_[nodeid];
+
+	struct sdo_info sdo_info = {
+		.index = index,
+		.subindex = subindex,
+		.timeout = SDO_TIMEOUT,
+		.on_done = on_master_sdo_request_done
+	};
+
+	int rc = sdo_proc_async_read(&node->sdo_proc, &sdo_info);
+
+	schedule_sdo_proc_run(nodeid);
+
+	return rc;
+}
+
+static void on_master_sdo_send_done(struct sdo_proc* sdo_proc)
+{
+	(void)sdo_proc;
 }
 
 static int master_send_sdo(int nodeid, int index, int subindex,
 			   unsigned char* data, size_t size)
 {
-	return schedule_sdo_job(nodeid, SDO_JOB_DL, index, subindex, data,
-				size);
+	struct canopen_node* node = &node_[nodeid];
+
+	struct sdo_info sdo_info = {
+		.index = index,
+		.subindex = subindex,
+		.timeout = SDO_TIMEOUT,
+		.addr = data,
+		.size = size,
+		.on_done = on_master_sdo_send_done
+	};
+
+	int rc = sdo_proc_async_write(&node->sdo_proc, &sdo_info);
+
+	schedule_sdo_proc_run(nodeid);
+
+	return rc;
 }
 
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)
@@ -933,18 +793,6 @@ static void* master_iface_init(int nodeid)
 	return legacy_master_iface_new(&cb);
 }
 
-static void init_frame_queues()
-{
-	for (int i = 0; i < 128; ++i)
-		frame_fifo_init(&node_[i].frame_fifo);
-}
-
-static void clear_frame_queues()
-{
-	for (int i = 0; i < 128; ++i)
-		frame_fifo_clear(&node_[i].frame_fifo);
-}
-
 int main(int argc, char* argv[])
 {
 	int rc = 0;
@@ -953,12 +801,13 @@ int main(int argc, char* argv[])
 	memset(nodes_seen_, 0, sizeof(nodes_seen_));
 	memset(node_, 0, sizeof(node_));
 
-	init_frame_queues();
+	if (open_sdo_proc_pipe() < 0)
+		return 1;
 
 	socket_ = socketcan_open(iface);
 	if (socket_ < 0) {
 		perror("Could not open interface");
-		return 1;
+		goto iface_failure;
 	}
 
 	net_dont_block(socket_);
@@ -988,7 +837,8 @@ driver_manager_failure:
 	if (socket_ >= 0)
 		close(socket_);
 
-	clear_frame_queues();
+iface_failure:
+	close_sdo_proc_pipe();
 
 	return rc;
 }
