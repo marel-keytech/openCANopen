@@ -1,7 +1,7 @@
 CC := gcc
 CXX := g++
-CFLAGS := -Wall -g -std=c99 -D_GNU_SOURCE -O0 -fexceptions -Iinc/ -I/usr/include/lua5.1/
-CXXFLAGS := -Wall -g -std=c++11 -D_GNU_SOURCE -O0 -Iinc/
+CFLAGS := -Wall -ggdb -std=c99 -D_GNU_SOURCE -O0 -fexceptions -Iinc/ -I/usr/include/lua5.1/
+CXXFLAGS := -Wall -ggdb -std=c++0x -D_GNU_SOURCE -O0 -Iinc/
 LDFLAGS := -lrt
 
 MAJOR = 0
@@ -26,13 +26,15 @@ libcanopen.so: $(LIBCANOPEN)
 canopen-master: src/master.o src/sdo_common.o src/sdo_client.o src/byteorder.o \
 		src/prioq.o src/worker.o src/network.o src/canopen.o \
 		src/socketcan.o src/main-loop.o src/legacy-driver.o \
-		src/DriverManager.o src/Driver.o src/frame_fifo.o
-	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -leloop -ldl -o $@
+		src/DriverManager.o src/Driver.o src/frame_fifo.o src/ptr_fifo.o
+	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -leloop -ldl -lplog -o $@
 
 canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
 	      src/network.o src/canopen.o src/socketcan.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
+canbridge: src/canopen.o src/socketcan.o src/network.o src/canbridge.o
+	$(CC) $^ $(LDFLAGS) -o $@
 
 .PHONY: .c.o
 .c.o:
@@ -51,9 +53,9 @@ clean:
 tst/test_sdo_srv: src/sdo_common.o src/sdo_srv.o src/byteorder.o tst/sdo_srv.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
-tst/test_sdo_client: src/sdo_common.o src/sdo_client.o src/byteorder.o \
-		     tst/sdo_client.o
-	$(CC) $^ $(LDFLAGS) -o $@
+tst/test_sdo_client: src/sdo_common.o src/sdo_client.c src/byteorder.o \
+		     tst/sdo_client.c src/ptr_fifo.o
+	$(CC) $^ -pthread $(CFLAGS) $(LDFLAGS) -o $@
 
 tst/test_prioq: src/prioq.o tst/prioq_test.o
 	$(CC) $^ $(LDFLAGS) -o $@

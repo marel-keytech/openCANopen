@@ -15,8 +15,6 @@
 #include "canopen/nmt.h"
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
-#include "frame_fifo.h"
-#include "ptr_fifo.h"
 
 #include "legacy-driver.h"
 
@@ -30,9 +28,6 @@ static int socket_ = -1;
 static char nodes_seen_[128];
 
 typedef void (*void_cb_fn)(void*);
-
-static int sdo_proc_readfd_, sdo_proc_writefd_;
-struct ml_handler sdo_proc_handler_;
 
 enum master_state {
 	MASTER_STATE_STARTUP = 0,
@@ -93,61 +88,6 @@ get_node_from_proc(struct sdo_proc* proc)
 {
 	void* addr = (char*)proc - offsetof(struct canopen_node, sdo_proc);
 	return addr;
-}
-
-static inline int read_sdo_proc_pipe()
-{
-	char nodeid;
-	return read(sdo_proc_readfd_, &nodeid, sizeof(nodeid)) > 0 ? nodeid
-								   : -1;
-}
-
-static inline void schedule_sdo_proc_run(unsigned char nodeid)
-{
-	write(sdo_proc_writefd_, &nodeid, sizeof(nodeid));
-}
-
-static void sdo_proc_handler_fn(int fd, void* context)
-{
-	(void)fd;
-	(void)context;
-
-	int nodeid = read_sdo_proc_pipe();
-	struct canopen_node* node = &node_[nodeid];
-
-	if (sdo_proc_run(&node->sdo_proc) < 0)
-		schedule_sdo_proc_run(get_node_id(node)); /* defer */
-}
-
-static int open_sdo_proc_pipe()
-{
-	int fds[2];
-
-	if (pipe(fds) < 0)
-		return -1;
-
-	sdo_proc_readfd_ = fds[0];
-	sdo_proc_writefd_ = fds[1];
-
-	net_dont_block(sdo_proc_readfd_);
-
-	ml_handler_init(&sdo_proc_handler_);
-
-	sdo_proc_handler_.fn = sdo_proc_handler_fn;
-	sdo_proc_handler_.context = NULL;
-	sdo_proc_handler_.fd = sdo_proc_readfd_;
-
-	ml_handler_start(&sdo_proc_handler_);
-
-	return 0;
-}
-
-static void close_sdo_proc_pipe()
-{
-	ml_handler_stop(&sdo_proc_handler_);
-	ml_handler_clear(&sdo_proc_handler_);
-	close(sdo_proc_readfd_);
-	close(sdo_proc_writefd_);
 }
 
 void clean_node_name(char* name, size_t size)
@@ -266,8 +206,6 @@ static void unload_driver(int nodeid)
 
 	legacy_master_iface_delete(node->master_iface);
 
-	sdo_proc_destroy(&node->sdo_proc);
-
 	node->driver = NULL;
 	node->master_iface = NULL;
 	node->device_type = 0;
@@ -368,23 +306,6 @@ static int load_driver(int nodeid)
 
 	void* driver = NULL;
 
-	ml_timer_init(&node->sdo_timer);
-
-	struct sdo_proc* sdo_proc = &node->sdo_proc;
-	memset(sdo_proc, 0, sizeof(*sdo_proc));
-
-	node->sdo_timer.context = sdo_proc;
-
-	sdo_proc->nodeid = nodeid;
-	sdo_proc->async_timer = &node->sdo_timer;
-	sdo_proc->do_start_timer = start_sdo_timer;
-	sdo_proc->do_stop_timer = stop_sdo_timer;
-	sdo_proc->do_set_timer_fn = set_sdo_timeout_fn;
-	sdo_proc->do_write_frame = write_frame;
-
-	if (sdo_proc_init(&node->sdo_proc) < 0)
-		return -1;
-
 	uint32_t device_type = get_device_type(nodeid);
 	if (device_type == 0)
 		goto failure;
@@ -400,7 +321,7 @@ static int load_driver(int nodeid)
 	if (legacy_driver_manager_create_handler(driver_manager_, name,
 						 device_type, master_iface,
 						 &driver) < 0)
-		goto failure;
+		goto driver_create_failure;
 
 	node->driver = driver;
 	node->master_iface = master_iface;
@@ -424,15 +345,14 @@ static int load_driver(int nodeid)
 
 	return 0;
 
-	legacy_master_iface_delete(master_iface);
 driver_init_failure:
 	legacy_driver_delete_handler(driver_manager_, device_type, driver);
+driver_create_failure:
+	legacy_master_iface_delete(master_iface);
 
 	node->driver = NULL;
 	node->master_iface = NULL;
 failure:
-	sdo_proc_destroy(&node->sdo_proc);
-	ml_timer_clear(&node->sdo_timer);
 
 	return -1;
 }
@@ -532,9 +452,6 @@ static void handle_sdo(struct canopen_node* node, const struct can_frame* cf)
 {
 	struct sdo_proc* sdo_proc = &node->sdo_proc;
 	sdo_proc_feed(sdo_proc, cf);
-
-	if (sdo_proc_run(&node->sdo_proc) < 0)
-		schedule_sdo_proc_run(get_node_id(node)); /* defer */
 }
 
 static void handle_not_loaded(struct canopen_node* node,
@@ -694,19 +611,17 @@ static void on_master_sdo_request_done(struct sdo_proc* sdo_proc)
 	void* driver = node->driver;
 	struct sdo_req* req = &sdo_proc->req;
 
-	if (sdo_proc->req.state < 0) {
-		legacy_driver_iface_process_sdo(driver,
-						req->index,
-						req->subindex,
-						NULL, 0);
-	} else if (sdo_proc->req.state == SDO_REQ_DONE) {
+	if (sdo_proc->req.state == SDO_REQ_DONE) {
 		legacy_driver_iface_process_sdo(driver,
 						req->index,
 						req->subindex,
 						(unsigned char*)req->addr,
 						req->pos);
 	} else {
-		abort();
+		legacy_driver_iface_process_sdo(driver,
+						req->index,
+						req->subindex,
+						NULL, 0);
 	}
 }
 
@@ -722,8 +637,6 @@ static int master_request_sdo(int nodeid, int index, int subindex)
 	};
 
 	int rc = sdo_proc_async_read(&node->sdo_proc, &sdo_info);
-
-	schedule_sdo_proc_run(nodeid);
 
 	return rc;
 }
@@ -748,8 +661,6 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 	};
 
 	int rc = sdo_proc_async_write(&node->sdo_proc, &sdo_info);
-
-	schedule_sdo_proc_run(nodeid);
 
 	return rc;
 }
@@ -793,6 +704,53 @@ static void* master_iface_init(int nodeid)
 	return legacy_master_iface_new(&cb);
 }
 
+static int init_single_sdo_proc(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+
+	ml_timer_init(&node->sdo_timer);
+
+	struct sdo_proc* sdo_proc = &node->sdo_proc;
+	memset(sdo_proc, 0, sizeof(*sdo_proc));
+
+	node->sdo_timer.context = sdo_proc;
+
+	sdo_proc->nodeid = nodeid;
+	sdo_proc->async_timer = &node->sdo_timer;
+	sdo_proc->do_start_timer = start_sdo_timer;
+	sdo_proc->do_stop_timer = stop_sdo_timer;
+	sdo_proc->do_set_timer_fn = set_sdo_timeout_fn;
+	sdo_proc->do_write_frame = write_frame;
+
+	return sdo_proc_init(sdo_proc);
+}
+
+static int init_sdo_processors()
+{
+	int i;
+	for (i = 1; i < 128; ++i)
+		if (init_single_sdo_proc(i) < 0)
+			goto failure;
+	return 0;
+
+failure:
+	for (; i > 0; --i) {
+		struct canopen_node* node = &node_[i];
+		sdo_proc_destroy(&node->sdo_proc);
+		ml_timer_clear(&node->sdo_timer);
+	}
+	return -1;
+}
+
+static void destroy_sdo_processors()
+{
+	for (int i = 1; i < 128; ++i) {
+		struct canopen_node* node = &node_[i];
+		sdo_proc_destroy(&node->sdo_proc);
+		ml_timer_clear(&node->sdo_timer);
+	}
+}
+
 int main(int argc, char* argv[])
 {
 	int rc = 0;
@@ -801,8 +759,8 @@ int main(int argc, char* argv[])
 	memset(nodes_seen_, 0, sizeof(nodes_seen_));
 	memset(node_, 0, sizeof(node_));
 
-	if (open_sdo_proc_pipe() < 0)
-		return 1;
+	if (init_sdo_processors() < 0)
+		return -1;
 
 	socket_ = socketcan_open(iface);
 	if (socket_ < 0) {
@@ -838,7 +796,7 @@ driver_manager_failure:
 		close(socket_);
 
 iface_failure:
-	close_sdo_proc_pipe();
+	destroy_sdo_processors();
 
 	return rc;
 }

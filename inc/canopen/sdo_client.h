@@ -6,9 +6,7 @@
 #include <unistd.h>
 #include <linux/can.h>
 
-#ifndef TESTING
 #include <pthread.h>
-#endif
 
 #include "frame_fifo.h"
 #include "ptr_fifo.h"
@@ -53,35 +51,22 @@ struct sdo_proc__req {
 	int index, subindex;
 	int timeout;
 	sdo_proc_fn on_done;
+	ssize_t rc;
 	size_t size;
 	char data[0];
 };
 
-#ifdef TESTING
-enum lock_owner {
-	LOCK_OWNER_NONE = 0,
-	LOCK_OWNER_THIS,
-	LOCK_OWNER_OTHER
-};
-#endif
-
 struct sdo_proc {
 	int nodeid;
-#ifndef TESTING
 	pthread_mutex_t mutex;
-#else
-	enum lock_owner lock_owner;
-	int lock_count;
-#endif
 
-	struct frame_fifo frame_input;
+	pthread_cond_t suspend_cond;
 
 	struct ptr_fifo sdo_req_input;
 
 	struct sdo_req req;
 	struct sdo_proc__req* current_req_data;
-
-	int is_new_req;
+	struct sdo_proc__req* saved_req_data;
 
 	void* async_timer;
 
@@ -120,7 +105,7 @@ void sdo_proc_feed(struct sdo_proc* self, const struct can_frame* frame);
 int sdo_proc_run(struct sdo_proc* self);
 
 ssize_t sdo_proc_sync_read(struct sdo_proc* self, struct sdo_info* args);
-ssize_t sdo_proc_sync_write(struct sdo_proc* self, const struct sdo_info* args);
+ssize_t sdo_proc_sync_write(struct sdo_proc* self, struct sdo_info* args);
 
 int sdo_proc_async_read(struct sdo_proc* self, const struct sdo_info* args);
 int sdo_proc_async_write(struct sdo_proc* self, const struct sdo_info* args);

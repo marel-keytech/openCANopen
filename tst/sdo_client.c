@@ -395,34 +395,6 @@ static int test_proc_init_destroy()
 	return 0;
 }
 
-static int test_proc_feed()
-{
-	struct sdo_proc proc;
-	init_mock_proc(&proc);
-
-	struct can_frame cf[3];
-	struct can_frame cfr;
-
-	cf[0].can_id = 1;
-	cf[1].can_id = 2;
-	cf[2].can_id = 3;
-
-	sdo_proc_feed(&proc, &cf[0]);
-	sdo_proc_feed(&proc, &cf[1]);
-	sdo_proc_feed(&proc, &cf[2]);
-
-	ASSERT_INT_GE(0, frame_fifo_dequeue(&proc.frame_input, &cfr, 0));
-	ASSERT_INT_EQ(1, cfr.can_id);
-	ASSERT_INT_GE(0, frame_fifo_dequeue(&proc.frame_input, &cfr, 0));
-	ASSERT_INT_EQ(2, cfr.can_id);
-	ASSERT_INT_GE(0, frame_fifo_dequeue(&proc.frame_input, &cfr, 0));
-	ASSERT_INT_EQ(3, cfr.can_id);
-	ASSERT_INT_LT(0, frame_fifo_dequeue(&proc.frame_input, &cfr, 0));
-
-	sdo_proc_destroy(&proc);
-	return 0;
-}
-
 static int test_proc_setup_dl_req()
 {
 	struct sdo_proc proc;
@@ -442,11 +414,10 @@ static int test_proc_setup_dl_req()
 
 	sdo_proc__setup_dl_req(&proc);
 
-	ASSERT_INT_EQ(R_RSDO + 11, mock_written_frame.can_id);
-	ASSERT_INT_EQ(0x1234, sdo_get_index(&mock_written_frame));
-	ASSERT_INT_EQ(42, sdo_get_subindex(&mock_written_frame));
-	ASSERT_INT_EQ(SDO_CCS_DL_INIT_REQ, sdo_get_cs(&mock_written_frame));
-	ASSERT_FALSE(sdo_is_expediated(&mock_written_frame));
+	ASSERT_INT_EQ(0x1234, sdo_get_index(&proc.req.frame));
+	ASSERT_INT_EQ(42, sdo_get_subindex(&proc.req.frame));
+	ASSERT_INT_EQ(SDO_CCS_DL_INIT_REQ, sdo_get_cs(&proc.req.frame));
+	ASSERT_FALSE(sdo_is_expediated(&proc.req.frame));
 
 	ASSERT_STR_EQ("foobar", proc.req.addr);
 	ASSERT_INT_EQ(strlen("foobar") + 1, proc.req.size);
@@ -474,10 +445,9 @@ static int test_proc_setup_ul_req()
 
 	sdo_proc__setup_ul_req(&proc);
 
-	ASSERT_INT_EQ(R_RSDO + 11, mock_written_frame.can_id);
-	ASSERT_INT_EQ(0x1234, sdo_get_index(&mock_written_frame));
-	ASSERT_INT_EQ(42, sdo_get_subindex(&mock_written_frame));
-	ASSERT_INT_EQ(SDO_CCS_UL_INIT_REQ, sdo_get_cs(&mock_written_frame));
+	ASSERT_INT_EQ(0x1234, sdo_get_index(&proc.req.frame));
+	ASSERT_INT_EQ(42, sdo_get_subindex(&proc.req.frame));
+	ASSERT_INT_EQ(SDO_CCS_UL_INIT_REQ, sdo_get_cs(&proc.req.frame));
 
 	ASSERT_INT_EQ(0, proc.req.pos);
 	ASSERT_PTR_EQ(rdata->data, proc.req.addr);
@@ -498,66 +468,7 @@ static int test_proc_try_next_request__empty()
 	sdo_proc__try_next_request(&proc);
 
 	ASSERT_INT_EQ(0, mock_written_frame.can_id);
-	ASSERT_FALSE(proc.is_new_req);
 	ASSERT_PTR_EQ(NULL, proc.current_req_data);
-
-	proc.current_req_data = NULL;
-	sdo_proc_destroy(&proc);
-	return 0;
-}
-
-static int test_proc_try_next_request__busy()
-{
-	struct sdo_proc proc;
-	init_mock_proc(&proc);
-
-	memset(&mock_written_frame, 0, sizeof(mock_written_frame));
-
-	sdo_request_upload(&proc.req, 0x1234, 11);
-
-	int dummy;
-	ptr_fifo_enqueue(&proc.sdo_req_input, &dummy, NULL);
-
-	sdo_proc__try_next_request(&proc);
-
-	ASSERT_INT_EQ(0, mock_written_frame.can_id);
-	ASSERT_FALSE(proc.is_new_req);
-	ASSERT_PTR_EQ(NULL, proc.current_req_data);
-
-	proc.current_req_data = NULL;
-	sdo_proc_destroy(&proc);
-	return 0;
-}
-
-static int test_proc_try_next_request__locked()
-{
-	struct sdo_proc proc;
-	init_mock_proc(&proc);
-
-	char buffer[sizeof(struct sdo_proc__req) + 32];
-	struct sdo_proc__req* rdata = (struct sdo_proc__req*)buffer;
-
-	proc.nodeid = 11;
-	rdata->type = SDO_REQ_UL;
-	rdata->index = 0x1234;
-	rdata->subindex = 42;
-	rdata->size = 32;
-
-	memset(&mock_written_frame, 0, sizeof(mock_written_frame));
-
-	ptr_fifo_enqueue(&proc.sdo_req_input, rdata, NULL);
-
-	proc.lock_owner = LOCK_OWNER_OTHER;
-	proc.lock_count = 1;
-
-	sdo_proc__try_next_request(&proc);
-
-	ASSERT_INT_EQ(0, mock_written_frame.can_id);
-	ASSERT_FALSE(proc.is_new_req);
-	ASSERT_PTR_EQ(NULL, proc.current_req_data);
-
-	ASSERT_INT_EQ(1, proc.lock_count);
-	ASSERT_INT_EQ(LOCK_OWNER_OTHER, proc.lock_owner);
 
 	proc.current_req_data = NULL;
 	sdo_proc_destroy(&proc);
@@ -586,7 +497,6 @@ static int test_proc_try_next_request__one_sdo()
 
 	ASSERT_INT_EQ(R_RSDO + 11, mock_written_frame.can_id);
 	ASSERT_INT_EQ(SDO_CCS_UL_INIT_REQ, sdo_get_cs(&mock_written_frame));
-	ASSERT_TRUE(proc.is_new_req);
 	ASSERT_PTR_EQ(rdata, proc.current_req_data);
 
 	proc.current_req_data = NULL;
@@ -598,90 +508,6 @@ struct mock_sdo_proc {
 	struct sdo_proc proc;
 	int on_done_called;
 };
-
-static void test_proc_async_done_on_done(struct sdo_proc* proc)
-{
-	struct mock_sdo_proc* mproc = (struct mock_sdo_proc*)proc;
-	mproc->on_done_called++;
-}
-
-static int test_proc_async_done()
-{
-	struct mock_sdo_proc mproc;
-	struct sdo_proc* proc = &mproc.proc;
-	init_mock_proc(proc);
-
-	proc->lock_owner = LOCK_OWNER_THIS;
-	proc->lock_count = 1;
-
-	mproc.on_done_called = 0;
-
-	struct sdo_proc__req* rdata = malloc(sizeof(*rdata));
-	proc->current_req_data = rdata;
-	rdata->on_done = test_proc_async_done_on_done;
-
-	sdo_proc__async_done(proc);
-
-	ASSERT_PTR_EQ(NULL, proc->current_req_data);
-
-	ASSERT_INT_EQ(0, proc->lock_count);
-	ASSERT_INT_EQ(LOCK_OWNER_NONE, proc->lock_owner);
-
-	sdo_proc_destroy(proc);
-	return 0;
-}
-
-static int test_proc_async_timeout()
-{
-	struct mock_sdo_proc mproc;
-	struct sdo_proc* proc = &mproc.proc;
-	init_mock_proc(proc);
-
-	proc->lock_owner = LOCK_OWNER_THIS;
-	proc->lock_count = 1;
-
-	mproc.on_done_called = 0;
-
-	struct sdo_proc__req* rdata = malloc(sizeof(*rdata));
-	proc->current_req_data = rdata;
-	rdata->on_done = test_proc_async_done_on_done;
-
-	proc->nodeid = 12;
-	proc->req.index = 0x1234;
-	proc->req.subindex = 7;
-
-	sdo_proc__async_timeout(proc);
-
-	ASSERT_PTR_EQ(NULL, proc->current_req_data);
-	ASSERT_INT_EQ(R_RSDO + 12, mock_written_frame.can_id);
-	ASSERT_INT_EQ(SDO_CCS_ABORT, sdo_get_cs(&mock_written_frame));
-	ASSERT_INT_EQ(SDO_ABORT_TIMEOUT,
-		      sdo_get_abort_code(&mock_written_frame));
-	ASSERT_INT_EQ(0x1234, sdo_get_index(&mock_written_frame));
-	ASSERT_INT_EQ(7, sdo_get_subindex(&mock_written_frame));
-
-	ASSERT_INT_EQ(0, proc->lock_count);
-	ASSERT_INT_EQ(LOCK_OWNER_NONE, proc->lock_owner);
-
-	sdo_proc_destroy(proc);
-	return 0;
-}
-
-static int test_proc_process_frame__empty()
-{
-	struct sdo_proc proc;
-	init_mock_proc(&proc);
-
-	memset(&mock_written_frame, 0, sizeof(mock_written_frame));
-
-	sdo_proc__process_frame(&proc, NULL);
-
-	ASSERT_INT_EQ(0, mock_written_frame.can_id);
-	ASSERT_INT_EQ(proc.req.state, SDO_REQ_EMPTY);
-
-	sdo_proc_destroy(&proc);
-	return 0;
-}
 
 static int test_proc_is_req_done()
 {
@@ -751,66 +577,6 @@ static int test_proc_restart_timer()
 	return 0;
 }
 
-static int test_proc_run__locked()
-{
-	struct sdo_proc proc;
-	init_mock_proc(&proc);
-
-	proc.lock_owner = LOCK_OWNER_OTHER;
-	proc.lock_count = 1;
-
-	ASSERT_INT_LT(0, sdo_proc_run(&proc));
-
-	ASSERT_INT_EQ(LOCK_OWNER_OTHER, proc.lock_owner);
-	ASSERT_INT_EQ(1, proc.lock_count);
-
-	sdo_proc_destroy(&proc);
-	return 0;
-}
-
-static int test_proc_run__empty_req()
-{
-	struct sdo_proc proc;
-	init_mock_proc(&proc);
-
-	ASSERT_INT_GE(0, sdo_proc_run(&proc));
-
-	ASSERT_INT_EQ(LOCK_OWNER_NONE, proc.lock_owner);
-	ASSERT_INT_EQ(0, proc.lock_count);
-
-	sdo_proc_destroy(&proc);
-	return 0;
-}
-
-static int test_proc_run__read__empty_frame_queue()
-{
-	struct sdo_proc proc;
-	init_mock_proc(&proc);
-
-	struct sdo_info info = {
-		.index = 0x1234,
-		.subindex = 7,
-		.on_done = NULL,
-		.timeout = 1337,
-		.size = 32
-	};
-	sdo_proc_async_read(&proc, &info);
-
-	ASSERT_TRUE(proc.is_new_req);
-
-	ASSERT_INT_GE(0, sdo_proc_run(&proc));
-
-	ASSERT_FALSE(proc.is_new_req);
-
-	ASSERT_INT_EQ(LOCK_OWNER_THIS, proc.lock_owner);
-	ASSERT_INT_EQ(1, proc.lock_count);
-
-	ASSERT_INT_EQ(1, mock_timer.started);
-	ASSERT_INT_EQ(1337, mock_timer.timeout);
-
-	sdo_proc_destroy(&proc);
-	return 0;
-}
 
 int main()
 {
@@ -836,23 +602,14 @@ int main()
 
 	printf("sdo_proc:\n");
 	RUN_TEST(test_proc_init_destroy);
-	RUN_TEST(test_proc_feed);
 	RUN_TEST(test_proc_setup_dl_req);
 	RUN_TEST(test_proc_setup_ul_req);
 	RUN_TEST(test_proc_try_next_request__empty);
-	RUN_TEST(test_proc_try_next_request__busy);
-	RUN_TEST(test_proc_try_next_request__locked);
 	RUN_TEST(test_proc_try_next_request__one_sdo);
-	RUN_TEST(test_proc_async_done);
-	RUN_TEST(test_proc_async_timeout);
-	RUN_TEST(test_proc_process_frame__empty);
 	RUN_TEST(test_proc_is_req_done);
 	RUN_TEST(test_proc_start_timer);
 	RUN_TEST(test_proc_stop_timer);
 	RUN_TEST(test_proc_restart_timer);
-	RUN_TEST(test_proc_run__locked);
-	RUN_TEST(test_proc_run__empty_req);
-	RUN_TEST(test_proc_run__read__empty_frame_queue);
 
 	return r;
 }
