@@ -84,7 +84,7 @@ static inline int get_node_id(const struct canopen_node* node)
 }
 
 static inline struct canopen_node*
-get_node_from_proc(struct sdo_proc* proc)
+get_node_from_proc_req(struct sdo_proc_req* proc)
 {
 	void* addr = (char*)proc - offsetof(struct canopen_node, sdo_proc);
 	return addr;
@@ -196,9 +196,9 @@ static void unload_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
 
-	if (node->is_heartbeat_supported)
-		stop_heartbeat_timer(nodeid);
-	else
+	stop_heartbeat_timer(nodeid);
+
+	if (!node->is_heartbeat_supported)
 		stop_ping_timer(nodeid);
 
 	legacy_driver_delete_handler(driver_manager_, node->device_type,
@@ -286,7 +286,7 @@ void stop_sdo_timer(void* timer)
 	ml_timer_stop(timer);
 }
 
-void set_sdo_timeout_fn(void* timer, sdo_proc_fn fn)
+void set_sdo_timeout_fn(void* timer, sdo_proc_req_fn fn)
 {
 	struct ml_timer* x = timer;
 	x->fn = (void_cb_fn)fn;
@@ -605,22 +605,21 @@ static int master_set_node_state(int nodeid, int state)
 }
 
 
-static void on_master_sdo_request_done(struct sdo_proc* sdo_proc)
+static void on_master_sdo_request_done(struct sdo_proc_req* proc_req)
 {
-	struct canopen_node* node = get_node_from_proc(sdo_proc);
+	struct canopen_node* node = get_node_from_proc_req(proc_req);
 	void* driver = node->driver;
-	struct sdo_req* req = &sdo_proc->req;
 
-	if (sdo_proc->req.state == SDO_REQ_DONE) {
+	if (proc_req->rc >= 0) {
 		legacy_driver_iface_process_sdo(driver,
-						req->index,
-						req->subindex,
-						(unsigned char*)req->addr,
-						req->pos);
+						proc_req->index,
+						proc_req->subindex,
+						(unsigned char*)proc_req->data,
+						proc_req->rc);
 	} else {
 		legacy_driver_iface_process_sdo(driver,
-						req->index,
-						req->subindex,
+						proc_req->index,
+						proc_req->subindex,
 						NULL, 0);
 	}
 }
@@ -636,14 +635,12 @@ static int master_request_sdo(int nodeid, int index, int subindex)
 		.on_done = on_master_sdo_request_done
 	};
 
-	int rc = sdo_proc_async_read(&node->sdo_proc, &sdo_info);
-
-	return rc;
+	return sdo_proc_async_read(&node->sdo_proc, &sdo_info) == NULL ? -1 : 0;
 }
 
-static void on_master_sdo_send_done(struct sdo_proc* sdo_proc)
+static void on_master_sdo_send_done(struct sdo_proc_req* proc_req)
 {
-	(void)sdo_proc;
+	(void)proc_req;
 }
 
 static int master_send_sdo(int nodeid, int index, int subindex,
@@ -660,9 +657,7 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 		.on_done = on_master_sdo_send_done
 	};
 
-	int rc = sdo_proc_async_write(&node->sdo_proc, &sdo_info);
-
-	return rc;
+	return sdo_proc_async_write(&node->sdo_proc, &sdo_info) == NULL ? -1 :0;
 }
 
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)

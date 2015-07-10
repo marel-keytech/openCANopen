@@ -2,7 +2,6 @@
 #include "canopen/sdo.h"
 #include "canopen/sdo_client.h"
 #include "canopen.h"
-#include "thread-utils.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -10,7 +9,7 @@
 #define CAN_MAX_DLC 8
 #endif
 
-void sdo_proc__async_timeout(struct sdo_proc* self);
+void sdo_proc__req_timeout(struct sdo_proc_req* self);
 
 static int sdo_req_abort(struct sdo_req* self, enum sdo_abort_code code)
 {
@@ -327,7 +326,7 @@ int sdo_proc_init(struct sdo_proc* self)
 	pthread_mutex_init(&self->mutex, &attr);
 	pthread_cond_init(&self->suspend_cond, NULL);
 
-	self->do_set_timer_fn(self->async_timer, sdo_proc__async_timeout);
+	self->do_set_timer_fn(self->async_timer, sdo_proc__req_timeout);
 
 	return 0;
 }
@@ -352,7 +351,7 @@ void sdo_proc__write_req_frame(struct sdo_proc* self)
 void sdo_proc__setup_dl_req(struct sdo_proc* self)
 {
 	struct sdo_req* req = &self->req;
-	struct sdo_proc__req* data = self->current_req_data;
+	struct sdo_proc_req* data = self->current_req_data;
 
 	sdo_request_download(req, data->index, data->subindex, data->data,
 			     data->size);
@@ -361,7 +360,7 @@ void sdo_proc__setup_dl_req(struct sdo_proc* self)
 void sdo_proc__setup_ul_req(struct sdo_proc* self)
 {
 	struct sdo_req* req = &self->req;
-	struct sdo_proc__req* data = self->current_req_data;
+	struct sdo_proc_req* data = self->current_req_data;
 
 	sdo_request_upload(req, data->index, data->subindex);
 
@@ -399,40 +398,40 @@ done:
 	sdo_proc__unlock(self);
 }
 
-
-void sdo_proc__async_done(struct sdo_proc* self)
+void sdo_proc__req_done(struct sdo_proc_req* self)
 {
-	sdo_proc__lock(self);
+	struct sdo_proc* proc = self->parent;
+	sdo_proc__lock(proc);
 
-	assert(self->current_req_data);
+	assert(proc->current_req_data);
 
-	sdo_proc__stop_timer(self);
+	sdo_proc__stop_timer(proc);
 
-	sdo_proc_fn on_done = self->current_req_data->on_done;
+	sdo_proc_req_fn on_done = self->on_done;
 	if (on_done)
 		on_done(self);
 
-	if(self->current_req_data)
-		free(self->current_req_data);
-	self->current_req_data = NULL;
-	memset(&self->req, 0, sizeof(self->req));
+	if(proc->current_req_data)
+		free(proc->current_req_data);
+	proc->current_req_data = NULL;
 
-	pthread_cond_broadcast(&self->suspend_cond);
-	sdo_proc__unlock(self);
+	memset(&proc->req, 0, sizeof(proc->req));
 
-	sdo_proc__try_next_request(self);
+	pthread_cond_broadcast(&proc->suspend_cond);
+	sdo_proc__unlock(proc);
+
+	sdo_proc__try_next_request(proc);
 }
 
-void sdo_proc__async_timeout(struct sdo_proc* self)
+void sdo_proc__req_timeout(struct sdo_proc_req* self)
 {
 	struct can_frame cf;
-	struct sdo_req* req = &self->req;
 	sdo_clear_frame(&cf);
-	sdo_abort(&cf, SDO_ABORT_TIMEOUT, req->index, req->subindex);
-	cf.can_id = R_RSDO + self->nodeid;
-	self->do_write_frame(&cf);
+	sdo_abort(&cf, SDO_ABORT_TIMEOUT, self->index, self->subindex);
+	cf.can_id = R_RSDO + self->parent->nodeid;
+	self->parent->do_write_frame(&cf);
 
-	sdo_proc__async_done(self);
+	sdo_proc__req_done(self);
 }
 
 void sdo_proc_feed(struct sdo_proc* self, const struct can_frame* cf)
@@ -448,7 +447,7 @@ void sdo_proc_feed(struct sdo_proc* self, const struct can_frame* cf)
 	sdo_proc__write_req_frame(self);
 
 	if (sdo_proc__is_req_done(self))
-		sdo_proc__async_done(self);
+		sdo_proc__req_done(self->current_req_data);
 	else
 		sdo_proc__restart_timer(self);
 
@@ -456,12 +455,13 @@ done:
 	sdo_proc__unlock(self);
 }
 
-int sdo_proc_async_read(struct sdo_proc* self, const struct sdo_info* info)
+struct sdo_proc_req* sdo_proc_async_read(struct sdo_proc* self,
+					 const struct sdo_info* info)
 {
 	size_t size = 1024; /* TODO: make dynamic */
-	struct sdo_proc__req* req = malloc(sizeof(*req) + size);
+	struct sdo_proc_req* req = malloc(sizeof(*req) + size);
 	if (!req)
-		return -1;
+		return req;
 
 	memset(req, 0, sizeof(*req) + size);
 
@@ -471,18 +471,21 @@ int sdo_proc_async_read(struct sdo_proc* self, const struct sdo_info* info)
 	req->on_done = info->on_done;
 	req->timeout = info->timeout;
 	req->size = size;
+	req->parent = self;
 
 	ptr_fifo_enqueue(&self->sdo_req_input, req, free);
 
 	sdo_proc__try_next_request(self);
-	return 0;
+
+	return req;
 }
 
-int sdo_proc_async_write(struct sdo_proc* self, const struct sdo_info* info)
+struct sdo_proc_req* sdo_proc_async_write(struct sdo_proc* self,
+					  const struct sdo_info* info)
 {
-	struct sdo_proc__req* req = malloc(sizeof(*req) + info->size);
+	struct sdo_proc_req* req = malloc(sizeof(*req) + info->size);
 	if (!req)
-		return -1;
+		return NULL;
 
 	memset(req, 0, sizeof(*req) + info->size);
 
@@ -492,23 +495,27 @@ int sdo_proc_async_write(struct sdo_proc* self, const struct sdo_info* info)
 	req->on_done = info->on_done;
 	req->timeout = info->timeout;
 	req->size = info->size;
+	req->parent = self;
 
 	memcpy(req->data, info->addr, req->size);
 
 	ptr_fifo_enqueue(&self->sdo_req_input, req, free);
 
 	sdo_proc__try_next_request(self);
-	return 0;
+
+	return req;
 }
 
-void sdo_proc__on_sync_done(struct sdo_proc* self)
+void sdo_proc__on_sync_done(struct sdo_proc_req* self)
 {
-	self->saved_req_data = self->current_req_data;
-	self->current_req_data = NULL;
-	if (self->req.state < 0)
-		self->saved_req_data->rc = -1;
-	else
-		self->saved_req_data->rc = self->req.pos;
+	struct sdo_proc* parent = self->parent;
+	struct sdo_req* req = &parent->req;
+
+	self->is_done = 1;
+	self->rc = req->state < 0 ? -1 : req->pos;
+
+	assert(self = parent->current_req_data);
+	parent->current_req_data = NULL;
 }
 
 ssize_t sdo_proc_sync_read(struct sdo_proc* self, struct sdo_info* info)
@@ -517,16 +524,18 @@ ssize_t sdo_proc_sync_read(struct sdo_proc* self, struct sdo_info* info)
 
 	sdo_proc__lock(self);
 
-	sdo_proc_async_read(self, info);
-	block_thread_while_empty(&self->suspend_cond, &self->mutex, -1,
-				 self->saved_req_data == NULL);
+	struct sdo_proc_req* req = sdo_proc_async_read(self, info);
+	if (!req)
+		return -1;
 
-	ssize_t rsize = self->saved_req_data->rc;
+	while (!req->is_done)
+		pthread_cond_wait(&self->suspend_cond, &self->mutex);
 
-	memcpy(info->addr, self->saved_req_data->data, info->size);
+	ssize_t rsize = req->rc;
 
-	free(self->saved_req_data);
-	self->saved_req_data = NULL;
+	memcpy(info->addr, req->data, info->size);
+
+	free(req);
 	sdo_proc__unlock(self);
 
 	return rsize;
@@ -538,14 +547,16 @@ ssize_t sdo_proc_sync_write(struct sdo_proc* self, struct sdo_info* info)
 
 	sdo_proc__lock(self);
 
-	sdo_proc_async_write(self, info);
-	block_thread_while_empty(&self->suspend_cond, &self->mutex, -1,
-				 self->saved_req_data == NULL);
+	struct sdo_proc_req* req = sdo_proc_async_write(self, info);
+	if (!req)
+		return -1;
 
-	ssize_t wsize = self->saved_req_data->rc;
+	while (!req->is_done)
+		pthread_cond_wait(&self->suspend_cond, &self->mutex);
 
-	free(self->saved_req_data);
-	self->saved_req_data = NULL;
+	ssize_t wsize = req->rc;
+
+	free(req);
 	sdo_proc__unlock(self);
 
 	return wsize;

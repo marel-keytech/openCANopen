@@ -42,16 +42,18 @@ struct sdo_req {
 	int have_frame;
 };
 
-struct sdo_proc;
+struct sdo_proc_req;
 
-typedef void (*sdo_proc_fn)(struct sdo_proc*);
+typedef void (*sdo_proc_req_fn)(struct sdo_proc_req*);
 
-struct sdo_proc__req {
+struct sdo_proc_req {
+	struct sdo_proc* parent;
 	enum sdo_req_type type;
 	int index, subindex;
 	int timeout;
-	sdo_proc_fn on_done;
+	sdo_proc_req_fn on_done;
 	ssize_t rc;
+	int is_done;
 	size_t size;
 	char data[0];
 };
@@ -65,14 +67,13 @@ struct sdo_proc {
 	struct ptr_fifo sdo_req_input;
 
 	struct sdo_req req;
-	struct sdo_proc__req* current_req_data;
-	struct sdo_proc__req* saved_req_data;
+	struct sdo_proc_req* current_req_data;
 
 	void* async_timer;
 
 	void (*do_start_timer)(void* timer, int timeout);
 	void (*do_stop_timer)(void* timer);
-	void (*do_set_timer_fn)(void* timer, sdo_proc_fn fn);
+	void (*do_set_timer_fn)(void* timer, sdo_proc_req_fn fn);
 
 	ssize_t (*do_write_frame)(const struct can_frame* cf);
 };
@@ -82,7 +83,7 @@ struct sdo_info {
 	void* addr;
 	size_t size;
 	int timeout;
-	sdo_proc_fn on_done;
+	sdo_proc_req_fn on_done;
 };
 
 int sdo_request_download(struct sdo_req* self, int index, int subindex,
@@ -107,8 +108,10 @@ int sdo_proc_run(struct sdo_proc* self);
 ssize_t sdo_proc_sync_read(struct sdo_proc* self, struct sdo_info* args);
 ssize_t sdo_proc_sync_write(struct sdo_proc* self, struct sdo_info* args);
 
-int sdo_proc_async_read(struct sdo_proc* self, const struct sdo_info* args);
-int sdo_proc_async_write(struct sdo_proc* self, const struct sdo_info* args);
+struct sdo_proc_req* sdo_proc_async_read(struct sdo_proc* self,
+					 const struct sdo_info* args);
+struct sdo_proc_req* sdo_proc_async_write(struct sdo_proc* self,
+					  const struct sdo_info* args);
 
 void sdo_proc__setup_dl_req(struct sdo_proc* self);
 void sdo_proc__setup_ul_req(struct sdo_proc* self);
