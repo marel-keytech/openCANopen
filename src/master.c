@@ -6,7 +6,7 @@
 #include <appcbase.h>
 #include <ctype.h>
 
-#include "main-loop.h"
+#include <mloop.h>
 #include "socketcan.h"
 #include "canopen.h"
 #include "canopen/sdo.h"
@@ -38,7 +38,8 @@ static enum master_state master_state_ = MASTER_STATE_STARTUP;
 
 static void* driver_manager_;
 
-static struct ml_handler mux_handler_;
+static struct mloop* mloop_;
+static struct mloop_socket* mux_handler_;
 
 struct canopen_node;
 
@@ -49,22 +50,21 @@ struct canopen_node {
 	struct frame_fifo frame_fifo;
 
 	struct sdo_proc sdo_proc;
-	struct ml_timer sdo_timer;
 
 	int device_type;
 	int is_heartbeat_supported;
 
-	struct ml_timer heartbeat_timer;
-	struct ml_timer ping_timer;
+	struct mloop_timer* heartbeat_timer;
+	struct mloop_timer* ping_timer;
 };
 
 struct driver_load_job {
-	struct ml_job job;
+	struct mloop_work* job;
 	int nodeid;
 };
 
 struct ping_job {
-	struct ml_job job;
+	struct mloop_work* job;
 	int nodeid;
 	int ok;
 };
@@ -181,15 +181,15 @@ const char* get_name(int nodeid)
 static void stop_heartbeat_timer(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
-	struct ml_timer* timer = &node->heartbeat_timer;
-	ml_timer_stop(timer);
+	struct mloop_timer* timer = node->heartbeat_timer;
+	mloop_timer_stop(timer);
 }
 
 static void stop_ping_timer(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
-	struct ml_timer* timer = &node->ping_timer;
-	ml_timer_stop(timer);
+	struct mloop_timer* timer = node->ping_timer;
+	mloop_timer_stop(timer);
 }
 
 static void unload_driver(int nodeid)
@@ -214,25 +214,26 @@ static void unload_driver(int nodeid)
 	net__send_nmt(socket_, NMT_CS_RESET_NODE, nodeid);
 }
 
-static void on_heartbeat_timeout(void* context)
+static void on_heartbeat_timeout(struct mloop_timer* timer)
 {
-	struct canopen_node* node = context;
+	struct canopen_node* node = mloop_timer_get_context(timer);
 	unload_driver(get_node_id(node));
 }
 
 static int start_heartbeat_timer(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
-	struct ml_timer* timer = &node->heartbeat_timer;
+	struct mloop_timer* timer = node->heartbeat_timer;
 
-	ml_timer_init(timer);
+	if (!timer) {
+		timer = mloop_timer_new(mloop_);
+		mloop_timer_set_context(timer, node, NULL);
+		mloop_timer_set_time(timer, HEARTBEAT_TIMEOUT * 1000000LL);
+		mloop_timer_set_callback(timer, on_heartbeat_timeout);
+		node->heartbeat_timer = timer;
+	}
 
-	timer->is_periodic = 0;
-	timer->context = node;
-	timer->timeout = HEARTBEAT_TIMEOUT;
-	timer->fn = on_heartbeat_timeout;
-
-	ml_timer_start(timer);
+	mloop_timer_start(timer);
 
 	return 0;
 }
@@ -243,9 +244,9 @@ static int restart_heartbeat_timer(int nodeid)
 	return start_heartbeat_timer(nodeid);
 }
 
-static void on_ping_timeout(void* context)
+static void on_ping_timeout(struct mloop_timer* timer)
 {
-	struct canopen_node* node = context;
+	struct canopen_node* node = mloop_timer_get_context(timer);
 	int nodeid = get_node_id(node);
 
 	struct can_frame cf = { 0 };
@@ -260,36 +261,20 @@ static void on_ping_timeout(void* context)
 static int start_ping_timer(int nodeid, int period)
 {
 	struct canopen_node* node = &node_[nodeid];
-	struct ml_timer* timer = &node->ping_timer;
+	struct mloop_timer* timer = node->ping_timer;
 
-	ml_timer_init(timer);
+	if (!timer) {
+		timer = mloop_timer_new(mloop_);
+		mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
+		mloop_timer_set_context(timer, node, NULL);
+		mloop_timer_set_time(timer, period * 1000000LL);
+		mloop_timer_set_callback(timer, on_ping_timeout);
+		node->ping_timer = timer;
+	}
 
-	timer->is_periodic = 1;
-	timer->context = node;
-	timer->timeout = period;
-	timer->fn = on_ping_timeout;
-
-	ml_timer_start(timer);
+	mloop_timer_start(timer);
 
 	return 0;
-}
-
-void start_sdo_timer(void* timer, int timeout)
-{
-	struct ml_timer* x = timer;
-	x->timeout = timeout,
-	ml_timer_start(timer);
-}
-
-void stop_sdo_timer(void* timer)
-{
-	ml_timer_stop(timer);
-}
-
-void set_sdo_timeout_fn(void* timer, sdo_proc_req_fn fn)
-{
-	struct ml_timer* x = timer;
-	x->fn = (void_cb_fn)fn;
 }
 
 ssize_t write_frame(const struct can_frame* frame)
@@ -337,6 +322,8 @@ static int load_driver(int nodeid)
 	if (!is_heartbeat_supported)
 		start_ping_timer(nodeid, HEARTBEAT_PERIOD);
 
+	start_heartbeat_timer(nodeid);
+
 	node->device_type = device_type;
 	node->is_heartbeat_supported = is_heartbeat_supported;
 
@@ -357,44 +344,40 @@ failure:
 	return -1;
 }
 
-static void run_net_probe(void* context)
+static void run_net_probe(struct mloop_work* self)
 {
-	(void)context;
+	(void)self;
 
 	net_reset(socket_, nodes_seen_, 100);
 	net_probe(socket_, nodes_seen_, 1, 127, 100);
 }
 
-static void run_load_driver(void* context)
+static void run_load_driver(struct mloop_work* self)
 {
-	struct driver_load_job* job = context;
-	load_driver(job->nodeid);
+	struct canopen_node* node = mloop_work_get_context(self);
+	int nodeid = get_node_id(node);
+	load_driver(nodeid);
 }
 
 static int schedule_load_driver(int nodeid)
 {
-	struct driver_load_job* load_job = malloc(sizeof(*load_job));
-	if (!load_job)
+	struct canopen_node* node = &node_[nodeid];
+
+	struct mloop_work* work = mloop_work_new(mloop_);
+	if (!work)
 		return -1;
 
-	struct ml_job* job = (struct ml_job*)load_job;
+	mloop_work_set_context(work, node, NULL);
+	mloop_work_set_work_fn(work, run_load_driver);
+	mloop_work_set_done_fn(work, (mloop_work_fn)mloop_work_unref);
 
-	ml_job_init(job);
-
-	job->priority = nodeid;
-	job->context = job;
-	job->work_fn = run_load_driver;
-	job->after_work_fn = free;
-	load_job->nodeid = nodeid;
-
-	if (ml_job_enqueue(job) < 0)
+	if (mloop_work_start(work) < 0)
 		goto failure;
 
 	return 0;
 
 failure:
-	ml_job_clear(job);
-	free(job);
+	mloop_work_unref(work);
 	return -1;
 }
 
@@ -476,9 +459,9 @@ static void handle_not_loaded(struct canopen_node* node,
 	}
 }
 
-static void mux_handler_fn(int fd, void* context)
+static void mux_handler_fn(struct mloop_socket* self)
 {
-	(void)context;
+	int fd = mloop_socket_get_fd(self);
 
 	struct can_frame cf;
 	struct canopen_msg msg;
@@ -530,39 +513,39 @@ static void mux_handler_fn(int fd, void* context)
 
 static void init_multiplexer()
 {
-	ml_handler_init(&mux_handler_);
-	mux_handler_.fd = socket_;
-	mux_handler_.fn = mux_handler_fn;
-	ml_handler_start(&mux_handler_);
+	mux_handler_ = mloop_socket_new(mloop_);
+	mloop_socket_set_fd(mux_handler_, socket_);
+	mloop_socket_set_callback(mux_handler_, mux_handler_fn);
+	mloop_socket_start(mux_handler_);
 }
 
-static void run_bootup(void* context)
+static void run_bootup(struct mloop_work* self)
 {
-	(void)context;
+	(void)self;
 
 	for (int i = 1; i < 128; ++i)
 		if (nodes_seen_[i])
 			load_driver(i);
 }
 
-static void on_bootup_done(void* context)
+static void on_bootup_done(struct mloop_work* self)
 {
-	(void)context;
 	net__send_nmt(socket_, NMT_CS_START, 0);
 	master_state_ = MASTER_STATE_RUNNING;
+
+	mloop_work_unref(self);
 }
 
-static void on_net_probe_done(void* context)
+static void on_net_probe_done(struct mloop_work* self)
 {
-	(void)context;
-
 	init_multiplexer();
 
-	static struct ml_job job;
-	ml_job_init(&job);
-	job.work_fn = run_bootup;
-	job.after_work_fn = on_bootup_done;
-	ml_job_enqueue(&job);
+	struct mloop_work* work = mloop_work_new(mloop_);
+	mloop_work_set_work_fn(work, run_bootup);
+	mloop_work_set_done_fn(work, on_bootup_done);
+	mloop_work_start(work);
+
+	mloop_work_unref(self);
 }
 
 static int initialize()
@@ -577,11 +560,10 @@ static int cleanup()
 
 static int on_tickermaster_alive()
 {
-	static struct ml_job job;
-	ml_job_init(&job);
-	job.work_fn = run_net_probe;
-	job.after_work_fn = on_net_probe_done;
-	ml_job_enqueue(&job);
+	struct mloop_work* work = mloop_work_new(mloop_);
+	mloop_work_set_work_fn(work, run_net_probe);
+	mloop_work_set_done_fn(work, on_net_probe_done);
+	mloop_work_start(work);
 
 	return 0;
 }
@@ -702,19 +684,12 @@ static void* master_iface_init(int nodeid)
 static int init_single_sdo_proc(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
-
-	ml_timer_init(&node->sdo_timer);
-
 	struct sdo_proc* sdo_proc = &node->sdo_proc;
+
 	memset(sdo_proc, 0, sizeof(*sdo_proc));
 
-	node->sdo_timer.context = sdo_proc;
-
+	sdo_proc->mloop = mloop_;
 	sdo_proc->nodeid = nodeid;
-	sdo_proc->async_timer = &node->sdo_timer;
-	sdo_proc->do_start_timer = start_sdo_timer;
-	sdo_proc->do_stop_timer = stop_sdo_timer;
-	sdo_proc->do_set_timer_fn = set_sdo_timeout_fn;
 	sdo_proc->do_write_frame = write_frame;
 
 	return sdo_proc_init(sdo_proc);
@@ -732,7 +707,6 @@ failure:
 	for (; i > 0; --i) {
 		struct canopen_node* node = &node_[i];
 		sdo_proc_destroy(&node->sdo_proc);
-		ml_timer_clear(&node->sdo_timer);
 	}
 	return -1;
 }
@@ -742,7 +716,6 @@ static void destroy_sdo_processors()
 	for (int i = 1; i < 128; ++i) {
 		struct canopen_node* node = &node_[i];
 		sdo_proc_destroy(&node->sdo_proc);
-		ml_timer_clear(&node->sdo_timer);
 	}
 }
 
@@ -753,6 +726,8 @@ int main(int argc, char* argv[])
 
 	memset(nodes_seen_, 0, sizeof(nodes_seen_));
 	memset(node_, 0, sizeof(node_));
+
+	mloop_ = mloop_default();
 
 	if (init_sdo_processors() < 0)
 		return -1;
@@ -772,16 +747,14 @@ int main(int argc, char* argv[])
 		goto driver_manager_failure;
 	}
 
-	if (worker_init(4, 1024, 4096) != 0) {
+	if (mloop_start_workers(4, 1024, 4096) != 0) {
 		rc = 1;
 		goto worker_failure;
 	}
 
-	ml_init();
-
 	rc = run_appbase(&argc, argv);
 
-	worker_deinit();
+	mloop_stop_workers();
 
 worker_failure:
 	legacy_driver_manager_delete(driver_manager_);

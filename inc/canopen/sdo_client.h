@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <linux/can.h>
+#include <mloop.h>
 
 #include <pthread.h>
 
@@ -69,11 +70,8 @@ struct sdo_proc {
 	struct sdo_req req;
 	struct sdo_proc_req* current_req_data;
 
-	void* async_timer;
-
-	void (*do_start_timer)(void* timer, int timeout);
-	void (*do_stop_timer)(void* timer);
-	void (*do_set_timer_fn)(void* timer, sdo_proc_req_fn fn);
+	struct mloop* mloop;
+	struct mloop_timer* async_timer;
 
 	ssize_t (*do_write_frame)(const struct can_frame* cf);
 };
@@ -130,12 +128,15 @@ static inline void sdo_proc__start_timer(struct sdo_proc* self)
 {
 	assert(self->current_req_data);
 	int timeout = self->current_req_data->timeout;
-	self->do_start_timer(self->async_timer, timeout);
+	mloop_timer_set_context(self->async_timer, self->current_req_data,
+				NULL);
+	mloop_timer_set_time(self->async_timer, timeout * 1000000LL);
+	mloop_timer_start(self->async_timer);
 }
 
 static inline void sdo_proc__stop_timer(struct sdo_proc* self)
 {
-	self->do_stop_timer(self->async_timer);
+	mloop_timer_stop(self->async_timer);
 }
 
 static inline void sdo_proc__restart_timer(struct sdo_proc* self)

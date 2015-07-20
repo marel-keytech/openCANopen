@@ -9,7 +9,7 @@
 #define CAN_MAX_DLC 8
 #endif
 
-void sdo_proc__req_timeout(struct sdo_proc_req* self);
+void sdo_proc__req_timeout(struct mloop_timer* self);
 
 static int sdo_req_abort(struct sdo_req* self, enum sdo_abort_code code)
 {
@@ -326,13 +326,23 @@ int sdo_proc_init(struct sdo_proc* self)
 	pthread_mutex_init(&self->mutex, &attr);
 	pthread_cond_init(&self->suspend_cond, NULL);
 
-	self->do_set_timer_fn(self->async_timer, sdo_proc__req_timeout);
+	self->async_timer = mloop_timer_new(self->mloop);
+	if (!self->async_timer)
+		goto timer_failure;
+
+	mloop_timer_set_callback(self->async_timer, sdo_proc__req_timeout);
+	mloop_timer_set_context(self->async_timer, self, NULL);
 
 	return 0;
+
+timer_failure:
+	ptr_fifo_destroy(&self->sdo_req_input);
+	return -1;
 }
 
 void sdo_proc_destroy(struct sdo_proc* self)
 {
+	mloop_timer_free(self->async_timer);
 	if (self->current_req_data)
 		free(self->current_req_data);
 	ptr_fifo_destroy(&self->sdo_req_input);
@@ -414,6 +424,7 @@ void sdo_proc__req_done(struct sdo_proc_req* self)
 	if(proc->current_req_data)
 		free(proc->current_req_data);
 	proc->current_req_data = NULL;
+	mloop_timer_set_context(proc->async_timer, NULL, NULL);
 
 	memset(&proc->req, 0, sizeof(proc->req));
 
@@ -423,15 +434,19 @@ void sdo_proc__req_done(struct sdo_proc_req* self)
 	sdo_proc__try_next_request(proc);
 }
 
-void sdo_proc__req_timeout(struct sdo_proc_req* self)
+void sdo_proc__req_timeout(struct mloop_timer* self)
 {
+	struct sdo_proc_req* proc_req = mloop_timer_get_context(self);
+	if (!proc_req)
+		return;
+
 	struct can_frame cf;
 	sdo_clear_frame(&cf);
-	sdo_abort(&cf, SDO_ABORT_TIMEOUT, self->index, self->subindex);
-	cf.can_id = R_RSDO + self->parent->nodeid;
-	self->parent->do_write_frame(&cf);
+	sdo_abort(&cf, SDO_ABORT_TIMEOUT, proc_req->index, proc_req->subindex);
+	cf.can_id = R_RSDO + proc_req->parent->nodeid;
+	proc_req->parent->do_write_frame(&cf);
 
-	sdo_proc__req_done(self);
+	sdo_proc__req_done(proc_req);
 }
 
 void sdo_proc_feed(struct sdo_proc* self, const struct can_frame* cf)
