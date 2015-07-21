@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
-#include <appcbase.h>
 #include <ctype.h>
+#include <appcbase.h>
 
 #include <mloop.h>
 #include "socketcan.h"
@@ -24,8 +24,12 @@
 #define HEARTBEAT_PERIOD 10000 /* ms */
 #define HEARTBEAT_TIMEOUT 11000 /* ms */
 
+#define for_each_node(index) \
+	for(index = CANOPEN_NODEID_MIN; index <= CANOPEN_NODEID_MAX; ++index)
+
 static int socket_ = -1;
-static char nodes_seen_[128];
+static char nodes_seen_[CANOPEN_NODEID_MAX + 1];
+/* Note: nodes_seen_[0] is unused */
 
 typedef void (*void_cb_fn)(void*);
 
@@ -38,8 +42,8 @@ static enum master_state master_state_ = MASTER_STATE_STARTUP;
 
 static void* driver_manager_;
 
-static struct mloop* mloop_;
-static struct mloop_socket* mux_handler_;
+static struct mloop* mloop_ = NULL;
+static struct mloop_socket* mux_handler_ = NULL;
 
 struct canopen_node;
 
@@ -76,7 +80,8 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size);
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size);
 
-static struct canopen_node node_[128];
+static struct canopen_node node_[CANOPEN_NODEID_MAX + 1];
+/* Note: node_[0] is unsued */
 
 static inline int get_node_id(const struct canopen_node* node)
 {
@@ -224,18 +229,7 @@ static int start_heartbeat_timer(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
 	struct mloop_timer* timer = node->heartbeat_timer;
-
-	if (!timer) {
-		timer = mloop_timer_new(mloop_);
-		mloop_timer_set_context(timer, node, NULL);
-		mloop_timer_set_time(timer, HEARTBEAT_TIMEOUT * 1000000LL);
-		mloop_timer_set_callback(timer, on_heartbeat_timeout);
-		node->heartbeat_timer = timer;
-	}
-
-	mloop_timer_start(timer);
-
-	return 0;
+	return mloop_timer_start(timer);
 }
 
 static int restart_heartbeat_timer(int nodeid)
@@ -258,23 +252,11 @@ static void on_ping_timeout(struct mloop_timer* timer)
 	net_write_frame(socket_, &cf, -1);
 }
 
-static int start_ping_timer(int nodeid, int period)
+static int start_ping_timer(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
 	struct mloop_timer* timer = node->ping_timer;
-
-	if (!timer) {
-		timer = mloop_timer_new(mloop_);
-		mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
-		mloop_timer_set_context(timer, node, NULL);
-		mloop_timer_set_time(timer, period * 1000000LL);
-		mloop_timer_set_callback(timer, on_ping_timeout);
-		node->ping_timer = timer;
-	}
-
-	mloop_timer_start(timer);
-
-	return 0;
+	return mloop_timer_start(timer);
 }
 
 ssize_t write_frame(const struct can_frame* frame)
@@ -320,7 +302,7 @@ static int load_driver(int nodeid)
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
 
 	if (!is_heartbeat_supported)
-		start_ping_timer(nodeid, HEARTBEAT_PERIOD);
+		start_ping_timer(nodeid);
 
 	start_heartbeat_timer(nodeid);
 
@@ -471,7 +453,7 @@ static void mux_handler_fn(struct mloop_socket* self)
 	if (canopen_get_object_type(&msg, &cf) < 0)
 		return;
 
-	assert(msg.id < 128);
+	assert(CANOPEN_NODEID_MIN <= msg.id && msg.id <= CANOPEN_NODEID_MAX);
 
 	struct canopen_node* node = &node_[msg.id];
 	void* driver = node->driver;
@@ -523,7 +505,8 @@ static void run_bootup(struct mloop_work* self)
 {
 	(void)self;
 
-	for (int i = 1; i < 128; ++i)
+	int i;
+	for_each_node(i)
 		if (nodes_seen_[i])
 			load_driver(i);
 }
@@ -548,16 +531,12 @@ static void on_net_probe_done(struct mloop_work* self)
 	mloop_work_unref(self);
 }
 
-static int initialize()
+static int appbase_dummy()
 {
 	return 0;
 }
 
-static int cleanup()
-{
-	return 0;
-}
-
+//static void on_tickermaster_alive()
 static int on_tickermaster_alive()
 {
 	struct mloop_work* work = mloop_work_new(mloop_);
@@ -573,11 +552,21 @@ static int run_appbase(int* argc, char* argv[])
 	appcbase_t cb = { 0 };
 	cb.queue_timeout_ms = -1;
 	cb.usetm = 1;
-	cb.initialize = initialize;
-	cb.deinitialize = cleanup;
+	cb.initialize = appbase_dummy;
+	cb.deinitialize = appbase_dummy;
 	cb.on_tickmaster_alive = on_tickermaster_alive;
 
-	return appbase_start(argc, argv, &cb) == 0 ? 0 : 1;
+	if (appbase_cmdline(argc, argv) != 0)
+		return 1;
+
+	if (appbase_initialize("canopen", appbase_get_instance(), &cb) != 0)
+		return 1;
+
+	mloop_run(mloop_);
+
+	appbase_deinitialize();
+
+	return 0;
 }
 
 static int master_set_node_state(int nodeid, int state)
@@ -681,42 +670,110 @@ static void* master_iface_init(int nodeid)
 	return legacy_master_iface_new(&cb);
 }
 
-static int init_single_sdo_proc(int nodeid)
+static int init_sdo_proc(struct canopen_node* node)
 {
-	struct canopen_node* node = &node_[nodeid];
 	struct sdo_proc* sdo_proc = &node->sdo_proc;
 
 	memset(sdo_proc, 0, sizeof(*sdo_proc));
 
 	sdo_proc->mloop = mloop_;
-	sdo_proc->nodeid = nodeid;
+	sdo_proc->nodeid = get_node_id(node);
 	sdo_proc->do_write_frame = write_frame;
 
 	return sdo_proc_init(sdo_proc);
 }
 
-static int init_sdo_processors()
+static int init_heartbeat_timer(struct canopen_node* node)
 {
-	int i;
-	for (i = 1; i < 128; ++i)
-		if (init_single_sdo_proc(i) < 0)
-			goto failure;
+	struct mloop_timer* timer = mloop_timer_new(mloop_);
+	if (!timer)
+		return -1;
+
+	mloop_timer_set_context(timer, node, NULL);
+	mloop_timer_set_time(timer, HEARTBEAT_TIMEOUT * 1000000LL);
+	mloop_timer_set_callback(timer, on_heartbeat_timeout);
+	node->heartbeat_timer = timer;
+
+	return 0;
+}
+
+static int init_ping_timer(struct canopen_node* node)
+{
+	struct mloop_timer* timer = mloop_timer_new(mloop_);
+	if (!timer)
+		return -1;
+
+	mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
+	mloop_timer_set_context(timer, node, NULL);
+	mloop_timer_set_time(timer, HEARTBEAT_PERIOD * 1000000LL);
+	mloop_timer_set_callback(timer, on_ping_timeout);
+	node->ping_timer = timer;
+
+	return 0;
+}
+
+static int init_node_structure(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+
+	memset(node, 0, sizeof(*node));
+
+	if (init_sdo_proc(node) < 0)
+		return -1;
+
+	if (init_heartbeat_timer(node) < 0)
+		goto heartbeat_timer_failure;
+
+	if (init_ping_timer(node) < 0)
+		goto ping_timer_failure;
+
 	return 0;
 
-failure:
-	for (; i > 0; --i) {
-		struct canopen_node* node = &node_[i];
-		sdo_proc_destroy(&node->sdo_proc);
-	}
+ping_timer_failure:
+	mloop_timer_free(node->heartbeat_timer);
+heartbeat_timer_failure:
+	sdo_proc_destroy(&node->sdo_proc);
 	return -1;
 }
 
-static void destroy_sdo_processors()
+static void destroy_node_structure(int nodeid)
 {
-	for (int i = 1; i < 128; ++i) {
-		struct canopen_node* node = &node_[i];
-		sdo_proc_destroy(&node->sdo_proc);
-	}
+	struct canopen_node* node = &node_[nodeid];
+
+	mloop_timer_free(node->ping_timer);
+	mloop_timer_free(node->heartbeat_timer);
+	sdo_proc_destroy(&node->sdo_proc);
+}
+
+static int init_all_node_structures()
+{
+	int i;
+	for_each_node(i)
+		if (init_node_structure(i) < 0)
+			goto failure;
+
+	return 0;
+
+failure:
+	for (; i > 0; --i)
+		destroy_node_structure(i);
+
+	return -1;
+}
+
+static void destroy_all_node_structures()
+{
+	int i;
+	for_each_node(i)
+		destroy_node_structure(i);
+}
+
+static void unload_all_drivers()
+{
+	int i;
+	for_each_node(i)
+		if(node_[i].driver)
+			unload_driver(i);
 }
 
 int main(int argc, char* argv[])
@@ -729,7 +786,7 @@ int main(int argc, char* argv[])
 
 	mloop_ = mloop_default();
 
-	if (init_sdo_processors() < 0)
+	if (init_all_node_structures() < 0)
 		return -1;
 
 	socket_ = socketcan_open(iface);
@@ -754,6 +811,13 @@ int main(int argc, char* argv[])
 
 	rc = run_appbase(&argc, argv);
 
+	unload_all_drivers();
+
+	if (mux_handler_) {
+		mloop_socket_set_fd(mux_handler_, -1);
+		mloop_socket_free(mux_handler_);
+	}
+
 	mloop_stop_workers();
 
 worker_failure:
@@ -764,7 +828,7 @@ driver_manager_failure:
 		close(socket_);
 
 iface_failure:
-	destroy_sdo_processors();
+	destroy_all_node_structures();
 
 	return rc;
 }
