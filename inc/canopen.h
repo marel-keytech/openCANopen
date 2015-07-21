@@ -1,6 +1,9 @@
 #ifndef _CANOPEN_H
 #define _CANOPEN_H
 
+#define CANOPEN_NODEID_MIN 1
+#define CANOPEN_NODEID_MAX 127
+
 enum canopen_range {
 	R_NMT = 0,
 	R_SYNC = 0x80,
