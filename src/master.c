@@ -536,7 +536,6 @@ static int appbase_dummy()
 	return 0;
 }
 
-//static void on_tickermaster_alive()
 static int on_tickermaster_alive()
 {
 	struct mloop_work* work = mloop_work_new(mloop_);
