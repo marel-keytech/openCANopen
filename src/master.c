@@ -27,6 +27,9 @@
 #define for_each_node(index) \
 	for(index = CANOPEN_NODEID_MIN; index <= CANOPEN_NODEID_MAX; ++index)
 
+#define for_each_node_reverse(index) \
+	for(index = CANOPEN_NODEID_MAX; index >= CANOPEN_NODEID_MIN; --index)
+
 static int socket_ = -1;
 static char nodes_seen_[CANOPEN_NODEID_MAX + 1];
 /* Note: nodes_seen_[0] is unused */
@@ -314,11 +317,6 @@ static int load_driver(int nodeid)
 	node->device_type = device_type;
 	node->is_heartbeat_supported = is_heartbeat_supported;
 
-	start_nodeguarding(nodeid);
-
-	if (master_state_ > MASTER_STATE_STARTUP)
-		net__send_nmt(socket_, NMT_CS_START, nodeid);
-
 	return 0;
 
 driver_init_failure:
@@ -345,7 +343,14 @@ static void run_load_driver(struct mloop_work* self)
 {
 	struct canopen_node* node = mloop_work_get_context(self);
 	int nodeid = get_node_id(node);
-	load_driver(nodeid);
+
+	if (load_driver(nodeid) < 0)
+		return;
+
+	start_nodeguarding(nodeid);
+
+	if (master_state_ > MASTER_STATE_STARTUP)
+		net__send_nmt(socket_, NMT_CS_START, nodeid);
 }
 
 static int schedule_load_driver(int nodeid)
@@ -520,7 +525,19 @@ static void run_bootup(struct mloop_work* self)
 
 static void on_bootup_done(struct mloop_work* self)
 {
-	net__send_nmt(socket_, NMT_CS_START, 0);
+	int i;
+
+	/* We start each node individually because we don't want to start nodes
+	 * that were not properly registered.
+	 */
+	for_each_node_reverse(i)
+		if (node_[i].driver)
+			net__send_nmt(socket_, NMT_CS_START, i);
+
+	for_each_node(i)
+		if (node_[i].driver)
+			start_nodeguarding(i);
+
 	master_state_ = MASTER_STATE_RUNNING;
 
 	mloop_work_unref(self);
