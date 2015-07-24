@@ -44,6 +44,7 @@ enum master_state {
 static enum master_state master_state_ = MASTER_STATE_STARTUP;
 
 static void* driver_manager_;
+pthread_mutex_t driver_manager_lock_ = PTHREAD_MUTEX_INITIALIZER;
 
 static struct mloop* mloop_ = NULL;
 static struct mloop_socket* mux_handler_ = NULL;
@@ -82,6 +83,7 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 			   unsigned char* data, size_t size);
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size);
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size);
+static void unload_legacy_module(int device_type, void* driver);
 
 static struct canopen_node node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unsued */
@@ -209,8 +211,7 @@ static void unload_driver(int nodeid)
 	if (!node->is_heartbeat_supported)
 		stop_ping_timer(nodeid);
 
-	legacy_driver_delete_handler(driver_manager_, node->device_type,
-				     node->driver);
+	unload_legacy_module(node->device_type, node->driver);
 
 	legacy_master_iface_delete(node->master_iface);
 
@@ -277,14 +278,31 @@ static void start_nodeguarding(int nodeid)
 	start_heartbeat_timer(nodeid);
 }
 
+static void* load_legacy_module(const char* name, int device_type,
+				void* master_iface)
+{
+	void* driver = NULL;
+	pthread_mutex_lock(&driver_manager_lock_);
+	int rc = legacy_driver_manager_create_handler(driver_manager_, name,
+						      device_type, master_iface,
+						      &driver);
+	pthread_mutex_unlock(&driver_manager_lock_);
+	return rc >= 0 ? driver : NULL;
+}
+
+static void unload_legacy_module(int device_type, void* driver)
+{
+	pthread_mutex_lock(&driver_manager_lock_);
+	legacy_driver_delete_handler(driver_manager_, device_type, driver);
+	pthread_mutex_unlock(&driver_manager_lock_);
+}
+
 static int load_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
 
 	if (node->driver)
 		unload_driver(nodeid);
-
-	void* driver = NULL;
 
 	uint32_t device_type = get_device_type(nodeid);
 	if (device_type == 0)
@@ -298,9 +316,8 @@ static int load_driver(int nodeid)
 	if (!master_iface)
 		goto failure;
 
-	if (legacy_driver_manager_create_handler(driver_manager_, name,
-						 device_type, master_iface,
-						 &driver) < 0)
+	void* driver = load_legacy_module(name, device_type, master_iface);
+	if (!driver)
 		goto driver_create_failure;
 
 	node->driver = driver;
@@ -320,7 +337,7 @@ static int load_driver(int nodeid)
 	return 0;
 
 driver_init_failure:
-	legacy_driver_delete_handler(driver_manager_, device_type, driver);
+	unload_legacy_module(device_type, driver);
 driver_create_failure:
 	legacy_master_iface_delete(master_iface);
 
