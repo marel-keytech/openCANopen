@@ -320,24 +320,16 @@ static int load_driver(int nodeid)
 	if (!driver)
 		goto driver_create_failure;
 
-	node->driver = driver;
-	node->master_iface = master_iface;
-
-	if (legacy_driver_iface_initialize(driver) < 0)
-		goto driver_init_failure;
-
-	legacy_driver_iface_process_node_state(driver, 1);
-
 	int is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
 
+	node->driver = driver;
 	node->device_type = device_type;
+	node->master_iface = master_iface;
 	node->is_heartbeat_supported = is_heartbeat_supported;
 
 	return 0;
 
-driver_init_failure:
-	unload_legacy_module(device_type, driver);
 driver_create_failure:
 	legacy_master_iface_delete(master_iface);
 
@@ -346,6 +338,20 @@ driver_create_failure:
 failure:
 
 	return -1;
+}
+
+static void initialize_driver(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+	if (legacy_driver_iface_initialize(node->driver) < 0) {
+		unload_legacy_module(node->device_type, node->driver);
+		legacy_master_iface_delete(node->master_iface);
+		node->driver = NULL;
+		node->master_iface = NULL;
+		return;
+	}
+
+	legacy_driver_iface_process_node_state(node->driver, 1);
 }
 
 static void run_net_probe(struct mloop_work* self)
@@ -360,14 +366,26 @@ static void run_load_driver(struct mloop_work* self)
 {
 	struct canopen_node* node = mloop_work_get_context(self);
 	int nodeid = get_node_id(node);
+	load_driver(nodeid);
+}
 
-	if (load_driver(nodeid) < 0)
-		return;
+static void on_load_driver_done(struct mloop_work* self)
+{
+	struct canopen_node* node = mloop_work_get_context(self);
+	int nodeid = get_node_id(node);
+
+	if (!node->driver)
+		goto done;
+
+	initialize_driver(nodeid);
 
 	start_nodeguarding(nodeid);
 
 	if (master_state_ > MASTER_STATE_STARTUP)
 		net__send_nmt(socket_, NMT_CS_START, nodeid);
+
+done:
+	mloop_work_unref(self);
 }
 
 static int schedule_load_driver(int nodeid)
@@ -380,7 +398,7 @@ static int schedule_load_driver(int nodeid)
 
 	mloop_work_set_context(work, node, NULL);
 	mloop_work_set_work_fn(work, run_load_driver);
-	mloop_work_set_done_fn(work, (mloop_work_fn)mloop_work_unref);
+	mloop_work_set_done_fn(work, on_load_driver_done);
 
 	if (mloop_work_start(work) < 0)
 		goto failure;
@@ -538,6 +556,10 @@ static void run_bootup(struct mloop_work* self)
 	for_each_node(i)
 		if (nodes_seen_[i])
 			load_driver(i);
+
+	for_each_node(i)
+		if (node_[i].driver)
+			initialize_driver(i);
 }
 
 static void on_bootup_done(struct mloop_work* self)
