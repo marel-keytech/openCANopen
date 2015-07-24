@@ -264,6 +264,16 @@ ssize_t write_frame(const struct can_frame* frame)
 	return net_write_frame(socket_, frame, -1);
 }
 
+static void start_nodeguarding(int nodeid)
+{
+	struct canopen_node* node = &node_[nodeid];
+
+	if (!node->is_heartbeat_supported)
+		start_ping_timer(nodeid);
+
+	start_heartbeat_timer(nodeid);
+}
+
 static int load_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
@@ -301,13 +311,10 @@ static int load_driver(int nodeid)
 	int is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
 
-	if (!is_heartbeat_supported)
-		start_ping_timer(nodeid);
-
-	start_heartbeat_timer(nodeid);
-
 	node->device_type = device_type;
 	node->is_heartbeat_supported = is_heartbeat_supported;
+
+	start_nodeguarding(nodeid);
 
 	if (master_state_ > MASTER_STATE_STARTUP)
 		net__send_nmt(socket_, NMT_CS_START, nodeid);
