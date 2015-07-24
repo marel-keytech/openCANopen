@@ -89,7 +89,7 @@ static inline int get_node_id(const struct canopen_node* node)
 }
 
 static inline struct canopen_node*
-get_node_from_proc_req(struct sdo_proc_req* proc)
+get_node_from_proc(struct sdo_proc* proc)
 {
 	void* addr = (char*)proc - offsetof(struct canopen_node, sdo_proc);
 	return addr;
@@ -578,7 +578,7 @@ static int master_set_node_state(int nodeid, int state)
 
 static void on_master_sdo_request_done(struct sdo_proc_req* proc_req)
 {
-	struct canopen_node* node = get_node_from_proc_req(proc_req);
+	struct canopen_node* node = get_node_from_proc(proc_req->parent);
 	void* driver = node->driver;
 
 	if (proc_req->rc >= 0) {
