@@ -524,7 +524,8 @@ static void mux_handler_fn(struct mloop_socket* self)
 	if (canopen_get_object_type(&msg, &cf) < 0)
 		return;
 
-	assert(CANOPEN_NODEID_MIN <= msg.id && msg.id <= CANOPEN_NODEID_MAX);
+	if (!(CANOPEN_NODEID_MIN <= msg.id && msg.id <= CANOPEN_NODEID_MAX))
+		return;
 
 	struct canopen_node* node = &node_[msg.id];
 	void* driver = node->driver;
