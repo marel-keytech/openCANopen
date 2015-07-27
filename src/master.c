@@ -88,6 +88,29 @@ static void unload_legacy_module(int device_type, void* driver);
 static struct canopen_node node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unsued */
 
+static int is_profiling_on_ = -1;
+
+static inline int is_profiling_on()
+{
+	if (is_profiling_on_ < 0)
+		is_profiling_on_ = getenv("CANOPEN_PROFILE") != NULL;
+	return is_profiling_on_;
+}
+
+static inline uint64_t gettime_us()
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ts.tv_sec * 1000000LL + ts.tv_nsec / 1000LL;
+}
+
+static uint64_t start_time_ = 0;
+
+#define tprintf(fmt, ...) \
+	printf("%07llu\t" fmt, gettime_us() - start_time_, ## __VA_ARGS__)
+
+#define profile(fmt, ...) if (is_profiling_on()) tprintf(fmt, ## __VA_ARGS__)
+
 static inline int get_node_id(const struct canopen_node* node)
 {
 	return ((char*)node - (char*)node_) / sizeof(struct canopen_node);
@@ -358,6 +381,7 @@ static void run_net_probe(struct mloop_work* self)
 {
 	(void)self;
 
+	profile("Probe network...\n");
 	net_reset(socket_, nodes_seen_, 100);
 	net_probe(socket_, nodes_seen_, 1, 127, 100);
 }
@@ -553,10 +577,13 @@ static void run_bootup(struct mloop_work* self)
 	(void)self;
 
 	int i;
+
+	profile("Load drivers...\n");
 	for_each_node(i)
 		if (nodes_seen_[i])
 			load_driver(i);
 
+	profile("Initialize drivers...\n");
 	for_each_node(i)
 		if (node_[i].driver)
 			initialize_driver(i);
@@ -569,13 +596,17 @@ static void on_bootup_done(struct mloop_work* self)
 	/* We start each node individually because we don't want to start nodes
 	 * that were not properly registered.
 	 */
+	profile("Start nodes...\n");
 	for_each_node_reverse(i)
 		if (node_[i].driver)
 			net__send_nmt(socket_, NMT_CS_START, i);
 
+	profile("Start node guarding...\n");
 	for_each_node(i)
 		if (node_[i].driver)
 			start_nodeguarding(i);
+
+	profile("Boot-up finished!\n");
 
 	master_state_ = MASTER_STATE_RUNNING;
 
@@ -584,6 +615,7 @@ static void on_bootup_done(struct mloop_work* self)
 
 static void on_net_probe_done(struct mloop_work* self)
 {
+	profile("Initialize multiplexer...\n");
 	init_multiplexer();
 
 	struct mloop_work* work = mloop_work_new(mloop_);
@@ -843,14 +875,19 @@ int main(int argc, char* argv[])
 	int rc = 0;
 	const char* iface = argv[1];
 
+	start_time_ = gettime_us();
+	profile("Starting up canopen-master...\n");
+
 	memset(nodes_seen_, 0, sizeof(nodes_seen_));
 	memset(node_, 0, sizeof(node_));
 
 	mloop_ = mloop_default();
 
+	profile("Initialize structures...\n");
 	if (init_all_node_structures() < 0)
 		return -1;
 
+	profile("Open interface...\n");
 	socket_ = socketcan_open(iface);
 	if (socket_ < 0) {
 		perror("Could not open interface");
@@ -860,12 +897,14 @@ int main(int argc, char* argv[])
 	net_dont_block(socket_);
 	net_fix_sndbuf(socket_);
 
+	profile("Create legacy driver manager...\n");
 	driver_manager_ = legacy_driver_manager_new();
 	if (!driver_manager_) {
 		rc = 1;
 		goto driver_manager_failure;
 	}
 
+	profile("Start worker threads...\n");
 	if (mloop_start_workers(4, 1024, 4096) != 0) {
 		rc = 1;
 		goto worker_failure;
