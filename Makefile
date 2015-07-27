@@ -24,7 +24,7 @@ libcanopen.so: $(LIBCANOPEN)
 	ln -fs $(LIBCANOPEN) libcanopen.so
 
 canopen-master: src/master.o src/sdo_common.o src/sdo_client.o src/byteorder.o \
-		src/prioq.o src/worker.o src/network.o src/canopen.o \
+		src/worker.o src/network.o src/canopen.o \
 		src/socketcan.o src/legacy-driver.o \
 		src/DriverManager.o src/Driver.o src/ptr_fifo.o
 	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lplog -o $@
