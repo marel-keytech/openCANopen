@@ -29,7 +29,7 @@ int DriverManager::getdir(const string& dir, vector<string> &files)
 
     glob(fullpath.c_str(), 0, NULL, &globbuf);
 
-    for(int i = 0; i < globbuf.gl_pathc; i++)
+    for(unsigned int i = 0; i < globbuf.gl_pathc; i++)
         files.push_back(globbuf.gl_pathv[i]);
 
     globfree(&globbuf);
