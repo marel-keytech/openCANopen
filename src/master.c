@@ -256,7 +256,7 @@ static int start_heartbeat_timer(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
 	struct mloop_timer* timer = node->heartbeat_timer;
-	return mloop_timer_start(timer);
+	return mloop_start_timer(mloop_, timer);
 }
 
 static int restart_heartbeat_timer(int nodeid)
@@ -283,7 +283,7 @@ static int start_ping_timer(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
 	struct mloop_timer* timer = node->ping_timer;
-	return mloop_timer_start(timer);
+	return mloop_start_timer(mloop_, timer);
 }
 
 ssize_t write_frame(const struct can_frame* frame)
@@ -399,7 +399,7 @@ static void on_load_driver_done(struct mloop_work* self)
 	int nodeid = get_node_id(node);
 
 	if (!node->driver)
-		goto done;
+		return;
 
 	initialize_driver(nodeid);
 
@@ -407,16 +407,13 @@ static void on_load_driver_done(struct mloop_work* self)
 
 	if (master_state_ > MASTER_STATE_STARTUP)
 		net__send_nmt(socket_, NMT_CS_START, nodeid);
-
-done:
-	mloop_work_unref(self);
 }
 
 static int schedule_load_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
 
-	struct mloop_work* work = mloop_work_new(mloop_);
+	struct mloop_work* work = mloop_work_new();
 	if (!work)
 		return -1;
 
@@ -424,14 +421,10 @@ static int schedule_load_driver(int nodeid)
 	mloop_work_set_work_fn(work, run_load_driver);
 	mloop_work_set_done_fn(work, on_load_driver_done);
 
-	if (mloop_work_start(work) < 0)
-		goto failure;
+	int rc = mloop_start_work(mloop_, work);
 
-	return 0;
-
-failure:
 	mloop_work_unref(work);
-	return -1;
+	return rc;
 }
 
 static int handle_bootup(struct canopen_node* node)
@@ -565,12 +558,16 @@ static void mux_handler_fn(struct mloop_socket* self)
 	}
 }
 
-static void init_multiplexer()
+static int init_multiplexer()
 {
-	mux_handler_ = mloop_socket_new(mloop_);
+	mux_handler_ = mloop_socket_new();
+	if (!mux_handler_)
+		return -1;
+
 	mloop_socket_set_fd(mux_handler_, socket_);
 	mloop_socket_set_callback(mux_handler_, mux_handler_fn);
-	mloop_socket_start(mux_handler_);
+
+	return mloop_start_socket(mloop_, mux_handler_);
 }
 
 static void run_bootup(struct mloop_work* self)
@@ -610,21 +607,23 @@ static void on_bootup_done(struct mloop_work* self)
 	profile("Boot-up finished!\n");
 
 	master_state_ = MASTER_STATE_RUNNING;
-
-	mloop_work_unref(self);
 }
 
 static void on_net_probe_done(struct mloop_work* self)
 {
 	profile("Initialize multiplexer...\n");
-	init_multiplexer();
+	int rc = init_multiplexer();
+	assert(rc == 0);
 
-	struct mloop_work* work = mloop_work_new(mloop_);
+	struct mloop_work* work = mloop_work_new();
+	assert(work);
 	mloop_work_set_work_fn(work, run_bootup);
 	mloop_work_set_done_fn(work, on_bootup_done);
-	mloop_work_start(work);
 
-	mloop_work_unref(self);
+	rc = mloop_start_work(mloop_, work);
+	assert(rc == 0);
+
+	mloop_work_unref(work);
 }
 
 static int appbase_dummy()
@@ -634,12 +633,16 @@ static int appbase_dummy()
 
 static int on_tickermaster_alive()
 {
-	struct mloop_work* work = mloop_work_new(mloop_);
+	struct mloop_work* work = mloop_work_new();
+	if (!work)
+		return -1;
+
 	mloop_work_set_work_fn(work, run_net_probe);
 	mloop_work_set_done_fn(work, on_net_probe_done);
-	mloop_work_start(work);
 
-	return 0;
+	int rc = mloop_start_work(mloop_, work);
+	mloop_work_unref(work);
+	return rc;
 }
 
 static int run_appbase(int* argc, char* argv[])
@@ -780,7 +783,7 @@ static int init_sdo_proc(struct canopen_node* node)
 
 static int init_heartbeat_timer(struct canopen_node* node)
 {
-	struct mloop_timer* timer = mloop_timer_new(mloop_);
+	struct mloop_timer* timer = mloop_timer_new();
 	if (!timer)
 		return -1;
 
@@ -794,7 +797,7 @@ static int init_heartbeat_timer(struct canopen_node* node)
 
 static int init_ping_timer(struct canopen_node* node)
 {
-	struct mloop_timer* timer = mloop_timer_new(mloop_);
+	struct mloop_timer* timer = mloop_timer_new();
 	if (!timer)
 		return -1;
 

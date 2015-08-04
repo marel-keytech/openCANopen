@@ -326,7 +326,7 @@ int sdo_proc_init(struct sdo_proc* self)
 	pthread_mutex_init(&self->mutex, &attr);
 	pthread_cond_init(&self->suspend_cond, NULL);
 
-	self->async_timer = mloop_timer_new(self->mloop);
+	self->async_timer = mloop_timer_new();
 	if (!self->async_timer)
 		goto timer_failure;
 

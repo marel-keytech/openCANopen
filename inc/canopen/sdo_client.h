@@ -131,7 +131,7 @@ static inline void sdo_proc__start_timer(struct sdo_proc* self)
 	mloop_timer_set_context(self->async_timer, self->current_req_data,
 				NULL);
 	mloop_timer_set_time(self->async_timer, timeout * 1000000LL);
-	mloop_timer_start(self->async_timer);
+	mloop_start_timer(mloop_default(), self->async_timer);
 }
 
 static inline void sdo_proc__stop_timer(struct sdo_proc* self)
