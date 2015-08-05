@@ -72,6 +72,9 @@ tst/test_sdo_fifo: tst/sdo_fifo_test.o
 tst/test_frame_fifo: src/frame_fifo.c tst/frame_fifo_test.o
 	$(CC) $(CFLAGS) -DFRAME_FIFO_LENGTH=2 $^ $(LDFLAGS) -pthread -o $@
 
+tst/test_vector: tst/vector_test.o
+	$(CC) $^ -o $@
+
 fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_common.o \
 	  src/sdo_srv.o src/byteorder.o src/network.o
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
@@ -82,7 +85,7 @@ dlsdo: src/dlsdo.o src/canopen.o src/socketcan.o src/sdo_common.o \
 
 .PHONY:
 test: tst/test_sdo_srv tst/test_sdo_client tst/test_prioq tst/test_worker \
-	tst/test_network tst/test_sdo_fifo tst/test_frame_fifo
+	tst/test_network tst/test_sdo_fifo tst/test_frame_fifo tst/test_vector
 	run-parts tst
 
 install:
