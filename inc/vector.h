@@ -38,7 +38,8 @@ static inline int vector_reserve(struct vector* self, size_t size)
 	return self->size < size ? vector__grow(self, size * 2) : 0;
 }
 
-static inline int vector_append(struct vector* self, void* data, size_t size)
+static inline int vector_append(struct vector* self, const void* data,
+				size_t size)
 {
 	if (vector_reserve(self, size) < 0)
 		return -1;
@@ -52,7 +53,8 @@ static inline void vector_clear(struct vector* self)
 	self->index = 0;
 }
 
-static inline int vector_assign(struct vector* self, void* data, size_t size)
+static inline int vector_assign(struct vector* self, const void* data,
+				size_t size)
 {
 	vector_clear(self);
 	if (vector_reserve(self, size) < 0)
