@@ -41,7 +41,7 @@ static inline int vector_reserve(struct vector* self, size_t size)
 static inline int vector_append(struct vector* self, const void* data,
 				size_t size)
 {
-	if (vector_reserve(self, size) < 0)
+	if (vector_reserve(self, self->index + size) < 0)
 		return -1;
 	memcpy((char*)self->data + self->index, data, size);
 	self->index += size;
