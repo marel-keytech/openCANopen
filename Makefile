@@ -75,6 +75,16 @@ tst/test_frame_fifo: src/frame_fifo.c tst/frame_fifo_test.o
 tst/test_vector: tst/vector_test.o
 	$(CC) $^ -o $@
 
+tst/test_sdo_async: tst/sdo_async_test.o src/sdo_srv.o src/byteorder.o \
+		    src/sdo_common.o src/sdo_async.o src/network.o \
+		    src/canopen.o
+	$(CC) $^ -o $@
+
+tst/fuzz_test_sdo_async: tst/sdo_async_fuzz_test.o src/sdo_srv.o \
+			 src/byteorder.o src/sdo_common.o src/sdo_async.o \
+			 src/canopen.o
+	$(CC) $^ -o $@
+
 fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_common.o \
 	  src/sdo_srv.o src/byteorder.o src/network.o
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
