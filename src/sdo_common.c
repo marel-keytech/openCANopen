@@ -41,6 +41,8 @@ const char* sdo_strerror(enum sdo_abort_code code)
 		return "Attempt to write a read only object";
 	case SDO_ABORT_WO:
 		return "Attempt to read a write only object";
+	case SDO_ABORT_GENERAL:
+		return "General error";
 	}
 	return "UNKNOWN";
 }

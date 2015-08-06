@@ -45,6 +45,7 @@ enum sdo_abort_code {
 	SDO_ABORT_TOO_SHORT     = 0x06070013,
 	SDO_ABORT_RO            = 0x06010001,
 	SDO_ABORT_WO            = 0x06010002,
+	SDO_ABORT_GENERAL       = 0x08000000,
 };
 
 enum sdo_obj_flags {
@@ -172,14 +173,14 @@ static inline void sdo_set_expediated_size(struct can_frame* frame, size_t size)
 	frame->data[0] |= n << 2;
 }
 
-static inline int sdo_get_index(struct can_frame* frame)
+static inline int sdo_get_index(const struct can_frame* frame)
 {
 	uint16_t value;
 	byteorder(&value, &frame->data[SDO_MULTIPLEXER_IDX], sizeof(value));
 	return value;
 }
 
-static inline int sdo_get_subindex(struct can_frame* frame)
+static inline int sdo_get_subindex(const struct can_frame* frame)
 {
 	return frame->data[SDO_MULTIPLEXER_IDX+2];
 }
