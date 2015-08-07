@@ -3,6 +3,8 @@
 
 #include <mloop.h>
 #include "vector.h"
+#include "canopen/sdo_req_enums.h"
+#include "canopen/sdo.h"
 
 struct sdo_async;
 struct can_frame;
@@ -22,15 +24,10 @@ enum sdo_async_comm_state {
 	SDO_ASYNC_COMM_SEG_RESPONSE,
 };
 
-enum sdo_async_type {
-	SDO_ASYNC_DL = 1,
-	SDO_ASYNC_UL,
-};
-
 struct sdo_async {
 	int fd;
 	int nodeid;
-	enum sdo_async_type type;
+	enum sdo_req_type type;
 	enum sdo_async_state state;
 	enum sdo_async_comm_state comm_state;
 	struct mloop_timer* timer;
@@ -39,10 +36,12 @@ struct sdo_async {
 	int index, subindex;
 	int is_toggled;
 	int pos;
+	enum sdo_req_status status;
+	enum sdo_abort_code abort_code;
 };
 
 struct sdo_async_info {
-	enum sdo_async_type type;
+	enum sdo_req_type type;
 	int index, subindex;
 	unsigned long timeout;
 	const void* data;

@@ -51,6 +51,8 @@ static int sdo_async__abort(struct sdo_async* self, enum sdo_abort_code code)
 	sdo_async__init_frame(self, &cf);
 	sdo_abort(&cf, code, self->index, self->subindex);
 	net_write_frame(self->fd, &cf, -1);
+	self->status = SDO_REQ_LOCAL_ABORT;
+	self->abort_code = code;
 	sdo_async__on_done(self);
 	return -1;
 }
@@ -127,8 +129,8 @@ int sdo_async__send_init_ul(struct sdo_async* self)
 int sdo_async__send_init(struct sdo_async* self)
 {
 	switch (self->type) {
-	case SDO_ASYNC_DL: return sdo_async__send_init_dl(self);
-	case SDO_ASYNC_UL: return sdo_async__send_init_ul(self);
+	case SDO_REQ_DOWNLOAD: return sdo_async__send_init_dl(self);
+	case SDO_REQ_UPLOAD: return sdo_async__send_init_ul(self);
 	}
 
 	abort();
@@ -149,7 +151,7 @@ int sdo_async_start(struct sdo_async* self, const struct sdo_async_info* info)
 	self->subindex = info->subindex;
 	mloop_timer_set_time(self->timer, info->timeout * 1000000ULL);
 
-	if (info->type == SDO_ASYNC_DL)
+	if (info->type == SDO_REQ_DOWNLOAD)
 		vector_assign(&self->buffer, info->data, info->size);
 	else
 		vector_clear(&self->buffer);
@@ -233,6 +235,7 @@ int sdo_async__handle_expediated_ul(struct sdo_async* self,
 	assert(size <= SDO_EXPEDIATED_DATA_SIZE);
 	vector_assign(&self->buffer, &cf->data[SDO_EXPEDIATED_DATA_IDX],
 		      size);
+	self->status = SDO_REQ_OK;
 	sdo_async__on_done(self);
 	return 0;
 }
@@ -287,8 +290,8 @@ int sdo_async__feed_init_response(struct sdo_async* self,
 				  const struct can_frame* cf)
 {
 	switch (self->type) {
-	case SDO_ASYNC_DL: return sdo_async__feed_init_dl_response(self, cf);
-	case SDO_ASYNC_UL: return sdo_async__feed_init_ul_response(self, cf);
+	case SDO_REQ_DOWNLOAD: return sdo_async__feed_init_dl_response(self, cf);
+	case SDO_REQ_UPLOAD: return sdo_async__feed_init_ul_response(self, cf);
 	}
 
 	abort();
@@ -310,10 +313,12 @@ int sdo_async__feed_dl_seg_response(struct sdo_async* self,
 
 	self->is_toggled ^= 1;
 
-	if (sdo_async__is_at_end(self))
+	if (sdo_async__is_at_end(self)) {
+		self->status = SDO_REQ_OK;
 		sdo_async__on_done(self);
-	else
+	} else {
 		sdo_async__request_dl_segment(self);
+	}
 
 	return 0;
 }
@@ -338,10 +343,12 @@ int sdo_async__feed_ul_seg_response(struct sdo_async* self,
 	if (vector_append(&self->buffer, data, size) < 0)
 		return sdo_async__abort(self, SDO_ABORT_NOMEM);
 
-	if (sdo_is_end_segment(cf))
+	if (sdo_is_end_segment(cf)) {
+		self->status = SDO_REQ_OK;
 		sdo_async__on_done(self);
-	else
+	} else {
 		sdo_async__request_ul_segment(self);
+	}
 
 	return 0;
 }
@@ -350,8 +357,8 @@ int sdo_async__feed_seg_response(struct sdo_async* self,
 				 const struct can_frame* cf)
 {
 	switch (self->type) {
-	case SDO_ASYNC_DL: return sdo_async__feed_dl_seg_response(self, cf);
-	case SDO_ASYNC_UL: return sdo_async__feed_ul_seg_response(self, cf);
+	case SDO_REQ_DOWNLOAD: return sdo_async__feed_dl_seg_response(self, cf);
+	case SDO_REQ_UPLOAD: return sdo_async__feed_ul_seg_response(self, cf);
 	}
 
 	abort();
@@ -368,6 +375,8 @@ int sdo_async_feed(struct sdo_async* self, const struct can_frame* cf)
 		return -1;
 
 	if (sdo_get_cs(cf) == SDO_SCS_ABORT) {
+		self->status = SDO_REQ_REMOTE_ABORT;
+		self->abort_code = sdo_get_abort_code(cf);
 		sdo_async__on_done(self);
 		return 0;
 	}

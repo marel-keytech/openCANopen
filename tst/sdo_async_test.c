@@ -143,7 +143,7 @@ static int download(const char* str)
 	size_t size = strlen(str) + 1;
 
 	struct sdo_async_info info = {
-		.type = SDO_ASYNC_DL,
+		.type = SDO_REQ_DOWNLOAD,
 		.index = 0x1234,
 		.subindex = 42,
 		.timeout = 1000,
@@ -169,7 +169,7 @@ static int download(const char* str)
 static int upload(const char* str)
 {
 	struct sdo_async_info info = {
-		.type = SDO_ASYNC_UL,
+		.type = SDO_REQ_UPLOAD,
 		.index = 0x1234,
 		.subindex = 42,
 		.timeout = 1000,

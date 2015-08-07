@@ -48,7 +48,7 @@ static void cleanup()
 int upload_fuzz()
 {
 	struct sdo_async_info info = {
-		.type = SDO_ASYNC_UL,
+		.type = SDO_REQ_UPLOAD,
 		.index = 0x1234,
 		.subindex = 42,
 		.timeout = 1000,
@@ -79,7 +79,7 @@ static char dl_data[4096] = { 0 };
 int download_fuzz()
 {
 	struct sdo_async_info info = {
-		.type = SDO_ASYNC_DL,
+		.type = SDO_REQ_DOWNLOAD,
 		.index = 0x1234,
 		.subindex = 42,
 		.timeout = 1000,
