@@ -21,6 +21,7 @@ static inline int vector_init(struct vector* self, size_t size)
 static inline void vector_destroy(struct vector* self)
 {
 	free(self->data);
+	self->data = NULL;
 }
 
 static inline int vector__grow(struct vector* self, size_t size)
@@ -60,7 +61,7 @@ static inline int vector_assign(struct vector* self, const void* data,
 	if (vector_reserve(self, size) < 0)
 		return -1;
 	memcpy(self->data, data, size);
-	self->index += size;
+	self->index = size;
 	return 0;
 }
 
@@ -70,8 +71,13 @@ static inline int vector_fill(struct vector* self, int c, size_t size)
 	if (vector_reserve(self, size) < 0)
 		return -1;
 	memset(self->data, c, size);
-	self->index += size;
+	self->index = size;
 	return 0;
+}
+
+static inline int vector_copy(struct vector* dst, const struct vector* src)
+{
+	return vector_assign(dst, src->data, src->index);
 }
 
 #endif /* _VECTOR_H_INCLUDED */
