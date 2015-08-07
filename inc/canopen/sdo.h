@@ -115,7 +115,8 @@ static inline int sdo_is_end_segment(const struct can_frame* frame)
 	return frame->data[0] & 1;
 }
 
-static inline enum sdo_abort_code sdo_get_abort_code(struct can_frame* frame)
+static inline
+enum sdo_abort_code sdo_get_abort_code(const struct can_frame* frame)
 {
 	enum sdo_abort_code code;
 	byteorder(&code, &frame->data[4], 4);
