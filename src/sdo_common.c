@@ -7,8 +7,6 @@
 void sdo_abort(struct can_frame* frame, enum sdo_abort_code code, int index,
 	       int subindex)
 {
-	sdo_clear_frame(frame);
-
 	sdo_set_cs(frame, SDO_SCS_ABORT);
 	sdo_set_abort_code(frame, code);
 
