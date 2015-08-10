@@ -12,8 +12,10 @@ static inline int sdo_async__change_state(struct sdo_async* self,
 					  enum sdo_async_state before,
 					  enum sdo_async_state after)
 {
-	return __atomic_compare_exchange_n(&self->state, &before, after, 0,
-					   __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+	int rc = __atomic_compare_exchange_n(&self->state, &before, after, 0,
+					     __ATOMIC_SEQ_CST,
+					     __ATOMIC_SEQ_CST);
+	return rc ? 0 : -1;
 }
 
 static inline void sdo_async__set_state(struct sdo_async* self,
