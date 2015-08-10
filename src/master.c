@@ -67,6 +67,8 @@ struct canopen_node {
 
 	struct mloop_timer* heartbeat_timer;
 	struct mloop_timer* ping_timer;
+
+	int is_loading;
 };
 
 static void* master_iface_init(int nodeid);
@@ -330,7 +332,6 @@ static void unload_legacy_module(int device_type, void* driver)
 static int load_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
-
 	if (node->driver)
 		unload_driver(nodeid);
 
@@ -398,6 +399,7 @@ static void run_load_driver(struct mloop_work* self)
 	struct canopen_node* node = mloop_work_get_context(self);
 	int nodeid = get_node_id(node);
 	load_driver(nodeid);
+	node->is_loading = 0;
 }
 
 static void on_load_driver_done(struct mloop_work* self)
@@ -419,6 +421,8 @@ static void on_load_driver_done(struct mloop_work* self)
 static int schedule_load_driver(int nodeid)
 {
 	struct canopen_node* node = &node_[nodeid];
+	if (node->is_loading)
+		return 0;
 
 	struct mloop_work* work = mloop_work_new();
 	if (!work)
@@ -431,6 +435,9 @@ static int schedule_load_driver(int nodeid)
 	int rc = mloop_start_work(mloop_, work);
 
 	mloop_work_unref(work);
+
+	node->is_loading = 1;
+
 	return rc;
 }
 
@@ -649,6 +656,7 @@ static int on_tickermaster_alive()
 
 	int rc = mloop_start_work(mloop_, work);
 	mloop_work_unref(work);
+
 	return rc;
 }
 
