@@ -69,17 +69,6 @@ struct canopen_node {
 	struct mloop_timer* ping_timer;
 };
 
-struct driver_load_job {
-	struct mloop_work* job;
-	int nodeid;
-};
-
-struct ping_job {
-	struct mloop_work* job;
-	int nodeid;
-	int ok;
-};
-
 static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
 static int master_send_sdo(int nodeid, int index, int subindex,
