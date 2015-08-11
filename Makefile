@@ -88,6 +88,9 @@ tst/fuzz_test_sdo_async: tst/sdo_async_fuzz_test.o src/sdo_srv.o \
 tst/test_sdo_req: tst/sdo_req_test.o src/sdo_req.o
 	$(CC) $^ -o $@
 
+tst/test_http: tst/http_test.o src/http.o
+	$(CC) $^ -o $@
+
 fakenode: src/fakenode.o src/canopen.o src/socketcan.o src/sdo_common.o \
 	  src/sdo_srv.o src/byteorder.o src/network.o
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
