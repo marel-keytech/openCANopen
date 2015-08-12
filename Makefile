@@ -26,7 +26,7 @@ libcanopen.so: $(LIBCANOPEN)
 canopen-master: src/master.o src/sdo_common.o src/sdo_req.o src/byteorder.o \
 		src/network.o src/canopen.o src/sdo_async.o \
 		src/socketcan.o src/legacy-driver.o \
-		src/DriverManager.o src/Driver.o
+		src/DriverManager.o src/Driver.o src/rest.o src/http.o
 	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lplog -o $@
 
 canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
@@ -35,6 +35,10 @@ canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
 
 canbridge: src/canopen.o src/socketcan.o src/network.o src/canbridge.o
 	$(CC) $^ $(LDFLAGS) -o $@
+
+rest-example: src/rest-example.o src/sdo-rest.o src/http.o src/network.o \
+	      src/canopen.o
+	$(CC) $^ -pthread -lmloop -lrt -o $@
 
 .PHONY: .c.o
 .c.o:

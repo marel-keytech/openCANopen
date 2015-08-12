@@ -16,6 +16,7 @@
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
 #include "frame_fifo.h"
+#include "rest.h"
 
 #include "legacy-driver.h"
 
@@ -909,6 +910,101 @@ static void unload_all_drivers()
 			unload_driver(i);
 }
 
+void sdo_rest_not_found(struct rest_client* client, const char* message)
+{
+	struct rest_reply_data reply = {
+		.status_code = "404 Not Found",
+		.content_type = "text/plain",
+		.content_length = strlen(message),
+		.content = message
+	};
+
+	rest_reply(client->output, &reply);
+
+	client->state = REST_CLIENT_DONE;
+}
+
+void sdo_rest_server_error(struct rest_client* client, const char* message)
+{
+	struct rest_reply_data reply = {
+		.status_code = "500 Internal Server Error",
+		.content_type = "text/plain",
+		.content_length = strlen(message),
+		.content = message
+	};
+
+	rest_reply(client->output, &reply);
+
+	client->state = REST_CLIENT_DONE;
+}
+
+void on_sdo_rest_upload_done(struct sdo_req* req)
+{
+	struct rest_client* client = req->context;
+	assert(client);
+
+	if (req->status != SDO_REQ_OK) {
+		sdo_rest_server_error(client, sdo_strerror(req->abort_code));
+		goto done;
+	}
+
+	struct rest_reply_data reply = {
+		.status_code = "200 OK",
+		.content_type = "text/plain",
+		.content_length = req->data.index,
+		.content = req->data.data
+	};
+
+	rest_reply(client->output, &reply);
+
+	client->state = REST_CLIENT_DONE;
+
+done:
+	sdo_req_free(req);
+}
+
+void sdo_rest_service(struct rest_client* client, const void* content)
+{
+	(void)content;
+
+	if (client->req.url_index < 4) {
+		sdo_rest_not_found(client, "Wrong URL format. Must be /sdo/<nodeid>/<index>/<subindex>\r\n");
+		return;
+	}
+
+	int nodeid = strtoul(client->req.url[1], NULL, 10);
+	int index = strtoul(client->req.url[2], NULL, 16);
+	int subindex = strtoul(client->req.url[3], NULL, 10);
+
+	if (!(CANOPEN_NODEID_MIN <= nodeid && nodeid <= CANOPEN_NODEID_MAX)) {
+		sdo_rest_not_found(client, "Invalid node id\r\n");
+		return;
+	}
+
+	struct canopen_node* node = &node_[nodeid];
+
+	struct sdo_req_info info = {
+		.type = SDO_REQ_UPLOAD,
+		.index = index,
+		.subindex = subindex,
+		.on_done = on_sdo_rest_upload_done,
+		.context = client
+	};
+
+	struct sdo_req* req = sdo_req_new(&info);
+	if (!req)
+		goto failure;
+
+	if (sdo_req_start(req, &node->sdo_queue) < 0)
+		goto failure;
+
+	return;
+
+failure:
+	sdo_req_free(req);
+	sdo_rest_server_error(client, "Failed to start sdo request\r\n");
+}
+
 int main(int argc, char* argv[])
 {
 	int rc = 0;
@@ -922,11 +1018,17 @@ int main(int argc, char* argv[])
 
 	mloop_ = mloop_default();
 
+	if (rest_init() < 0)
+		return 1;
+
+	if (rest_register_service(HTTP_GET, "sdo", sdo_rest_service) < 0)
+		goto rest_service_failure;
+
 	profile("Open interface...\n");
 	socket_ = socketcan_open(iface);
 	if (socket_ < 0) {
 		perror("Could not open interface");
-		return 1;
+		goto socketcan_open_failure;
 	}
 
 	profile("Initialize structures...\n");
@@ -969,6 +1071,10 @@ driver_manager_failure:
 node_init_failure:
 	if (socket_ >= 0)
 		close(socket_);
+
+socketcan_open_failure:
+rest_service_failure:
+	rest_cleanup();
 
 	return rc;
 }
