@@ -18,19 +18,6 @@
 #define REST_PORT 9191
 #define REST_BACKLOG 16
 
-enum rest_client_state {
-	REST_CLIENT_START = 0,
-	REST_CLIENT_CONTENT,
-	REST_CLIENT_DONE
-};
-
-struct rest_client {
-	enum rest_client_state state;
-	struct vector buffer;
-	struct http_req req;
-	FILE* output;
-};
-
 struct rest_service {
 	SLIST_ENTRY(rest_service) links;
 	enum http_method method;
@@ -132,7 +119,7 @@ void rest_client_free(struct rest_client* self)
 {
 	if (!self) return;
 	vector_destroy(&self->buffer);
-	if (self->state == REST_CLIENT_CONTENT)
+	if (self->state > REST_CLIENT_START)
 		http_req_free(&self->req);
 	fclose(self->output);
 	free(self);
@@ -229,9 +216,8 @@ void rest__process_content(struct rest_client* client)
 	const void* content = (char*)client->buffer.data
 			    + client->req.header_length;
 
-	service->fn(client->output, &client->req, content);
-
-	client->state = REST_CLIENT_DONE;
+	client->state = REST_CLIENT_SERVICING;
+	service->fn(client, content);
 }
 
 void rest__handle_get(struct rest_client* client)
@@ -247,9 +233,8 @@ void rest__handle_get(struct rest_client* client)
 		return;
 	}
 
-	service->fn(client->output, &client->req, NULL);
-
-	client->state = REST_CLIENT_DONE;
+	client->state = REST_CLIENT_SERVICING;
+	service->fn(client, NULL);
 }
 
 void rest__handle_header(int fd, struct rest_client* client,
@@ -302,6 +287,10 @@ static void rest__on_client_data(struct mloop_socket* socket)
 		break;
 	case REST_CLIENT_CONTENT:
 		rest__handle_content(fd, client, socket);
+		break;
+	case REST_CLIENT_SERVICING:
+		if (fcntl(fd, F_GETFD) < 0 && errno == EBADF)
+			mloop_socket_stop(socket);
 		break;
 	case REST_CLIENT_DONE:
 		mloop_socket_stop(socket);

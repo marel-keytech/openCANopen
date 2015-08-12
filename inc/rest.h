@@ -11,8 +11,21 @@ struct rest_reply_data {
 	const void* content;
 };
 
-typedef void (*rest_fn)(FILE* output, const struct http_req* req,
-			const void* content);
+enum rest_client_state {
+	REST_CLIENT_START = 0,
+	REST_CLIENT_CONTENT,
+	REST_CLIENT_SERVICING,
+	REST_CLIENT_DONE
+};
+
+struct rest_client {
+	enum rest_client_state state;
+	struct vector buffer;
+	struct http_req req;
+	FILE* output;
+};
+
+typedef void (*rest_fn)(struct rest_client* client, const void* content);
 
 int rest_init();
 void rest_cleanup();
