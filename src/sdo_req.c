@@ -23,6 +23,7 @@ struct sdo_req* sdo_req_new(struct sdo_req_info* info)
 	self->index = info->index;
 	self->subindex = info->subindex;
 	self->on_done = info->on_done;
+	self->context = info->context;
 
 	if (info->type == SDO_REQ_DOWNLOAD)
 		vector_assign(&self->data, info->dl_data, info->dl_size);

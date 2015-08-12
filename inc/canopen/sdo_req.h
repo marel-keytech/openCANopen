@@ -19,6 +19,7 @@ struct sdo_req_info {
 	sdo_req_fn on_done;
 	const void* dl_data;
 	size_t dl_size;
+	void* context;
 };
 
 struct sdo_req_queue;
@@ -32,6 +33,7 @@ struct sdo_req {
 	enum sdo_abort_code abort_code;
 	sdo_req_fn on_done;
 	struct sdo_req_queue* parent;
+	void* context;
 };
 
 TAILQ_HEAD(sdo_req_list, sdo_req);
