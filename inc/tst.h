@@ -89,7 +89,7 @@
 #define ASSERT_DOUBLE_LE(value, expr) TST_ASSERT_LE_(value, expr, double, "%f")
 
 #define ASSERT_STR_EQ(value, expr) do { \
-	char* expr_ = (expr); \
+	const char* expr_ = (expr); \
 	if (strcmp(expr_, (value)) != 0) { \
 		fprintf(stderr, "FAILED " xstr(__LINE__) ": Expected " xstr(expr) " to be " xstr(value) "; was \"%s\"\n", \
 			expr_); \
