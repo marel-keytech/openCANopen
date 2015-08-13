@@ -49,6 +49,16 @@ static inline int ini__is_empty(const char* str)
 	return *str == '\0';
 }
 
+static inline char* ini__to_lower(char* str)
+{
+	char* ptr = str;
+	while (*ptr) {
+		*ptr = tolower(*ptr);
+		++ptr;
+	}
+	return str;
+}
+
 static int ini__parse_section(struct ini_parser* self, char* str)
 {
 	size_t len = strlen(str);
@@ -56,7 +66,10 @@ static int ini__parse_section(struct ini_parser* self, char* str)
 	if (*str != '[' || *end != ']')
 		return -1;
 
-	if (vector_assign(&self->section, str + 1, len - 2) < 0)
+	*end = '\0';
+	char* section = ini__to_lower(str + 1);
+
+	if (vector_assign(&self->section, section, strlen(section)) < 0)
 		return -1;
 
 	return 0;
@@ -71,7 +84,7 @@ static int ini__parse_key_value(struct ini_parser* self, char* str)
 
 	*eq = '\0';
 	char* value = ini__trim_left(eq + 1);
-	char* key = ini__trim_right(str);
+	char* key = ini__to_lower(ini__trim_right(str));
 
 	if (vector_copy(&self->buffer, &self->section) < 0
 	 || vector_append(&self->buffer, ".", 1) < 0

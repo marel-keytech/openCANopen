@@ -31,8 +31,8 @@ static int test_simple_file()
 	const char* text =
 	"; a simple test file\n"
 	"\n"
-	"[section]\n"
-	"foo=bar\n"
+	"[Section]\n"
+	"Foo=bar\n"
 	"x=y";
 
 	fprintf(wstream, "%s", text);
