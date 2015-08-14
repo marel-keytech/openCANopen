@@ -89,7 +89,7 @@ void sdo_async_destroy(struct sdo_async* self)
 
 static inline int sdo_async__is_expediated(const struct sdo_async* self)
 {
-	return self->buffer.size <= SDO_EXPEDIATED_DATA_SIZE;
+	return self->buffer.index <= SDO_EXPEDIATED_DATA_SIZE;
 }
 
 int sdo_async__send_init_dl(struct sdo_async* self)
@@ -102,12 +102,14 @@ int sdo_async__send_init_dl(struct sdo_async* self)
 	sdo_indicate_size(&cf);
 	if (sdo_async__is_expediated(self)) {
 		sdo_expediate(&cf);
-		sdo_set_expediated_size(&cf, self->buffer.size);
-		cf.can_dlc = SDO_EXPEDIATED_DATA_IDX + self->buffer.size;
+		sdo_set_expediated_size(&cf, self->buffer.index);
+		cf.can_dlc = SDO_EXPEDIATED_DATA_IDX + self->buffer.index;
 		memcpy(&cf.data[SDO_EXPEDIATED_DATA_IDX], self->buffer.data,
-		       self->buffer.size);
+		       self->buffer.index);
+		self->status = SDO_REQ_OK;
+		sdo_async__on_done(self);
 	} else {
-		sdo_set_indicated_size(&cf, self->buffer.size);
+		sdo_set_indicated_size(&cf, self->buffer.index);
 		cf.can_dlc = CAN_MAX_DLC;
 	}
 	mloop_start_timer(mloop_default(), self->timer);
@@ -178,7 +180,7 @@ int sdo_async_stop(struct sdo_async* self)
 
 static inline int sdo_async__is_at_end(const struct sdo_async* self)
 {
-	return self->pos >= self->buffer.size;
+	return self->pos >= self->buffer.index;
 }
 
 int sdo_async__request_dl_segment(struct sdo_async* self)
@@ -188,7 +190,7 @@ int sdo_async__request_dl_segment(struct sdo_async* self)
 	sdo_set_cs(&cf, SDO_CCS_DL_SEG_REQ);
 	if (self->is_toggled) sdo_toggle(&cf);
 
-	size_t size = MIN(SDO_SEGMENT_MAX_SIZE, self->buffer.size - self->pos);
+	size_t size = MIN(SDO_SEGMENT_MAX_SIZE, self->buffer.index - self->pos);
 	assert(size > 0);
 
 	sdo_set_segment_size(&cf, size);
