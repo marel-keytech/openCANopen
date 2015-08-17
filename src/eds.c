@@ -3,6 +3,7 @@
 #include <ftw.h>
 #include <sys/resource.h>
 #include <errno.h>
+#include <stddef.h>
 
 #include "vector.h"
 #include "sys/tree.h"
@@ -73,17 +74,26 @@ static inline struct canopen_eds* eds__db_get(int index)
 
 const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 {
-	const struct canopen_eds* eds;
-
-	for (int i = 0; i < eds__db.index; ++i) {
-		eds = eds__db_get(i);
-		if (vendor   > 0 && vendor   == eds->vendor)   continue;
-		if (product  > 0 && product  == eds->product)  continue;
-		if (revision > 0 && revision == eds->revision) continue;
+	for (int i = 0; i < eds__db.index / sizeof(struct canopen_eds); ++i) {
+		const struct canopen_eds* eds = eds__db_get(i);
+		if (vendor   > 0 && vendor   != eds->vendor)   continue;
+		if (product  > 0 && product  != eds->product)  continue;
+		if (revision > 0 && revision != eds->revision) continue;
 		return eds;
 	}
 
 	return NULL;
+}
+
+struct eds_obj_node* eds__obj_new()
+{
+	struct eds_obj_node* obj = malloc(sizeof(*obj));
+	if (!obj)
+		return 0;
+
+	memset(obj, 0, sizeof(*obj));
+
+	return obj;
 }
 
 const struct eds_obj* eds_obj_find(const struct canopen_eds* eds,
@@ -94,16 +104,17 @@ const struct eds_obj* eds_obj_find(const struct canopen_eds* eds,
 	return (void*)RB_FIND(eds_obj_tree, (void*)&eds->obj_tree, cmp);
 }
 
+void eds_obj_dump(const struct canopen_eds* eds)
+{
+	struct eds_obj_node* obj;
+	RB_FOREACH(obj, eds_obj_tree, (void*)&eds->obj_tree)
+		printf("%x %x\n", eds__get_index(obj), eds__get_subindex(obj));
+}
+
 static inline int eds__extension_matches(const char* path, const char* ext)
 {
 	char* ptr = strrchr(path, '.');
-	return ptr ? strcmp(ext, ptr) : 0;
-}
-
-static inline const char* eds__ini_find(struct kv_dict* ini, const char* key)
-{
-	const struct kv* kv = kv_dict_find(ini, key);
-	return kv ? kv_value(kv) : NULL;
+	return ptr ? strcmp(ext, ptr) == 0 : 0;
 }
 
 static void eds__clear(struct canopen_eds* eds)
@@ -116,94 +127,95 @@ static void eds__clear(struct canopen_eds* eds)
 	}
 }
 
-static const char* eds__get_section(const char* str)
-{
-	static char buffer[256];
-	strncpy(buffer, str, sizeof(buffer));
-	buffer[sizeof(buffer)-1] = '\0';
-	char* end = strchr(buffer, '.');
-	if (!end)
-		return NULL;
-	*end = '\0';
-	return buffer;
-}
-
-static inline const char* eds__get_subkey(const char* str)
-{
-	const char* start = strchr(str, '.');
-	return start ? start + 1 : NULL;
-}
-
 int eds__get_section_index(const char* str)
 {
-	char buffer[256];
-	strncpy(buffer, str, sizeof(buffer));
-	buffer[sizeof(buffer)-1] = '\0';
-
-	char* end = strstr(buffer, "sub");
-	if (end)
-		*end = '\0';
-
-	char* endptr = 0;
-	int index = strtoul(buffer, &endptr, 16);
-	return *endptr == '\0' ? index : -1;
+	const char* sub = strstr(str, "sub");
+	char* end = NULL;
+	int index = strtoul(str, &end, 16);
+	return (str != end && (*end == '\0' || end == sub)) ? index : -1;
 }
 
-int eds__get_section_subindex(const char* str)
+unsigned int eds__get_section_subindex(const char* str)
 {
-	char* start = strstr(str, "sub");
-	if (start)
-		start += 3;
+	const char* sub = strstr(str, "sub");
+	if (!sub || sub[3] == '\0')
+		return 0;
 
-	char* endptr = 0;
-	int subindex = strtoul(start, &endptr, 16);
-	return *endptr == '\0' ? subindex : -1;
+	sub += 3;
+	char* end = NULL;
+	int subindex = strtoul(sub, &end, 16);
+
+	return sub != end && *end == '\0' ? subindex : -1;
 }
 
-static int eds__convert_obj_tree(struct canopen_eds* eds, struct kv_dict* ini)
+enum eds_obj_access eds__get_access_type(const char* str)
 {
-	const struct kv_dict_iter* it;
+	if (strcmp(str, "ro") == 0) return EDS_OBJ_R;
+	if (strcmp(str, "wo") == 0) return EDS_OBJ_W;
+	if (strcmp(str, "rw") == 0) return EDS_OBJ_RW;
+	if (strcmp(str, "const") == 0) return EDS_OBJ_CONST;
+	return 0;
+}
 
-	for (it = kv_dict_find_ge(ini, ""); it; it = kv_dict_iter_next(ini, it))
-	{
-		const struct kv* kv = kv_dict_iter_kv(it);
-		const char* key = kv_key(kv);
-		const char* value = kv_value(kv);
+static void eds__insert(struct canopen_eds* eds, struct eds_obj_node* node)
+{
+	struct eds_obj_node* existing;
 
-		const char* section = eds__get_section(key);
-		if (!section)
-			continue;
+	existing = RB_INSERT(eds_obj_tree, &eds->obj_tree, node);
+	if (!existing)
+		return;
 
-		const char* subkey = eds__get_subkey(key);
-		if (!subkey)
-			continue;
+	RB_REMOVE(eds_obj_tree, &eds->obj_tree, existing);
+	free(existing);
 
-		int index = eds__get_section_index(section);
+	RB_INSERT(eds_obj_tree, &eds->obj_tree, node);
+}
+
+static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
+{
+	for (size_t i = 0; i < ini_get_length(ini); ++i) {
+		const struct ini_section* section = ini_get_section(ini, i);
+
+		int index = eds__get_section_index(section->section);
 		if (index < 0)
 			continue;
 
-		int subindex = eds__get_section_subindex(section);
+		int subindex = eds__get_section_subindex(section->section);
 		if (subindex < 0)
 			continue;
 
-		/* To be continued ... */
+		const char* type = ini_find_key(section, "objecttype");
+		if (!type)
+			continue;
 
+		const char* access = ini_find_key(section, "accesstype");
+		if (!access)
+			access = "ro";
+
+		struct eds_obj_node* obj = eds__obj_new();
+		if (!obj)
+			return -1;
+
+		obj->obj.type = strtoul(type, NULL, 0);
+		obj->obj.access = eds__get_access_type(access);
+		obj->key = (index << 8) | subindex;
+		eds__insert(eds, obj);
 	}
 
 	return 0;
 }
 
-static int eds__convert_ini(struct kv_dict* ini)
+static int eds__convert_ini(struct ini_file* ini)
 {
-	const char* vendor = eds__ini_find(ini, "deviceinfo.vendornumber");
+	const char* vendor = ini_find(ini, "deviceinfo", "vendornumber");
 	if (!vendor)
 		return -1;
 
-	const char* product = eds__ini_find(ini, "deviceinfo.productnumber");
+	const char* product = ini_find(ini, "deviceinfo", "productnumber");
 	if (!product)
 		return -1;
 
-	const char* revision = eds__ini_find(ini, "deviceinfo.revisionnumber");
+	const char* revision = ini_find(ini, "deviceinfo", "revisionnumber");
 	if (!revision)
 		return -1;
 
@@ -235,21 +247,21 @@ static int eds__load_file(const char* path)
 	if (!file)
 		return -1;
 
-	struct kv_dict* ini = kv_dict_new();
-	if (!ini)
+	struct ini_file ini;
+
+	if (ini_parse(&ini, file) < 0)
 		goto failure;
 
-	if (ini_parse(ini, file) < 0)
+	if (eds__convert_ini(&ini) < 0)
 		goto failure;
 
-	if (eds__convert_ini(ini) < 0)
-		goto failure;
-
-	kv_dict_del(ini);
+	fclose(file);
+	ini_destroy(&ini);
 	return 0;
 
 failure:
-	kv_dict_del(ini);
+	fclose(file);
+	ini_destroy(&ini);
 	return -1;
 }
 
@@ -303,7 +315,7 @@ failure:
 
 static void eds__db_clear(void)
 {
-	for (int i = 0; i < eds__db.index; ++i)
+	for (int i = 0; i < eds__db.index / sizeof(struct canopen_eds); ++i)
 		eds__clear(eds__db_get(i));
 }
 
