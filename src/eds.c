@@ -184,7 +184,7 @@ static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
 		if (subindex < 0)
 			continue;
 
-		const char* type = ini_find_key(section, "objecttype");
+		const char* type = ini_find_key(section, "datatype");
 		if (!type)
 			continue;
 
