@@ -106,8 +106,6 @@ int sdo_async__send_init_dl(struct sdo_async* self)
 		cf.can_dlc = SDO_EXPEDIATED_DATA_IDX + self->buffer.index;
 		memcpy(&cf.data[SDO_EXPEDIATED_DATA_IDX], self->buffer.data,
 		       self->buffer.index);
-		self->status = SDO_REQ_OK;
-		sdo_async__on_done(self);
 	} else {
 		sdo_set_indicated_size(&cf, self->buffer.index);
 		cf.can_dlc = CAN_MAX_DLC;
