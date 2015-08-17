@@ -15,6 +15,7 @@
 #include "canopen/nmt.h"
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
+#include "canopen/eds.h"
 #include "frame_fifo.h"
 #include "rest.h"
 
@@ -65,6 +66,8 @@ struct canopen_node {
 
 	int device_type;
 	int is_heartbeat_supported;
+
+	uint32_t vendor_id, product_code, revision_number;
 
 	struct mloop_timer* heartbeat_timer;
 	struct mloop_timer* ping_timer;
@@ -128,37 +131,76 @@ void clean_node_name(char* name, size_t size)
 
 }
 
-uint32_t get_device_type(int nodeid)
+struct sdo_req* sdo_read(int nodeid, int index, int subindex)
 {
 	struct canopen_node* node = &node_[nodeid];
-	uint32_t device_type = 0;
 
 	struct sdo_req_info info = {
 		.type = SDO_REQ_UPLOAD,
-		.index = 0x1000,
-		.subindex = 0
+		.index = index,
+		.subindex = subindex
 	};
 
 	struct sdo_req* req = sdo_req_new(&info);
 	if (!req)
-		return 0;
+		return NULL;
 
 	if (sdo_req_start(req, &node->sdo_queue) < 0)
 		goto done;
 
 	sdo_req_wait(req);
+
 	if (req->status != SDO_REQ_OK)
 		goto done;
 
-	if (req->data.index > sizeof(device_type))
-		goto done;
-
-	memcpy(&device_type, req->data.data, MIN(req->data.index,
-	       sizeof(device_type)));
+	return req;
 
 done:
 	sdo_req_free(req);
-	return device_type;
+	return NULL;
+}
+
+static uint32_t sdo_read_u32(int nodeid, int index, int subindex)
+{
+	uint32_t value = 0;
+
+	struct sdo_req* req = sdo_read(nodeid, index, subindex);
+	if (!req)
+		return 0;
+
+	if (req->data.index > sizeof(value))
+		goto done;
+
+	byteorder2(&value, req->data.data, sizeof(value), req->data.index);
+
+done:
+	sdo_req_free(req);
+	return value;
+}
+
+static inline uint32_t get_device_type(int nodeid)
+{
+	return sdo_read_u32(nodeid, 0x1000, 0);
+}
+
+static inline int node_has_identity(int nodeid)
+{
+	return !!sdo_read_u32(nodeid, 0x1018, 0);
+}
+
+static inline uint32_t get_vendor_id(int nodeid)
+{
+	return sdo_read_u32(nodeid, 0x1018, 1);
+}
+
+static inline uint32_t get_product_code(int nodeid)
+{
+	return sdo_read_u32(nodeid, 0x1018, 2);
+}
+
+static inline uint32_t get_revision_number(int nodeid)
+{
+	return sdo_read_u32(nodeid, 0x1018, 3);
 }
 
 static inline int set_heartbeat_period(int nodeid, uint16_t period)
@@ -193,24 +235,10 @@ failure:
 
 const char* get_name(int nodeid)
 {
-	struct canopen_node* node = &node_[nodeid];
 	static __thread char name[256];
 
-	struct sdo_req_info info = {
-		.type = SDO_REQ_UPLOAD,
-		.index = 0x1008,
-		.subindex = 0
-	};
-
-	struct sdo_req* req = sdo_req_new(&info);
+	struct sdo_req* req = sdo_read(nodeid, 0x1008, 0);
 	if (!req)
-		return 0;
-
-	if (sdo_req_start(req, &node->sdo_queue) < 0)
-		goto done;
-
-	sdo_req_wait(req);
-	if (req->status != SDO_REQ_OK)
 		goto done;
 
 	memcpy(name, req->data.data, MIN(req->data.index, sizeof(name)));
@@ -351,6 +379,12 @@ static int load_driver(int nodeid)
 	void* driver = load_legacy_module(name, device_type, master_iface);
 	if (!driver)
 		goto driver_create_failure;
+
+	if (node_has_identity(nodeid)) {
+		node->vendor_id = get_vendor_id(nodeid);
+		node->product_code = get_product_code(nodeid);
+		node->revision_number = get_revision_number(nodeid);
+	}
 
 	int is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
@@ -1018,6 +1052,10 @@ int main(int argc, char* argv[])
 
 	mloop_ = mloop_default();
 
+	profile("Load EDS database...\n");
+	eds_db_load();
+
+	profile("Initialize and register SDO REST service...\n");
 	if (rest_init() < 0)
 		return 1;
 
@@ -1075,6 +1113,8 @@ node_init_failure:
 socketcan_open_failure:
 rest_service_failure:
 	rest_cleanup();
+
+	eds_db_unload();
 
 	return rc;
 }
