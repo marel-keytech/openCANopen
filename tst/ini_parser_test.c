@@ -38,13 +38,13 @@ static int test_simple_file()
 	fprintf(wstream, "%s", text);
 	fflush(wstream);
 
-	struct kv_dict* dict = kv_dict_new();
-	ASSERT_INT_EQ(0, ini_parse(dict, rstream));
+	struct ini_file file;
+	ASSERT_INT_EQ(0, ini_parse(&file, rstream));
 
-	ASSERT_STR_EQ("bar", kv_value(kv_dict_find(dict, "section.foo")));
-	ASSERT_STR_EQ("y", kv_value(kv_dict_find(dict, "section.x")));
+	ASSERT_STR_EQ("bar", ini_find(&file, "section", "foo"));
+	ASSERT_STR_EQ("y", ini_find(&file, "section", "x"));
 
-	kv_dict_del(dict);
+	ini_destroy(&file);
 
 	return 0;
 }
