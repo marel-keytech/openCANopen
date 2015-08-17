@@ -75,6 +75,11 @@ struct canopen_node {
 	int is_loading;
 };
 
+struct rest_context {
+	struct rest_client* client;
+	const struct eds_obj* eds_obj;
+};
+
 static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
 static int master_send_sdo(int nodeid, int index, int subindex,
@@ -372,6 +377,12 @@ static int load_driver(int nodeid)
 	if (!name)
 		goto failure;
 
+	if (node_has_identity(nodeid)) {
+		node->vendor_id = get_vendor_id(nodeid);
+		node->product_code = get_product_code(nodeid);
+		node->revision_number = get_revision_number(nodeid);
+	}
+
 	void* master_iface = master_iface_init(nodeid);
 	if (!master_iface)
 		goto failure;
@@ -379,12 +390,6 @@ static int load_driver(int nodeid)
 	void* driver = load_legacy_module(name, device_type, master_iface);
 	if (!driver)
 		goto driver_create_failure;
-
-	if (node_has_identity(nodeid)) {
-		node->vendor_id = get_vendor_id(nodeid);
-		node->product_code = get_product_code(nodeid);
-		node->revision_number = get_revision_number(nodeid);
-	}
 
 	int is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
@@ -972,16 +977,8 @@ void sdo_rest_server_error(struct rest_client* client, const char* message)
 	client->state = REST_CLIENT_DONE;
 }
 
-void on_sdo_rest_upload_done(struct sdo_req* req)
+void on_sdo_rest_string(struct sdo_req* req, struct rest_client* client)
 {
-	struct rest_client* client = req->context;
-	assert(client);
-
-	if (req->status != SDO_REQ_OK) {
-		sdo_rest_server_error(client, sdo_strerror(req->abort_code));
-		goto done;
-	}
-
 	struct rest_reply_data reply = {
 		.status_code = "200 OK",
 		.content_type = "text/plain",
@@ -990,10 +987,101 @@ void on_sdo_rest_upload_done(struct sdo_req* req)
 	};
 
 	rest_reply(client->output, &reply);
+}
+
+void on_sdo_rest_u64(struct sdo_req* req, struct rest_client* client)
+{
+	char buffer[32];
+
+	uint64_t number = 0;
+
+	byteorder2(&number, req->data.data, sizeof(number), req->data.index);
+
+	sprintf(buffer, "%llu\r\n", number);
+
+	struct rest_reply_data reply = {
+		.status_code = "200 OK",
+		.content_type = "text/plain",
+		.content_length = strlen(buffer),
+		.content = buffer
+	};
+
+	rest_reply(client->output, &reply);
+}
+
+void on_sdo_rest_s64(struct sdo_req* req, struct rest_client* client)
+{
+	char buffer[32];
+
+	int64_t number = 0;
+
+	byteorder2(&number, req->data.data, sizeof(number), req->data.index);
+
+	sprintf(buffer, "%lld\r\n", number);
+
+	struct rest_reply_data reply = {
+		.status_code = "200 OK",
+		.content_type = "text/plain",
+		.content_length = strlen(buffer),
+		.content = buffer
+	};
+
+	rest_reply(client->output, &reply);
+}
+
+void on_sdo_rest_r64(struct sdo_req* req, struct rest_client* client)
+{
+	char buffer[32];
+
+	double number = 0;
+
+	byteorder2(&number, req->data.data, sizeof(number), req->data.index);
+
+	sprintf(buffer, "%lf\r\n", number);
+
+	struct rest_reply_data reply = {
+		.status_code = "200 OK",
+		.content_type = "text/plain",
+		.content_length = strlen(buffer),
+		.content = buffer
+	};
+
+	rest_reply(client->output, &reply);
+}
+
+void on_sdo_rest_upload_done(struct sdo_req* req)
+{
+	struct rest_context* context = req->context;
+	assert(context);
+	struct rest_client* client = context->client;
+	const struct eds_obj* eds_obj = context->eds_obj;
+
+	if (req->status != SDO_REQ_OK) {
+		sdo_rest_server_error(client, sdo_strerror(req->abort_code));
+		goto done;
+	}
+
+	if (eds_obj) {
+		if (canopen_type_is_signed_integer(eds_obj->type))
+			on_sdo_rest_s64(req, client);
+		else if (canopen_type_is_unsigned_integer(eds_obj->type))
+			on_sdo_rest_u64(req, client);
+		else if (canopen_type_is_real(eds_obj->type))
+			on_sdo_rest_r64(req, client);
+		else if (canopen_type_is_string(eds_obj->type))
+			on_sdo_rest_string(req, client);
+
+	} else {
+		if (req->data.index <= 8)
+			on_sdo_rest_u64(req, client);
+		else
+			on_sdo_rest_string(req, client);
+	}
 
 	client->state = REST_CLIENT_DONE;
 
 done:
+	free(context);
 	sdo_req_free(req);
 }
 
@@ -1015,27 +1103,39 @@ void sdo_rest_service(struct rest_client* client, const void* content)
 		return;
 	}
 
+	struct rest_context* context = malloc(sizeof(*context));
+	context->client = client;
+
 	struct canopen_node* node = &node_[nodeid];
+
+	const struct canopen_eds* eds = eds_db_find(node->vendor_id,
+						    node->product_code,
+						    -1);
+	if (eds)
+		context->eds_obj = eds_obj_find(eds, index, subindex);
 
 	struct sdo_req_info info = {
 		.type = SDO_REQ_UPLOAD,
 		.index = index,
 		.subindex = subindex,
 		.on_done = on_sdo_rest_upload_done,
-		.context = client
+		.context = context
 	};
 
 	struct sdo_req* req = sdo_req_new(&info);
 	if (!req)
-		goto failure;
+		goto req_failure;
 
 	if (sdo_req_start(req, &node->sdo_queue) < 0)
-		goto failure;
+		goto req_start_failure;
 
 	return;
 
-failure:
+req_start_failure:
 	sdo_req_free(req);
+req_failure:
+	free(context);
+
 	sdo_rest_server_error(client, "Failed to start sdo request\r\n");
 }
 
