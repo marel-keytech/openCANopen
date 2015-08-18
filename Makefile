@@ -72,8 +72,7 @@ tst/test_sdo_req: tst/sdo_req_test.o src/sdo_req.o
 tst/test_http: tst/http_test.o src/http.o
 	$(CC) $^ -o $@
 
-tst/test_ini_parser: tst/ini_parser_test.o src/ini_parser.o src/kv.o \
-		     src/kv_dict.o
+tst/test_ini_parser: tst/ini_parser_test.o src/ini_parser.o
 	$(CC) $^ -o $@
 
 .PHONY:
