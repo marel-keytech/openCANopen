@@ -1,0 +1,21 @@
+{
+	dlopen bug.
+	Memcheck:Leak
+	...
+	fun:_dlerror_run
+	...
+}
+{
+	Piece of shit log4c crap.
+	Memcheck:Leak
+	...
+	fun:sd_*alloc
+	...
+}
+{
+	Ignore leak due to missing dlclose. We cannot call dlclose when using valgrind.
+	Memcheck:Leak
+	...
+	fun:_dl_open
+	...
+}
