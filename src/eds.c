@@ -19,7 +19,6 @@ struct eds_obj_node {
 	struct eds_obj obj;
 
 	RB_ENTRY(eds_obj_node) rb_entry;
-	uint32_t key;
 };
 
 RB_HEAD(eds_obj_tree, eds_obj_node);
@@ -27,8 +26,8 @@ RB_HEAD(eds_obj_tree, eds_obj_node);
 static inline int eds_obj_cmp(const struct eds_obj_node* o1,
 			      const struct eds_obj_node* o2)
 {
-	uint32_t k1 = o1->key;
-	uint32_t k2 = o2->key;
+	uint32_t k1 = o1->obj.key;
+	uint32_t k2 = o2->obj.key;
 
 	return k1 < k2 ? -1 : k1 > k2;
 }
@@ -45,24 +44,24 @@ struct canopen_eds {
 
 static inline int eds__get_index(const struct eds_obj_node* node)
 {
-	return node->key >> 8;
+	return node->obj.key >> 8;
 }
 
 static inline int eds__get_subindex(const struct eds_obj_node* node)
 {
-	return node->key & 0xff;
+	return node->obj.key & 0xff;
 }
 
 static inline void eds__set_index(struct eds_obj_node* node, int index)
 {
-	node->key &= ~0xffff00;
-	node->key |= index << 8;
+	node->obj.key &= ~0xffff00;
+	node->obj.key |= index << 8;
 }
 
 static inline void eds__set_subindex(struct eds_obj_node* node, int subindex)
 {
-	node->key &= ~0xff;
-	node->key |= subindex;
+	node->obj.key &= ~0xff;
+	node->obj.key |= subindex;
 }
 
 static struct vector eds__db;
@@ -100,15 +99,8 @@ const struct eds_obj* eds_obj_find(const struct canopen_eds* eds,
 				   int index, int subindex)
 {
 	uint32_t key = (index << 8) | subindex;
-	void* cmp = (char*)&key - offsetof(struct eds_obj_node, key);
+	void* cmp = (char*)&key;
 	return (void*)RB_FIND(eds_obj_tree, (void*)&eds->obj_tree, cmp);
-}
-
-void eds_obj_dump(const struct canopen_eds* eds)
-{
-	struct eds_obj_node* obj;
-	RB_FOREACH(obj, eds_obj_tree, (void*)&eds->obj_tree)
-		printf("%x %x\n", eds__get_index(obj), eds__get_subindex(obj));
 }
 
 static inline int eds__extension_matches(const char* path, const char* ext)
@@ -198,7 +190,7 @@ static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
 
 		obj->obj.type = strtoul(type, NULL, 0);
 		obj->obj.access = eds__get_access_type(access);
-		obj->key = (index << 8) | subindex;
+		obj->obj.key = (index << 8) | subindex;
 		eds__insert(eds, obj);
 	}
 
@@ -325,3 +317,13 @@ void eds_db_unload(void)
 	vector_destroy(&eds__db);
 }
 
+const struct eds_obj* eds_obj_first(const struct canopen_eds* eds)
+{
+	return (void*)RB_MIN(eds_obj_tree, (void*)&eds->obj_tree);
+}
+
+const struct eds_obj* eds_obj_next(const struct canopen_eds* eds,
+				   const struct eds_obj* obj)
+{
+	return (void*)RB_NEXT(eds_obj_tree, &eds->obj_tree, (void*)obj);
+}
