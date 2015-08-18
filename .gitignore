@@ -3,3 +3,5 @@
 *.swp
 tst/test_*
 fakenode
+mcv14.lua
+bin/*
