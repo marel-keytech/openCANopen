@@ -11,6 +11,9 @@
 #define SDO_REQ_TIMEOUT 1000 /* ms */
 #define SDO_REQ_ASYNC_PRIO 1000
 
+/* Index 0 is unused */
+static struct sdo_req_queue sdo_req__queues[128];
+
 struct sdo_req* sdo_req_new(struct sdo_req_info* info)
 {
 	struct sdo_req* self = malloc(sizeof(*self));
@@ -37,8 +40,8 @@ void sdo_req_free(struct sdo_req* self)
 	free(self);
 }
 
-int sdo_req_queue_init(struct sdo_req_queue* self, int fd, int nodeid,
-		       size_t limit)
+int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
+			size_t limit)
 {
 	memset(self, 0, sizeof(*self));
 
@@ -46,6 +49,7 @@ int sdo_req_queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 		return -1;
 
 	self->limit = limit;
+	self->nodeid = nodeid;
 
 	pthread_mutex_init(&self->mutex, NULL);
 	TAILQ_INIT(&self->list);
@@ -53,7 +57,7 @@ int sdo_req_queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 	return 0;
 }
 
-void sdo_req_queue_clear(struct sdo_req_queue* self)
+void sdo_req__queue_clear(struct sdo_req_queue* self)
 {
 	while (!TAILQ_EMPTY(&self->list)) {
 		struct sdo_req* req = TAILQ_FIRST(&self->list);
@@ -62,11 +66,40 @@ void sdo_req_queue_clear(struct sdo_req_queue* self)
 	}
 }
 
-void sdo_req_queue_destroy(struct sdo_req_queue* self)
+void sdo_req__queue_destroy(struct sdo_req_queue* self)
 {
 	sdo_async_destroy(&self->sdo_client);
-	sdo_req_queue_clear(self);
+	sdo_req__queue_clear(self);
 	pthread_mutex_destroy(&self->mutex);
+}
+
+int sdo_req_queues_init(int fd, size_t limit)
+{
+	size_t i;
+
+	for (i = 1; i < 128; ++i)
+		if (sdo_req__queue_init(&sdo_req__queues[i], fd, i, limit) < 0)
+			goto failure;
+
+	return 0;
+
+failure:
+	for (--i; i > 0; --i)
+		sdo_req__queue_destroy(&sdo_req__queues[i]);
+	return -1;
+}
+
+void sdo_req_queues_cleanup()
+{
+	size_t i;
+	for (i = 1; i < 128; ++i)
+		sdo_req__queue_destroy(&sdo_req__queues[i]);
+}
+
+struct sdo_req_queue* sdo_req_queue_get(int nodeid)
+{
+	assert(1 <= nodeid && nodeid <= 127);
+	return &sdo_req__queues[nodeid];
 }
 
 void sdo_req_queue__lock(struct sdo_req_queue* self)

@@ -62,8 +62,6 @@ struct canopen_node {
 
 	struct frame_fifo frame_fifo;
 
-	struct sdo_req_queue sdo_queue;
-
 	int device_type;
 	int is_heartbeat_supported;
 
@@ -138,8 +136,6 @@ void clean_node_name(char* name, size_t size)
 
 struct sdo_req* sdo_read(int nodeid, int index, int subindex)
 {
-	struct canopen_node* node = &node_[nodeid];
-
 	struct sdo_req_info info = {
 		.type = SDO_REQ_UPLOAD,
 		.index = index,
@@ -150,7 +146,7 @@ struct sdo_req* sdo_read(int nodeid, int index, int subindex)
 	if (!req)
 		return NULL;
 
-	if (sdo_req_start(req, &node->sdo_queue) < 0)
+	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) < 0)
 		goto done;
 
 	sdo_req_wait(req);
@@ -210,7 +206,6 @@ static inline uint32_t get_revision_number(int nodeid)
 
 static inline int set_heartbeat_period(int nodeid, uint16_t period)
 {
-	struct canopen_node* node = &node_[nodeid];
 	int rc = -1;
 
 	struct sdo_req_info info = {
@@ -225,7 +220,7 @@ static inline int set_heartbeat_period(int nodeid, uint16_t period)
 	if (!req)
 		return -1;
 
-	if (sdo_req_start(req, &node->sdo_queue) < 0)
+	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) < 0)
 		goto failure;
 
 	sdo_req_wait(req);
@@ -533,7 +528,8 @@ static int handle_heartbeat(struct canopen_node* node,
 
 static void handle_sdo(struct canopen_node* node, const struct can_frame* cf)
 {
-	struct sdo_async* sdo_proc = &node->sdo_queue.sdo_client;
+	int nodeid = get_node_id(node);
+	struct sdo_async* sdo_proc = &sdo_req_queue_get(nodeid)->sdo_client;
 	sdo_async_feed(sdo_proc, cf);
 }
 
@@ -731,9 +727,7 @@ static int master_set_node_state(int nodeid, int state)
 static inline
 struct canopen_node* get_node_from_sdo_queue(const struct sdo_req_queue* queue)
 {
-	size_t offset = offsetof(struct canopen_node, sdo_queue);
-	size_t addr = (size_t)queue;
-	return (struct canopen_node*)(addr - offset);
+	return &node_[queue->nodeid];
 }
 
 static void on_master_sdo_request_done(struct sdo_req* req)
@@ -759,8 +753,6 @@ static void on_master_sdo_request_done(struct sdo_req* req)
 
 static int master_request_sdo(int nodeid, int index, int subindex)
 {
-	struct canopen_node* node = &node_[nodeid];
-
 	struct sdo_req_info info = {
 		.type = SDO_REQ_UPLOAD,
 		.index = index,
@@ -772,7 +764,7 @@ static int master_request_sdo(int nodeid, int index, int subindex)
 	if (!req)
 		return -1;
 
-	if (sdo_req_start(req, &node->sdo_queue) >= 0)
+	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) >= 0)
 		return 0;
 
 	sdo_req_free(req);
@@ -787,8 +779,6 @@ static void on_master_sdo_send_done(struct sdo_req* req)
 static int master_send_sdo(int nodeid, int index, int subindex,
 			   unsigned char* data, size_t size)
 {
-	struct canopen_node* node = &node_[nodeid];
-
 	struct sdo_req_info info = {
 		.type = SDO_REQ_DOWNLOAD,
 		.index = index,
@@ -802,7 +792,7 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 	if (!req)
 		return -1;
 
-	if (sdo_req_start(req, &node->sdo_queue) >= 0)
+	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) >= 0)
 		return 0;
 
 	sdo_req_free(req);
@@ -848,14 +838,6 @@ static void* master_iface_init(int nodeid)
 	return legacy_master_iface_new(&cb);
 }
 
-static int init_sdo_queue(struct canopen_node* node)
-{
-	struct sdo_req_queue* queue = &node->sdo_queue;
-	int nodeid = get_node_id(node);
-
-	return sdo_req_queue_init(queue, socket_, nodeid, SDO_FIFO_MAX_LENGTH);
-}
-
 static int init_heartbeat_timer(struct canopen_node* node)
 {
 	struct mloop_timer* timer = mloop_timer_new();
@@ -891,11 +873,8 @@ static int init_node_structure(int nodeid)
 
 	memset(node, 0, sizeof(*node));
 
-	if (init_sdo_queue(node) < 0)
-		return -1;
-
 	if (init_heartbeat_timer(node) < 0)
-		goto heartbeat_timer_failure;
+		return -1;;
 
 	if (init_ping_timer(node) < 0)
 		goto ping_timer_failure;
@@ -904,8 +883,6 @@ static int init_node_structure(int nodeid)
 
 ping_timer_failure:
 	mloop_timer_free(node->heartbeat_timer);
-heartbeat_timer_failure:
-	sdo_req_queue_destroy(&node->sdo_queue);
 	return -1;
 }
 
@@ -915,7 +892,6 @@ static void destroy_node_structure(int nodeid)
 
 	mloop_timer_free(node->ping_timer);
 	mloop_timer_free(node->heartbeat_timer);
-	sdo_req_queue_destroy(&node->sdo_queue);
 }
 
 static int init_all_node_structures()
@@ -1126,7 +1102,7 @@ void sdo_rest_service(struct rest_client* client, const void* content)
 	if (!req)
 		goto req_failure;
 
-	if (sdo_req_start(req, &node->sdo_queue) < 0)
+	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) < 0)
 		goto req_start_failure;
 
 	return;
@@ -1169,7 +1145,11 @@ int main(int argc, char* argv[])
 		goto socketcan_open_failure;
 	}
 
-	profile("Initialize structures...\n");
+	profile("Initialize SDO queues...\n");
+	if (sdo_req_queues_init(socket_, SDO_FIFO_MAX_LENGTH) < 0)
+		goto sdo_req_queues_failure;
+
+	profile("Initialize node structure...\n");
 	if (init_all_node_structures() < 0)
 		goto node_init_failure;
 
@@ -1207,6 +1187,9 @@ driver_manager_failure:
 	destroy_all_node_structures();
 
 node_init_failure:
+	sdo_req_queues_cleanup();
+
+sdo_req_queues_failure:
 	if (socket_ >= 0)
 		close(socket_);
 

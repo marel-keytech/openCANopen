@@ -51,13 +51,13 @@ static int test_req_queue_init_destroy()
 	sdo_async_init_fake.return_val = 0;
 
 	struct sdo_req_queue queue;
-	ASSERT_INT_EQ(0, sdo_req_queue_init(&queue, 4, 42, 10));
+	ASSERT_INT_EQ(0, sdo_req__queue_init(&queue, 4, 42, 10));
 
 	ASSERT_INT_EQ(4, sdo_async_init_fake.arg1_val);
 	ASSERT_INT_EQ(42, sdo_async_init_fake.arg2_val);
 	ASSERT_INT_EQ(10, queue.limit);
 
-	sdo_req_queue_destroy(&queue);
+	sdo_req__queue_destroy(&queue);
 
 	return 0;
 }
@@ -68,7 +68,7 @@ static int test_req_queue_enqueue_dequeue()
 	sdo_async_init_fake.return_val = 0;
 
 	struct sdo_req_queue queue;
-	sdo_req_queue_init(&queue, 0, 0, 3);
+	sdo_req__queue_init(&queue, 0, 0, 3);
 
 	struct sdo_req req[4];
 	memset(req, 0, sizeof(req));
@@ -93,7 +93,7 @@ static int test_req_queue_enqueue_dequeue()
 	ASSERT_PTR_EQ(NULL, req[2].parent);
 	ASSERT_PTR_EQ(NULL, req[3].parent);
 
-	sdo_req_queue_destroy(&queue);
+	sdo_req__queue_destroy(&queue);
 	return 0;
 }
 
