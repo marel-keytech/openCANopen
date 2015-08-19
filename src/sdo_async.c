@@ -222,8 +222,13 @@ int sdo_async__feed_init_dl_response(struct sdo_async* self,
 	if (index != self->index || subindex != self->subindex)
 		return sdo_async__abort(self, SDO_ABORT_GENERAL);
 
-	sdo_async__request_dl_segment(self);
-	self->comm_state = SDO_ASYNC_COMM_SEG_RESPONSE;
+	if (sdo_async__is_expediated(self)) {
+		self->status = SDO_REQ_OK;
+		sdo_async__on_done(self);
+	} else {
+		sdo_async__request_dl_segment(self);
+		self->comm_state = SDO_ASYNC_COMM_SEG_RESPONSE;
+	}
 
 	return 0;
 }
