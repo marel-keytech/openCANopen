@@ -7,6 +7,9 @@
 
 #define MIN(a, b) ((a) < (b)) ? (a) : (b);
 
+#ifndef CAN_MAX_DLC
+#define CAN_MAX_DLC 8
+#endif
 
 static inline int sdo_async__change_state(struct sdo_async* self,
 					  enum sdo_async_state before,
