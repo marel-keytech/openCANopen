@@ -1127,6 +1127,7 @@ int main(int argc, char* argv[])
 	memset(node_, 0, sizeof(node_));
 
 	mloop_ = mloop_default();
+	mloop_ref(mloop_);
 
 	profile("Load EDS database...\n");
 	eds_db_load();
@@ -1199,6 +1200,7 @@ rest_service_failure:
 
 	eds_db_unload();
 
+	mloop_unref(mloop_);
 	return rc;
 }
 
