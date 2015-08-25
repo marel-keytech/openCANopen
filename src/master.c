@@ -112,12 +112,12 @@ static uint64_t start_time_ = 0;
 
 #define profile(fmt, ...) if (is_profiling_on()) tprintf(fmt, ## __VA_ARGS__)
 
-static inline int get_node_id(const struct canopen_node* node)
+static inline int co_master_get_node_id(const struct canopen_node* node)
 {
 	return ((char*)node - (char*)node_) / sizeof(struct canopen_node);
 }
 
-static inline struct canopen_node* get_node(int nodeid)
+static inline struct canopen_node* co_master_get_node(int nodeid)
 {
 	assert(CANOPEN_NODEID_MIN <= nodeid && nodeid <= CANOPEN_NODEID_MAX);
 	return &node_[nodeid];
@@ -257,21 +257,21 @@ done:
 
 static void stop_heartbeat_timer(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->heartbeat_timer;
 	mloop_timer_stop(timer);
 }
 
 static void stop_ping_timer(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->ping_timer;
 	mloop_timer_stop(timer);
 }
 
 static void unload_driver(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 
 	stop_heartbeat_timer(nodeid);
 
@@ -293,12 +293,12 @@ static void unload_driver(int nodeid)
 static void on_heartbeat_timeout(struct mloop_timer* timer)
 {
 	struct canopen_node* node = mloop_timer_get_context(timer);
-	unload_driver(get_node_id(node));
+	unload_driver(co_master_get_node_id(node));
 }
 
 static int start_heartbeat_timer(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->heartbeat_timer;
 	return mloop_start_timer(mloop_, timer);
 }
@@ -312,7 +312,7 @@ static int restart_heartbeat_timer(int nodeid)
 static void on_ping_timeout(struct mloop_timer* timer)
 {
 	struct canopen_node* node = mloop_timer_get_context(timer);
-	int nodeid = get_node_id(node);
+	int nodeid = co_master_get_node_id(node);
 
 	struct can_frame cf = { 0 };
 
@@ -325,7 +325,7 @@ static void on_ping_timeout(struct mloop_timer* timer)
 
 static int start_ping_timer(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->ping_timer;
 	return mloop_start_timer(mloop_, timer);
 }
@@ -337,7 +337,7 @@ ssize_t write_frame(const struct can_frame* frame)
 
 static void start_nodeguarding(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 
 	if (!node->is_heartbeat_supported)
 		start_ping_timer(nodeid);
@@ -366,7 +366,7 @@ static void unload_legacy_module(int device_type, void* driver)
 
 static int load_driver(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 	if (node->driver)
 		unload_driver(nodeid);
 
@@ -414,7 +414,7 @@ failure:
 
 static void initialize_driver(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 	if (legacy_driver_iface_initialize(node->driver) < 0) {
 		unload_legacy_module(node->device_type, node->driver);
 		legacy_master_iface_delete(node->master_iface);
@@ -438,7 +438,7 @@ static void run_net_probe(struct mloop_work* self)
 static void run_load_driver(struct mloop_work* self)
 {
 	struct canopen_node* node = mloop_work_get_context(self);
-	int nodeid = get_node_id(node);
+	int nodeid = co_master_get_node_id(node);
 	load_driver(nodeid);
 	node->is_loading = 0;
 }
@@ -446,7 +446,7 @@ static void run_load_driver(struct mloop_work* self)
 static void on_load_driver_done(struct mloop_work* self)
 {
 	struct canopen_node* node = mloop_work_get_context(self);
-	int nodeid = get_node_id(node);
+	int nodeid = co_master_get_node_id(node);
 
 	if (!node->driver)
 		return;
@@ -461,7 +461,7 @@ static void on_load_driver_done(struct mloop_work* self)
 
 static int schedule_load_driver(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 	if (node->is_loading)
 		return 0;
 
@@ -487,7 +487,7 @@ static int handle_bootup(struct canopen_node* node)
 	if (master_state_ == MASTER_STATE_STARTUP)
 		return 0;
 
-	return schedule_load_driver(get_node_id(node));
+	return schedule_load_driver(co_master_get_node_id(node));
 }
 
 static int handle_emcy(struct canopen_node* node, const struct can_frame* frame)
@@ -521,7 +521,7 @@ static int handle_heartbeat(struct canopen_node* node,
 	if (master_state_ == MASTER_STATE_STARTUP)
 		return 0;
 
-	int nodeid = get_node_id(node);
+	int nodeid = co_master_get_node_id(node);
 
 	restart_heartbeat_timer(nodeid);
 
@@ -534,7 +534,7 @@ static int handle_heartbeat(struct canopen_node* node,
 
 static void handle_sdo(struct canopen_node* node, const struct can_frame* cf)
 {
-	int nodeid = get_node_id(node);
+	int nodeid = co_master_get_node_id(node);
 	struct sdo_async* sdo_proc = &sdo_req_queue_get(nodeid)->sdo_client;
 	sdo_async_feed(sdo_proc, cf);
 }
@@ -576,7 +576,7 @@ static void mux_handler_fn(struct mloop_socket* self)
 	if (!(CANOPEN_NODEID_MIN <= msg.id && msg.id <= CANOPEN_NODEID_MAX))
 		return;
 
-	struct canopen_node* node = get_node(msg.id);
+	struct canopen_node* node = co_master_get_node(msg.id);
 	void* driver = node->driver;
 
 	if (!driver) {
@@ -639,7 +639,7 @@ static void run_bootup(struct mloop_work* self)
 
 	profile("Initialize drivers...\n");
 	for_each_node(i)
-		if (get_node(i)->driver)
+		if (co_master_get_node(i)->driver)
 			initialize_driver(i);
 }
 
@@ -652,12 +652,12 @@ static void on_bootup_done(struct mloop_work* self)
 	 */
 	profile("Start nodes...\n");
 	for_each_node_reverse(i)
-		if (get_node(i)->driver)
+		if (co_master_get_node(i)->driver)
 			net__send_nmt(socket_, NMT_CS_START, i);
 
 	profile("Start node guarding...\n");
 	for_each_node(i)
-		if (get_node(i)->driver)
+		if (co_master_get_node(i)->driver)
 			start_nodeguarding(i);
 
 	profile("Boot-up finished!\n");
@@ -733,7 +733,7 @@ static int master_set_node_state(int nodeid, int state)
 static inline
 struct canopen_node* get_node_from_sdo_queue(const struct sdo_req_queue* queue)
 {
-	return get_node(queue->nodeid);
+	return co_master_get_node(queue->nodeid);
 }
 
 static void on_master_sdo_request_done(struct sdo_req* req)
@@ -875,7 +875,7 @@ static int init_ping_timer(struct canopen_node* node)
 
 static int init_node_structure(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 
 	memset(node, 0, sizeof(*node));
 
@@ -894,7 +894,7 @@ ping_timer_failure:
 
 static void destroy_node_structure(int nodeid)
 {
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 
 	mloop_timer_free(node->ping_timer);
 	mloop_timer_free(node->heartbeat_timer);
@@ -927,7 +927,7 @@ static void unload_all_drivers()
 {
 	int i;
 	for_each_node(i)
-		if(get_node(i)->driver)
+		if(co_master_get_node(i)->driver)
 			unload_driver(i);
 }
 
@@ -1088,7 +1088,7 @@ void sdo_rest_service(struct rest_client* client, const void* content)
 	struct rest_context* context = malloc(sizeof(*context));
 	context->client = client;
 
-	struct canopen_node* node = get_node(nodeid);
+	struct canopen_node* node = co_master_get_node(nodeid);
 
 	const struct canopen_eds* eds = eds_db_find(node->vendor_id,
 						    node->product_code,
