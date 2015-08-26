@@ -92,6 +92,10 @@ tst/test_http: tst/http_test.o src/http.o
 tst/test_ini_parser: tst/ini_parser_test.o src/ini_parser.o
 	$(CC) $^ -o $@
 
+tst/test_conversions: tst/conversions_test.o src/conversions.o src/types.o \
+		      src/byteorder.o
+	$(CC) $^ -lbsd -o $@
+
 .PHONY:
 test: tst/test_sdo_srv tst/test_network tst/test_vector tst/test_sdo_async \
       tst/fuzz_test_sdo_async tst/test_sdo_req tst/test_http \
