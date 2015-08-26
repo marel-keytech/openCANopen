@@ -107,73 +107,36 @@ int canopen_bool_fromstring(struct canopen_data* dst, char* str)
 	return 0;
 }
 
-int canopen_uint_fromstring(struct canopen_data* dst, enum canopen_type type,
-			    char* str)
-{
-	if (*str == '-' || *str == ' ')
-		return -1;
+#define uint64_t_tonumber(str, end) strtoull(str, end, 0);
+#define int64_t_tonumber(str, end) strtoll(str, end, 0);
+#define float_tonumber(str, end) strtof(str, end);
+#define double_tonumber(str, end) strtod(str, end);
 
-	dst->data = &dst->value;
-	dst->size = canopen_type_size(type);
-	dst->value = 0;
+#define tonumber(type, str, end) type ## _tonumber(str, end)
 
-	char* end = NULL;
-	uint64_t host_order = strtoull(str, &end, 0);
-	byteorder(dst->data, &host_order, sizeof(host_order));
-
-	return (*str != '\0' && *end == '\0') ? 0 : -1;
+#define MAKE_FROMSTRING(name, type_, reject) \
+int canopen_ ## name ## _fromstring(struct canopen_data* dst, \
+				    enum canopen_type type, \
+				    char* str) \
+{ \
+	if (reject) \
+		return -1; \
+\
+	dst->data = &dst->value; \
+	dst->size = canopen_type_size(type); \
+	dst->value = 0; \
+\
+	char* end = NULL; \
+	type_ host_order = tonumber(type_, str, &end); \
+	byteorder(dst->data, &host_order, sizeof(host_order)); \
+\
+	return (*str != '\0' && *end == '\0') ? 0 : -1; \
 }
 
-int canopen_int_fromstring(struct canopen_data* dst, enum canopen_type type,
-			   char* str)
-{
-	if (*str == ' ')
-		return -1;
-
-	dst->data = &dst->value;
-	dst->size = canopen_type_size(type);
-	dst->value = 0;
-
-	char* end = NULL;
-	int64_t host_order = strtoll(str, &end, 0);
-	byteorder(dst->data, &host_order, sizeof(host_order));
-
-	return (*str != '\0' && *end == '\0') ? 0 : -1;
-}
-
-int canopen_float_fromstring(struct canopen_data* dst, enum canopen_type type,
-			     char* str)
-{
-	if (*str == ' ')
-		return -1;
-
-	dst->data = &dst->value;
-	dst->size = canopen_type_size(type);
-	dst->value = 0;
-
-	char* end = NULL;
-	float host_order = strtof(str, &end);
-	byteorder(dst->data, &host_order, sizeof(host_order));
-
-	return (*str != '\0' && *end == '\0') ? 0 : -1;
-}
-
-int canopen_double_fromstring(struct canopen_data* dst, enum canopen_type type,
-			      char* str)
-{
-	if (*str == ' ')
-		return -1;
-
-	dst->data = &dst->value;
-	dst->size = canopen_type_size(type);
-	dst->value = 0;
-
-	char* end = NULL;
-	double host_order = strtod(str, &end);
-	byteorder(dst->data, &host_order, sizeof(host_order));
-
-	return (*str != '\0' && *end == '\0') ? 0 : -1;
-}
+MAKE_FROMSTRING(uint, uint64_t, *str == ' ' || *str == '-')
+MAKE_FROMSTRING(int, int64_t, *str == ' ')
+MAKE_FROMSTRING(float, float, *str == ' ')
+MAKE_FROMSTRING(double, double, *str == ' ')
 
 int canopen_string_fromstring(struct canopen_data* dst, char* str)
 {
