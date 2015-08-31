@@ -925,7 +925,8 @@ int main(int argc, char* argv[])
 	if (rest_init() < 0)
 		return 1;
 
-	if (rest_register_service(HTTP_GET, "sdo", sdo_rest_service) < 0)
+	if (rest_register_service(HTTP_GET | HTTP_PUT,
+				  "sdo", sdo_rest_service) < 0)
 		goto rest_service_failure;
 
 	profile("Open interface...\n");

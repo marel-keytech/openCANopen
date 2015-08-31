@@ -8,24 +8,20 @@
 #include "canopen/master.h"
 #include "vector.h"
 #include "rest.h"
+#include "conversions.h"
+#include "string-utils.h"
 
 #define is_in_range(x, min, max) ((min) <= (x) && (x) <= (max))
-
-struct sdo_rest_context {
-	struct rest_client* client;
-	const struct eds_obj* eds_obj;
-};
 
 struct sdo_rest_path {
 	int nodeid, index, subindex;
 };
 
-static inline int str_to_number(unsigned int* dst, const char* str, int base)
-{
-	char* end = NULL;
-	*dst = strtoul(str, &end, base);
-	return (*str != '\0' && *end == '\0') ? 0 : -1;
-}
+struct sdo_rest_context {
+	struct rest_client* client;
+	const struct eds_obj* eds_obj;
+	struct sdo_rest_path path;
+};
 
 static int sdo_rest__convert_path(struct sdo_rest_path* dst,
 				  const struct rest_client* client)
@@ -53,8 +49,9 @@ static const struct canopen_eds* sdo_rest__find_eds(int nodeid)
 	return eds_db_find(node->vendor_id, node->product_code, -1);
 }
 
-static struct sdo_rest_context* sdo_rest_context_new(struct rest_client* client,
-						     const struct eds_obj* obj)
+static struct sdo_rest_context*
+sdo_rest_context_new(struct rest_client* client, const struct eds_obj* obj,
+		     const struct sdo_rest_path* path)
 {
 	struct sdo_rest_context* self = malloc(sizeof(*self));
 	if (!self)
@@ -64,6 +61,7 @@ static struct sdo_rest_context* sdo_rest_context_new(struct rest_client* client,
 
 	self->client = client;
 	self->eds_obj = obj;
+	self->path = *path;
 
 	return self;
 }
@@ -97,76 +95,19 @@ static void sdo_rest_server_error(struct rest_client* client,
 	client->state = REST_CLIENT_DONE;
 }
 
-static void on_sdo_rest_string(struct sdo_req* req, struct rest_client* client)
+static void sdo_rest_bad_request(struct rest_client* client,
+				  const char* message)
 {
 	struct rest_reply_data reply = {
-		.status_code = "200 OK",
+		.status_code = "400 Bad Request",
 		.content_type = "text/plain",
-		.content_length = req->data.index,
-		.content = req->data.data
+		.content_length = strlen(message),
+		.content = message
 	};
 
 	rest_reply(client->output, &reply);
-}
 
-static void on_sdo_rest_u64(struct sdo_req* req, struct rest_client* client)
-{
-	char buffer[32];
-
-	uint64_t number = 0;
-
-	byteorder2(&number, req->data.data, sizeof(number), req->data.index);
-
-	sprintf(buffer, "%llu\r\n", number);
-
-	struct rest_reply_data reply = {
-		.status_code = "200 OK",
-		.content_type = "text/plain",
-		.content_length = strlen(buffer),
-		.content = buffer
-	};
-
-	rest_reply(client->output, &reply);
-}
-
-static void on_sdo_rest_s64(struct sdo_req* req, struct rest_client* client)
-{
-	char buffer[32];
-
-	int64_t number = 0;
-
-	byteorder2(&number, req->data.data, sizeof(number), req->data.index);
-
-	sprintf(buffer, "%lld\r\n", number);
-
-	struct rest_reply_data reply = {
-		.status_code = "200 OK",
-		.content_type = "text/plain",
-		.content_length = strlen(buffer),
-		.content = buffer
-	};
-
-	rest_reply(client->output, &reply);
-}
-
-static void on_sdo_rest_r64(struct sdo_req* req, struct rest_client* client)
-{
-	char buffer[32];
-
-	double number = 0;
-
-	byteorder2(&number, req->data.data, sizeof(number), req->data.index);
-
-	sprintf(buffer, "%lf\r\n", number);
-
-	struct rest_reply_data reply = {
-		.status_code = "200 OK",
-		.content_type = "text/plain",
-		.content_length = strlen(buffer),
-		.content = buffer
-	};
-
-	rest_reply(client->output, &reply);
+	client->state = REST_CLIENT_DONE;
 }
 
 static void on_sdo_rest_upload_done(struct sdo_req* req)
@@ -181,14 +122,27 @@ static void on_sdo_rest_upload_done(struct sdo_req* req)
 		goto done;
 	}
 
-	if (canopen_type_is_signed_integer(eds_obj->type))
-		on_sdo_rest_s64(req, client);
-	else if (canopen_type_is_unsigned_integer(eds_obj->type))
-		on_sdo_rest_u64(req, client);
-	else if (canopen_type_is_real(eds_obj->type))
-		on_sdo_rest_r64(req, client);
-	else if (canopen_type_is_string(eds_obj->type))
-		on_sdo_rest_string(req, client);
+	struct canopen_data data = {
+		.type = eds_obj->type,
+		.data = req->data.data,
+		.size = req->data.index
+	};
+
+	char buffer[256];
+	char* message = canopen_data_tostring(buffer, sizeof(buffer), &data);
+	if (!message) {
+		sdo_rest_server_error(client, "Data conversion failed\r\n");
+		goto done;
+	}
+
+	struct rest_reply_data reply = {
+		.status_code = "200 OK",
+		.content_type = "text/plain",
+		.content_length = strlen(message),
+		.content = message
+	};
+
+	rest_reply(client->output, &reply);
 
 	client->state = REST_CLIENT_DONE;
 
@@ -197,7 +151,144 @@ done:
 	sdo_req_free(req);
 }
 
-static void sdo_rest__get(struct rest_client* client)
+static int sdo_rest__get(struct sdo_rest_context* context)
+{
+	struct rest_client* client = context->client;
+	struct sdo_rest_path* path = &context->path;
+	const struct eds_obj* eds_obj = context->eds_obj;
+
+	if (!(eds_obj->access & (EDS_OBJ_R | EDS_OBJ_CONST))) {
+		sdo_rest_bad_request(client, "Object is not readable\r\n");
+		return -1;
+	}
+
+	struct sdo_req_info info = {
+		.type = SDO_REQ_UPLOAD,
+		.index = path->index,
+		.subindex = path->subindex,
+		.on_done = on_sdo_rest_upload_done,
+		.context = context
+	};
+
+	struct sdo_req* req = sdo_req_new(&info);
+	if (!req) {
+		sdo_rest_server_error(client, "Out of memory\r\n");
+		return -1;
+	}
+
+	if (sdo_req_start(req, sdo_req_queue_get(path->nodeid)) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	sdo_req_free(req);
+
+	sdo_rest_server_error(client, "Failed to start sdo request\r\n");
+	return -1;
+}
+
+static void on_sdo_rest_download_done(struct sdo_req* req)
+{
+	struct sdo_rest_context* context = req->context;
+	assert(context);
+	struct rest_client* client = context->client;
+
+	if (req->status != SDO_REQ_OK) {
+		sdo_rest_server_error(client, sdo_strerror(req->abort_code));
+		goto done;
+	}
+
+	struct rest_reply_data reply = {
+		.status_code = "200 OK",
+		.content_type = "text/plain",
+		.content_length = 0,
+		.content = ""
+	};
+
+	rest_reply(client->output, &reply);
+
+	client->state = REST_CLIENT_DONE;
+
+done:
+	free(context);
+	sdo_req_free(req);
+}
+
+static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
+{
+	struct rest_client* client = context->client;
+	struct sdo_rest_path* path = &context->path;
+	const struct eds_obj* eds_obj = context->eds_obj;
+	size_t content_length = client->req.content_length;
+
+	if (!(eds_obj->access & EDS_OBJ_W)) {
+		sdo_rest_bad_request(client, "Object is not writable\r\n");
+		return -1;
+	}
+
+	struct canopen_data data = { 0 };
+
+	char* input = malloc(content_length + 1);
+	if (!input) {
+		sdo_rest_server_error(client, "Out of memory\r\n");
+		goto failure;
+	}
+
+	memcpy(input, content, content_length);
+	input[content_length] = '\0';
+
+	int r = canopen_data_fromstring(&data, eds_obj->type,
+					string_trim(input));
+	free(input);
+
+	if (r < 0) {
+		sdo_rest_server_error(client, "Data conversion failed\r\n");
+		return -1;
+	}
+
+	struct sdo_req_info info = {
+		.type = SDO_REQ_DOWNLOAD,
+		.index = path->index,
+		.subindex = path->subindex,
+		.on_done = on_sdo_rest_download_done,
+		.context = context,
+		.dl_data = data.data,
+		.dl_size = data.size
+	};
+
+	struct sdo_req* req = sdo_req_new(&info);
+	if (!req) {
+		sdo_rest_server_error(client, "Out of memory\r\n");
+		return -1;
+	}
+
+	if (sdo_req_start(req, sdo_req_queue_get(path->nodeid)) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	sdo_req_free(req);
+
+	sdo_rest_server_error(client, "Failed to start sdo request\r\n");
+	return -1;
+}
+
+int sdo_rest__process(struct sdo_rest_context* context, const void* content)
+{
+	struct rest_client* client = context->client;
+
+	switch (client->req.method) {
+	case HTTP_GET: return sdo_rest__get(context);
+	case HTTP_PUT: return sdo_rest__put(context, content);
+	}
+
+	abort();
+	return -1;
+}
+
+void sdo_rest_service(struct rest_client* client, const void* content)
 {
 	if (client->req.url_index < 4) {
 		sdo_rest_not_found(client, "Wrong URL format. Must be /sdo/<nodeid>/<index>/<subindex>\r\n");
@@ -223,52 +314,13 @@ static void sdo_rest__get(struct rest_client* client)
 		return;
 	}
 
-	struct sdo_rest_context* context = sdo_rest_context_new(client,eds_obj);
+	struct sdo_rest_context* context;
+	context = sdo_rest_context_new(client, eds_obj, &path);
 	if (!context) {
 		sdo_rest_server_error(client, "Out of memory\r\n");
 		return;
 	}
 
-	struct sdo_req_info info = {
-		.type = SDO_REQ_UPLOAD,
-		.index = path.index,
-		.subindex = path.subindex,
-		.on_done = on_sdo_rest_upload_done,
-		.context = context
-	};
-
-	struct sdo_req* req = sdo_req_new(&info);
-	if (!req)
-		goto req_failure;
-
-	if (sdo_req_start(req, sdo_req_queue_get(path.nodeid)) < 0)
-		goto req_start_failure;
-
-	return;
-
-req_start_failure:
-	sdo_req_free(req);
-req_failure:
-	free(context);
-
-	sdo_rest_server_error(client, "Failed to start sdo request\r\n");
-}
-
-static void sdo_rest__put(struct rest_client* client, const void* content)
-{
-}
-
-void sdo_rest_service(struct rest_client* client, const void* content)
-{
-	switch (client->req.method) {
-	case HTTP_GET:
-		sdo_rest__get(client);
-		break;
-	case HTTP_PUT:
-		sdo_rest__put(client, content);
-		break;
-	default:
-		abort();
-		break;
-	}
+	if (sdo_rest__process(context, content) < 0)
+		free(context);
 }
