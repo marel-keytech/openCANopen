@@ -32,8 +32,8 @@ bin/canopen-master: src/master.o src/sdo_common.o src/sdo_req.o \
 		    src/sdo_async.o src/socketcan.o src/legacy-driver.o \
 		    src/DriverManager.o src/Driver.o src/rest.o src/http.o \
 		    src/eds.o src/ini_parser.o src/types.o src/sdo-rest.o \
-		    src/conversions.o
-	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lbsd -o $@
+		    src/conversions.o src/strlcpy.o
+	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -o $@
 
 bin/canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
 		  src/network.o src/canopen.o src/socketcan.o
@@ -94,8 +94,8 @@ tst/test_ini_parser: tst/ini_parser_test.o src/ini_parser.o
 	$(CC) $^ -o $@
 
 tst/test_conversions: tst/conversions_test.o src/conversions.o src/types.o \
-		      src/byteorder.o
-	$(CC) $^ -lbsd -o $@
+		      src/byteorder.o src/strlcpy.o
+	$(CC) $^ -o $@
 
 tst/test_string-utils: tst/string-utils_test.o
 	$(CC) $^ -o $@
