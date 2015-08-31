@@ -1,7 +1,9 @@
 #include <stdio.h>
-#include <bsd/string.h>
+#include <string.h>
 #include "canopen/byteorder.h"
 #include "conversions.h"
+
+size_t strlcpy(char* dst, const char* src, size_t dsize);
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
