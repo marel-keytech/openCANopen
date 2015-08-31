@@ -374,7 +374,7 @@ int http__dummy_kv(struct httplex* lex)
 	if (tok->type != HTTPLEX_VALUE)
 		return 0;
 
-	return 1;
+	return httplex_accept_token(lex);
 }
 
 
