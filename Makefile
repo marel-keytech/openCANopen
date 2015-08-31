@@ -96,6 +96,9 @@ tst/test_conversions: tst/conversions_test.o src/conversions.o src/types.o \
 		      src/byteorder.o
 	$(CC) $^ -lbsd -o $@
 
+tst/test_string-utils: tst/string-utils_test.o
+	$(CC) $^ -o $@
+
 .PHONY:
 test: tst/test_sdo_srv tst/test_network tst/test_vector tst/test_sdo_async \
       tst/fuzz_test_sdo_async tst/test_sdo_req tst/test_http \
