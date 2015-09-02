@@ -7,7 +7,7 @@ else
 RELEASE_FLAGS := -ggdb -O0
 endif
 
-COMMON_FLAGS := -Wall -D_GNU_SOURCE -Iinc/ $(RELEASE_FLAGS)
+COMMON_FLAGS := -Wextra -Wno-cpp -D_GNU_SOURCE -Iinc/ $(RELEASE_FLAGS)
 CFLAGS := -std=gnu99 $(COMMON_FLAGS) -fexceptions
 CXXFLAGS := -std=gnu++11 $(COMMON_FLAGS)
 LDFLAGS := -lrt

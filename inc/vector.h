@@ -6,7 +6,7 @@
 
 struct vector {
 	void* data;
-	int index;
+	size_t index;
 	size_t size;
 };
 

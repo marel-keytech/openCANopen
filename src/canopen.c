@@ -78,7 +78,7 @@ int canopen_get_object_type(struct canopen_msg* msg,
 }
 
 int canopen_get_object_type_simple(struct canopen_msg* msg,
-				   struct can_frame* frame, int nodeid)
+				   struct can_frame* frame, unsigned int nodeid)
 {
 	enum canopen_range cob = (enum canopen_range)frame->can_id;
 

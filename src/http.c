@@ -423,7 +423,7 @@ void http_req_free(struct http_req* req)
 {
 	free(req->content_type);
 
-	for (int i = 0; i < req->url_index; ++i)
+	for (size_t i = 0; i < req->url_index; ++i)
 		free(req->url[i]);
 }
 

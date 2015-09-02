@@ -100,7 +100,7 @@ static uint64_t start_time_ = 0;
 
 void clean_node_name(char* name, size_t size)
 {
-	int i, k = 0;
+	size_t i, k = 0;
 
 	for (i = 0; i < size && name[i]; ++i)
 		if (isalnum(name[i])) {

@@ -73,11 +73,12 @@ static inline struct canopen_eds* eds__db_get(int index)
 
 const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 {
-	for (int i = 0; i < eds__db.index / sizeof(struct canopen_eds); ++i) {
+	for (size_t i = 0; i < eds__db.index / sizeof(struct canopen_eds); ++i)
+	{
 		const struct canopen_eds* eds = eds__db_get(i);
-		if (vendor   > 0 && vendor   != eds->vendor)   continue;
-		if (product  > 0 && product  != eds->product)  continue;
-		if (revision > 0 && revision != eds->revision) continue;
+		if (vendor   > 0 && vendor   != (int)eds->vendor)   continue;
+		if (product  > 0 && product  != (int)eds->product)  continue;
+		if (revision > 0 && revision != (int)eds->revision) continue;
 		return eds;
 	}
 
@@ -307,7 +308,7 @@ failure:
 
 static void eds__db_clear(void)
 {
-	for (int i = 0; i < eds__db.index / sizeof(struct canopen_eds); ++i)
+	for (size_t i = 0; i < eds__db.index / sizeof(struct canopen_eds); ++i)
 		eds__clear(eds__db_get(i));
 }
 

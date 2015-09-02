@@ -247,7 +247,7 @@ void ini_destroy(struct ini_file* file)
 		struct ini_key_value** kv = section[i]->kv.data;
 		size_t kv_end = section[i]->kv.index / sizeof(void*);
 
-		for (int j = 0; j < kv_end; ++j)
+		for (size_t j = 0; j < kv_end; ++j)
 			free(kv[j]);
 
 		vector_destroy(&section[i]->kv);

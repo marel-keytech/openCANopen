@@ -26,7 +26,7 @@ enum sdo_async_comm_state {
 
 struct sdo_async {
 	int fd;
-	int nodeid;
+	unsigned int nodeid;
 	enum sdo_req_type type;
 	enum sdo_async_state state;
 	enum sdo_async_comm_state comm_state;
@@ -35,7 +35,7 @@ struct sdo_async {
 	sdo_async_fn on_done;
 	int index, subindex;
 	int is_toggled;
-	int pos;
+	size_t pos;
 	enum sdo_req_status status;
 	enum sdo_abort_code abort_code;
 };
