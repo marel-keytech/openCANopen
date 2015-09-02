@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <mloop.h>
 
 #include "canopen/sdo_req.h"
 #include "canopen/eds.h"
@@ -21,6 +22,11 @@ struct sdo_rest_context {
 	struct rest_client* client;
 	const struct eds_obj* eds_obj;
 	struct sdo_rest_path path;
+};
+
+struct sdo_rest_eds_context {
+	struct rest_client* client;
+	const struct canopen_eds* eds;
 };
 
 static int sdo_rest__convert_path(struct sdo_rest_path* dst,
@@ -288,8 +294,115 @@ int sdo_rest__process(struct sdo_rest_context* context, const void* content)
 	return -1;
 }
 
+void sdo_rest__eds_job(struct mloop_work* work)
+{
+	char* buffer = NULL;
+	size_t size = 0;
+	size_t len = 0;
+
+	struct sdo_rest_eds_context* context = mloop_work_get_context(work);
+	const struct canopen_eds* eds = context->eds;
+	struct rest_client* client = context->client;
+
+	FILE* out = open_memstream(&buffer, &size);
+	if (!out) {
+		sdo_rest_server_error(client, "Out of memory\r\n");
+		return;
+	}
+
+
+	len += fprintf(out, "{\r\n");
+	const struct eds_obj* obj = eds_obj_first(eds);
+	if (!obj)
+		goto done;
+
+	goto first_object;
+	do {
+		len += fprintf(out, ",\r\n");
+first_object:
+		len += fprintf(out, "\t\"%#x:%#x\": {\r\n", eds_obj_index(obj),
+			       eds_obj_subindex(obj));
+		len += fprintf(out, "\t\t\"type\": %u,\r\n", obj->type);
+		len += fprintf(out, "\t\t\"access\": {\r\n");
+		len += fprintf(out, "\t\t\t\"is_readable\": %s,\r\n",
+			       obj->access & EDS_OBJ_R ? "true" : "false");
+		len += fprintf(out, "\t\t\t\"is_writable\": %s,\r\n",
+			       obj->access & EDS_OBJ_W ? "true" : "false");
+		len += fprintf(out, "\t\t\t\"is_const\": %s\r\n",
+			       obj->access & EDS_OBJ_CONST ? "true" : "false");
+		len += fprintf(out, "\t\t}\r\n");
+		len += fprintf(out, "\t}");
+		obj = eds_obj_next(eds, obj);
+	} while (obj);
+done:
+	len += fprintf(out, "\r\n}\r\n");
+
+	fclose(out);
+
+	struct rest_reply_data reply = {
+		.status_code = "200 OK",
+		.content_type = "application/json",
+		.content_length = len,
+		.content = buffer
+	};
+
+	rest_reply(client->output, &reply);
+
+	client->state = REST_CLIENT_DONE;
+
+	free(buffer);
+	return;
+
+failure:
+	fclose(out);
+	free(buffer);
+	return;
+}
+
+int sdo_rest__send_eds(struct rest_client* client)
+{
+	unsigned int nodeid = strtoul(client->req.url[1], NULL, 10);
+	if (!is_in_range(nodeid, CANOPEN_NODEID_MIN, CANOPEN_NODEID_MAX)) {
+		sdo_rest_not_found(client, "URL is out of range\r\n");
+		return -1;
+	}
+
+	const struct canopen_eds* eds = sdo_rest__find_eds(nodeid);
+	if (!eds) {
+		sdo_rest_server_error(client, "Could not find EDS for node\r\n");
+		return -1;
+	}
+
+	struct sdo_rest_eds_context* context = malloc(sizeof(*context));
+	context->client = client;
+	context->eds = eds;
+
+	struct mloop_work* work = mloop_work_new();
+	if (!work) {
+		sdo_rest_server_error(client, "Out of memory\r\n");
+		goto failure;
+	}
+
+	mloop_work_set_context(work, context, free);
+	mloop_work_set_work_fn(work, sdo_rest__eds_job);
+	if (mloop_start_work(mloop_default(), work) < 0)
+		sdo_rest_server_error(client, "Failed to schedule response\r\n");
+
+	mloop_work_unref(work);
+	return 0;
+
+failure:
+	free(context);
+	return -1;
+}
+
 void sdo_rest_service(struct rest_client* client, const void* content)
 {
+	if (client->req.url_index == 2 && client->req.method == HTTP_GET) {
+		sdo_rest__send_eds(client);
+		return;
+	}
+
 	if (client->req.url_index < 4) {
 		sdo_rest_not_found(client, "Wrong URL format. Must be /sdo/<nodeid>/<index>/<subindex>\r\n");
 		return;
