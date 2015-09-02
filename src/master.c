@@ -23,6 +23,8 @@
 
 #include "legacy-driver.h"
 
+#define __unused __attribute__((unused))
+
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 #define SDO_FIFO_MAX_LENGTH 1024
@@ -642,7 +644,7 @@ static void on_bootup_done(struct mloop_work* self)
 static void on_net_probe_done(struct mloop_work* self)
 {
 	profile("Initialize multiplexer...\n");
-	int rc = init_multiplexer();
+	int __unused rc = init_multiplexer();
 	assert(rc == 0);
 
 	struct mloop_work* work = mloop_work_new();

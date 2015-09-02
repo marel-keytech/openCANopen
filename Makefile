@@ -2,7 +2,7 @@ CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
 
 ifdef RELEASE
-RELEASE_FLAGS := -O3
+RELEASE_FLAGS := -O3 -DNDEBUG
 else
 RELEASE_FLAGS := -ggdb -O0
 endif
