@@ -15,7 +15,6 @@
 #include "vector.h"
 #include "rest.h"
 
-#define REST_PORT 9191
 #define REST_BACKLOG 16
 
 struct rest_service {
@@ -359,13 +358,13 @@ int rest_register_service(enum http_method method, const char* path, rest_fn fn)
 	return 0;
 }
 
-int rest_init()
+int rest_init(int port)
 {
 	struct mloop* mloop = mloop_default();
 
 	SLIST_INIT(&rest_service_list_);
 
-	int lfd = rest__open_server(REST_PORT);
+	int lfd = rest__open_server(port);
 	if (lfd < 0)
 		return -1;
 

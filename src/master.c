@@ -26,6 +26,7 @@
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 #define SDO_FIFO_MAX_LENGTH 1024
+#define REST_DEFAULT_PORT 9191
 
 #define SDO_TIMEOUT 100 /* ms */
 #define HEARTBEAT_PERIOD 10000 /* ms */
@@ -959,7 +960,7 @@ int main(int argc, char* argv[])
 	size_t worker_stack_size = 0;
 	size_t job_queue_length = 64;
 	size_t sdo_queue_length = SDO_FIFO_MAX_LENGTH;
-	int rest_port = 9191;         /* TODO */
+	int rest_port = REST_DEFAULT_PORT;
 
 	static const struct option long_options[] = {
 		{ "worker-threads",    required_argument, 0, 'W' },
@@ -1009,7 +1010,7 @@ int main(int argc, char* argv[])
 	eds_db_load();
 
 	profile("Initialize and register SDO REST service...\n");
-	if (rest_init() < 0)
+	if (rest_init(rest_port) < 0)
 		goto rest_init_failure;
 
 	if (rest_register_service(HTTP_GET | HTTP_PUT,

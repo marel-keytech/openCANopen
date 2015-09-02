@@ -27,7 +27,7 @@ struct rest_client {
 
 typedef void (*rest_fn)(struct rest_client* client, const void* content);
 
-int rest_init();
+int rest_init(int port);
 void rest_cleanup();
 
 int rest_register_service(enum http_method method, const char* path,
