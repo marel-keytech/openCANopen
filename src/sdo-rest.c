@@ -25,6 +25,7 @@ struct sdo_rest_context {
 };
 
 struct sdo_rest_eds_context {
+	unsigned int nodeid;
 	struct rest_client* client;
 	const struct canopen_eds* eds;
 };
@@ -294,6 +295,47 @@ int sdo_rest__process(struct sdo_rest_context* context, const void* content)
 	return -1;
 }
 
+ssize_t sdo_rest__read_value(FILE* out, unsigned int nodeid, int index,
+			     int subindex, enum canopen_type type)
+{
+	struct sdo_req_info info = {
+		.type = SDO_REQ_UPLOAD,
+		.index = index,
+		.subindex = subindex
+	};
+
+	struct sdo_req* req = sdo_req_new(&info);
+	if (!req)
+		goto nomem;
+
+	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) < 0)
+		goto failure;
+
+	sdo_req_wait(req);
+
+	if (req->status != SDO_REQ_OK)
+		goto failure;
+
+	struct canopen_data data = {
+		.type = type,
+		.data = req->data.data,
+		.size = req->data.index
+	};
+
+	char buffer[256];
+	char* str = canopen_data_tostring(buffer, sizeof(buffer), &data);
+	if (!str)
+		goto failure;
+
+	sdo_req_free(req);
+	return fprintf(out, "\"%s\"", str);
+
+failure:
+	sdo_req_free(req);
+nomem:
+	return fprintf(out, "null");
+}
+
 void sdo_rest__eds_job(struct mloop_work* work)
 {
 	char* buffer = NULL;
@@ -303,8 +345,12 @@ void sdo_rest__eds_job(struct mloop_work* work)
 	struct sdo_rest_eds_context* context = mloop_work_get_context(work);
 	const struct canopen_eds* eds = context->eds;
 	struct rest_client* client = context->client;
+	unsigned int nodeid = context->nodeid;
 
 	int is_const, is_readable, is_writable;
+	int with_value = http_req_query(&client->req, "with_value") != NULL;
+
+	int index, subindex;
 
 	FILE* out = open_memstream(&buffer, &size);
 	if (!out) {
@@ -325,19 +371,27 @@ first_object:
 		is_readable = !!(obj->access & EDS_OBJ_R);
 		is_writable = !!(obj->access & EDS_OBJ_W);
 
-		len += fprintf(out, " \"%#x:%#x\": {\n", eds_obj_index(obj),
-			       eds_obj_subindex(obj));
+		index = eds_obj_index(obj);
+		subindex = eds_obj_subindex(obj);
+
+		len += fprintf(out, " \"%#x:%#x\": {\n", index, subindex);
 
 		len += fprintf(out, "  \"type\": %u,\n", obj->type);
 		if (is_const) {
-			len += fprintf(out, "  \"const\": true\n");
+			len += fprintf(out, "  \"const\": true");
 		} else {
-			len += fprintf(out, "  \"read-write\": [%s, %s]\n",
+			len += fprintf(out, "  \"read-write\": [%s, %s]",
 				       is_readable ? "true" : "false",
 				       is_writable ? "true" : "false");
 		}
 
-		len += fprintf(out, " }");
+		if ((is_const || is_readable) && with_value) {
+			len += fprintf(out, ",\n  \"value\": ");
+			len += sdo_rest__read_value(out, nodeid, index,
+						    subindex, obj->type);
+		}
+
+		len += fprintf(out, "\n }");
 		obj = eds_obj_next(eds, obj);
 	} while (obj);
 done:
@@ -382,6 +436,7 @@ int sdo_rest__send_eds(struct rest_client* client)
 	struct sdo_rest_eds_context* context = malloc(sizeof(*context));
 	context->client = client;
 	context->eds = eds;
+	context->nodeid = nodeid;
 
 	struct mloop_work* work = mloop_work_new();
 	if (!work) {
