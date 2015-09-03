@@ -12,6 +12,9 @@ enum httplex_token_type {
 	HTTPLEX_LITERAL,
 	HTTPLEX_KEY,
 	HTTPLEX_VALUE,
+	HTTPLEX_QUERY,
+	HTTPLEX_AMPERSAND,
+	HTTPLEX_EQ,
 	HTTPLEX_END,
 };
 
@@ -60,6 +63,7 @@ static inline int httplex__is_literal(char c)
 {
 	switch (c) {
 	case '/': case '\r': case '\n': case ' ': case '\t':
+	case '?': case '&': case '=':
 		return 0;
 	}
 
@@ -87,6 +91,18 @@ int httplex__classify_request_token(struct httplex* self)
 		return 0;
 	case '\n':
 		self->current_token.type = HTTPLEX_LF;
+		self->next_pos = self->pos + 1;
+		return 0;
+	case '?':
+		self->current_token.type = HTTPLEX_QUERY;
+		self->next_pos = self->pos + 1;
+		return 0;
+	case '&':
+		self->current_token.type = HTTPLEX_AMPERSAND;
+		self->next_pos = self->pos + 1;
+		return 0;
+	case '=':
+		self->current_token.type = HTTPLEX_EQ;
 		self->next_pos = self->pos + 1;
 		return 0;
 	case ' ':
@@ -269,7 +285,7 @@ int http__version(struct httplex* lex)
 	    && http__literal(lex, "1.1");
 }
 
-int http__url(struct http_req* req, struct httplex* lex)
+int http__url_path(struct http_req* req, struct httplex* lex)
 {
 	if (!http__expect(lex, HTTPLEX_SOLIDUS))
 		return 0;
@@ -293,7 +309,64 @@ int http__url(struct http_req* req, struct httplex* lex)
 	httplex_accept_token(lex);
 
 	return http__peek(lex, HTTPLEX_SOLIDUS)
-	     ? http__url(req, lex) : 1;
+	     ? http__url_path(req, lex) : 1;
+}
+
+int http__url_query_key(struct http_req* req, struct httplex* lex)
+{
+	struct httplex_token* tok = httplex_next_token(lex);
+	if (!tok)
+		return 0;
+
+	if (tok->type != HTTPLEX_LITERAL)
+		return 0;
+
+	if (req->url_index >= URL_INDEX_MAX)
+		return 0;
+
+	char* elem = strdup(tok->value);
+	if (!elem)
+		return 0;
+
+	req->url_query[req->url_query_index].key = elem;
+
+	return httplex_accept_token(lex);
+}
+
+int http__url_query_value(struct http_req* req, struct httplex* lex)
+{
+	struct httplex_token* tok = httplex_next_token(lex);
+	if (!tok)
+		return 0;
+
+	if (tok->type != HTTPLEX_LITERAL)
+		return 0;
+
+	if (req->url_index >= URL_INDEX_MAX)
+		return 0;
+
+	char* elem = strdup(tok->value);
+	if (!elem)
+		return 0;
+
+	req->url_query[req->url_query_index++].value = elem;
+
+	return httplex_accept_token(lex);
+}
+
+int http__url_query(struct http_req* req, struct httplex* lex)
+{
+	return http__url_query_key(req, lex)
+	    && http__expect(lex, HTTPLEX_EQ)
+	    && http__url_query_value(req, lex)
+	    && http__expect(lex, HTTPLEX_AMPERSAND)
+	       ? http__url_query(req, lex) : 1;
+}
+
+int http__url(struct http_req* req, struct httplex* lex)
+{
+	return http__url_path(req, lex)
+	    && http__expect(lex, HTTPLEX_QUERY) ? http__url_query(req, lex) : 1;
 }
 
 int http__request(struct http_req* req, struct httplex* lex)
@@ -425,5 +498,10 @@ void http_req_free(struct http_req* req)
 
 	for (size_t i = 0; i < req->url_index; ++i)
 		free(req->url[i]);
+
+	for (size_t i = 0; i < req->url_query_index; ++i) {
+		free(req->url_query[i].key);
+		free(req->url_query[i].value);
+	}
 }
 
