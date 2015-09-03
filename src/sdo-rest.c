@@ -304,6 +304,8 @@ void sdo_rest__eds_job(struct mloop_work* work)
 	const struct canopen_eds* eds = context->eds;
 	struct rest_client* client = context->client;
 
+	int is_const, is_readable, is_writable;
+
 	FILE* out = open_memstream(&buffer, &size);
 	if (!out) {
 		sdo_rest_server_error(client, "Out of memory\r\n");
@@ -319,17 +321,22 @@ void sdo_rest__eds_job(struct mloop_work* work)
 	do {
 		len += fprintf(out, ",\n");
 first_object:
+		is_const = !!(obj->access & EDS_OBJ_CONST);
+		is_readable = !!(obj->access & EDS_OBJ_R);
+		is_writable = !!(obj->access & EDS_OBJ_W);
+
 		len += fprintf(out, " \"%#x:%#x\": {\n", eds_obj_index(obj),
 			       eds_obj_subindex(obj));
+
 		len += fprintf(out, "  \"type\": %u,\n", obj->type);
-		len += fprintf(out, "  \"access\": {\n");
-		len += fprintf(out, "   \"is_readable\": %s,\n",
-			       obj->access & EDS_OBJ_R ? "true" : "false");
-		len += fprintf(out, "   \"is_writable\": %s,\n",
-			       obj->access & EDS_OBJ_W ? "true" : "false");
-		len += fprintf(out, "   \"is_const\": %s\n",
-			       obj->access & EDS_OBJ_CONST ? "true" : "false");
-		len += fprintf(out, "  }\n");
+		if (is_const) {
+			len += fprintf(out, "  \"const\": true\n");
+		} else {
+			len += fprintf(out, "  \"read-write\": [%s, %s]\n",
+				       is_readable ? "true" : "false",
+				       is_writable ? "true" : "false");
+		}
+
 		len += fprintf(out, " }");
 		obj = eds_obj_next(eds, obj);
 	} while (obj);
