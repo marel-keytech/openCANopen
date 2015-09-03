@@ -144,7 +144,6 @@ struct sdo_req* sdo_req_queue__dequeue(struct sdo_req_queue* self)
 	--self->size;
 
 	TAILQ_REMOVE(&self->list, req, links);
-	req->parent = NULL;
 
 	sdo_req_queue__unlock(self);
 	return req;
