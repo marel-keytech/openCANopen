@@ -24,26 +24,27 @@ endif
 
 all: bin/canopen-master
 
-bin:
-	mkdir bin
-
 bin/canopen-master: src/master.o src/sdo_common.o src/sdo_req.o \
 		    src/byteorder.o src/network.o src/canopen.o \
 		    src/sdo_async.o src/socketcan.o src/legacy-driver.o \
 		    src/DriverManager.o src/Driver.o src/rest.o src/http.o \
 		    src/eds.o src/ini_parser.o src/types.o src/sdo-rest.o \
 		    src/conversions.o src/strlcpy.o
+	@mkdir -p $(@D)
 	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -o $@
 
 bin/canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
 		  src/network.o src/canopen.o src/socketcan.o
+	@mkdir -p $(@D)
 	$(CC) $^ $(LDFLAGS) -o $@
 
 bin/canbridge: src/canopen.o src/socketcan.o src/network.o src/canbridge.o
+	@mkdir -p $(@D)
 	$(CC) $^ $(LDFLAGS) -o $@
 
 bin/fakenode: src/fakenode.o src/canopen.o src/socketcan.o \
 	      src/sdo_common.o src/sdo_srv.o src/byteorder.o src/network.o
+	@mkdir -p $(@D)
 	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
 
 .PHONY: .c.o
@@ -56,7 +57,7 @@ bin/fakenode: src/fakenode.o src/canopen.o src/socketcan.o \
 
 .PHONY: clean
 clean:
-	rm -f bin/*
+	rm -rf bin
 	rm -f src/*.o tst/*.o
 	rm -f tst/test_* tst/fuzz_test_*
 
