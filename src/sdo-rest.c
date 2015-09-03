@@ -310,32 +310,31 @@ void sdo_rest__eds_job(struct mloop_work* work)
 		return;
 	}
 
-
-	len += fprintf(out, "{\r\n");
+	len += fprintf(out, "{\n");
 	const struct eds_obj* obj = eds_obj_first(eds);
 	if (!obj)
 		goto done;
 
 	goto first_object;
 	do {
-		len += fprintf(out, ",\r\n");
+		len += fprintf(out, ",\n");
 first_object:
-		len += fprintf(out, "\t\"%#x:%#x\": {\r\n", eds_obj_index(obj),
+		len += fprintf(out, " \"%#x:%#x\": {\n", eds_obj_index(obj),
 			       eds_obj_subindex(obj));
-		len += fprintf(out, "\t\t\"type\": %u,\r\n", obj->type);
-		len += fprintf(out, "\t\t\"access\": {\r\n");
-		len += fprintf(out, "\t\t\t\"is_readable\": %s,\r\n",
+		len += fprintf(out, "  \"type\": %u,\n", obj->type);
+		len += fprintf(out, "  \"access\": {\n");
+		len += fprintf(out, "   \"is_readable\": %s,\n",
 			       obj->access & EDS_OBJ_R ? "true" : "false");
-		len += fprintf(out, "\t\t\t\"is_writable\": %s,\r\n",
+		len += fprintf(out, "   \"is_writable\": %s,\n",
 			       obj->access & EDS_OBJ_W ? "true" : "false");
-		len += fprintf(out, "\t\t\t\"is_const\": %s\r\n",
+		len += fprintf(out, "   \"is_const\": %s\n",
 			       obj->access & EDS_OBJ_CONST ? "true" : "false");
-		len += fprintf(out, "\t\t}\r\n");
-		len += fprintf(out, "\t}");
+		len += fprintf(out, "  }\n");
+		len += fprintf(out, " }");
 		obj = eds_obj_next(eds, obj);
 	} while (obj);
 done:
-	len += fprintf(out, "\r\n}\r\n");
+	len += fprintf(out, "\n}\n");
 
 	fclose(out);
 
