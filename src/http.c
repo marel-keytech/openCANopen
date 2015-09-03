@@ -505,3 +505,11 @@ void http_req_free(struct http_req* req)
 	}
 }
 
+const char* http_req_query(struct http_req* req, const char* key)
+{
+	for (size_t i = 0; i < req->url_query_index; ++i)
+		if (strcmp(key, req->url_query[i].key) == 0)
+			return req->url_query[i].value;
+
+	return NULL;
+}

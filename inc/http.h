@@ -30,4 +30,6 @@ struct http_req {
 int http_req_parse(struct http_req* req, const char* head);
 void http_req_free(struct http_req* req);
 
+const char* http_req_query(struct http_req* req, const char* key);
+
 #endif /* CANOPEN_HTTP_H_ */
