@@ -220,12 +220,11 @@ const char* get_name(int nodeid)
 
 	struct sdo_req* req = sdo_read(nodeid, 0x1008, 0);
 	if (!req)
-		goto done;
+		return NULL;
 
 	memcpy(name, req->data.data, MIN(req->data.index, sizeof(name)));
 	clean_node_name(name, sizeof(name));
 
-done:
 	sdo_req_free(req);
 	return name;
 }
