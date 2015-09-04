@@ -1,3 +1,16 @@
+/* Asynchronous SDO client message processor.
+ *
+ * Features:
+ * - Converts between plain data buffers and SDO transactions.
+ * - Chooses expediated/segmented mode based on data size.
+ * - Automatic timeout with abort.
+ * - Enforces correct communication according to standard.
+ * - Validates data according to state and aborts when receiving unexpected
+ *   data.
+ *
+ * There can be only one of these per node.
+ */
+
 #include <assert.h>
 #include <mloop.h>
 #include "canopen/sdo.h"
