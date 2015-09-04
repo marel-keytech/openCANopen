@@ -222,8 +222,9 @@ int sdo_async__feed_init_dl_response(struct sdo_async* self,
 	if (cs != SDO_SCS_DL_INIT_RES)
 		return sdo_async__abort(self, SDO_ABORT_INVALID_CS);
 
-	if (index != self->index || subindex != self->subindex)
-		return sdo_async__abort(self, SDO_ABORT_GENERAL);
+	if (!(self->quirks & SDO_ASYNC_QUIRK_IGNORE_MULTIPLEXER))
+		if (index != self->index || subindex != self->subindex)
+			return sdo_async__abort(self, SDO_ABORT_GENERAL);
 
 	if (sdo_async__is_expediated(self)) {
 		self->status = SDO_REQ_OK;
@@ -288,8 +289,9 @@ int sdo_async__feed_init_ul_response(struct sdo_async* self,
 	if (cs != SDO_SCS_UL_INIT_RES)
 		return sdo_async__abort(self, SDO_ABORT_INVALID_CS);
 
-	if (index != self->index || subindex != self->subindex)
-		return sdo_async__abort(self, SDO_ABORT_GENERAL);
+	if (!(self->quirks & SDO_ASYNC_QUIRK_IGNORE_MULTIPLEXER))
+		if (index != self->index || subindex != self->subindex)
+			return sdo_async__abort(self, SDO_ABORT_GENERAL);
 
 	return sdo_is_expediated(cf)
 	     ? sdo_async__handle_expediated_ul(self, cf)

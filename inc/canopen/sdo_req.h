@@ -47,10 +47,12 @@ struct sdo_req_queue {
 	int nodeid;
 };
 
-int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid, size_t);
+int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid, size_t,
+			enum sdo_async_quirks_flags quirks);
 void sdo_req__queue_destroy(struct sdo_req_queue* self);
 
-int sdo_req_queues_init(int fd, size_t limit);
+int sdo_req_queues_init(int fd, size_t limit,
+			enum sdo_async_quirks_flags quirks);
 void sdo_req_queues_cleanup();
 
 struct sdo_req_queue* sdo_req_queue_get(int nodeid);

@@ -41,12 +41,14 @@ void sdo_req_free(struct sdo_req* self)
 }
 
 int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
-			size_t limit)
+			size_t limit, enum sdo_async_quirks_flags quirks)
 {
 	memset(self, 0, sizeof(*self));
 
 	if (sdo_async_init(&self->sdo_client, fd, nodeid) < 0)
 		return -1;
+
+	self->sdo_client.quirks = quirks;
 
 	self->limit = limit;
 	self->nodeid = nodeid;
@@ -73,12 +75,14 @@ void sdo_req__queue_destroy(struct sdo_req_queue* self)
 	pthread_mutex_destroy(&self->mutex);
 }
 
-int sdo_req_queues_init(int fd, size_t limit)
+int sdo_req_queues_init(int fd, size_t limit,
+			enum sdo_async_quirks_flags quirks)
 {
 	size_t i;
 
 	for (i = 1; i < 128; ++i)
-		if (sdo_req__queue_init(&sdo_req__queues[i], fd, i, limit) < 0)
+		if (sdo_req__queue_init(&sdo_req__queues[i], fd, i, limit,
+					quirks) < 0)
 			goto failure;
 
 	return 0;

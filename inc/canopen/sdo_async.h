@@ -24,6 +24,12 @@ enum sdo_async_comm_state {
 	SDO_ASYNC_COMM_SEG_RESPONSE,
 };
 
+enum sdo_async_quirks_flags {
+	SDO_ASYNC_QUIRK_NONE = 0,
+	SDO_ASYNC_QUIRK_IGNORE_MULTIPLEXER = 1,
+	SDO_ASYNC_QUIRK_ALL = 0xff,
+};
+
 struct sdo_async {
 	int fd;
 	unsigned int nodeid;
@@ -38,6 +44,7 @@ struct sdo_async {
 	size_t pos;
 	enum sdo_req_status status;
 	enum sdo_abort_code abort_code;
+	enum sdo_async_quirks_flags quirks;
 };
 
 struct sdo_async_info {

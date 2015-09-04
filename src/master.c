@@ -962,6 +962,7 @@ int main(int argc, char* argv[])
 	size_t job_queue_length = 64;
 	size_t sdo_queue_length = SDO_FIFO_MAX_LENGTH;
 	int rest_port = REST_DEFAULT_PORT;
+	int with_quirks = 0;
 
 	static const struct option long_options[] = {
 		{ "worker-threads",    required_argument, 0, 'W' },
@@ -969,6 +970,7 @@ int main(int argc, char* argv[])
 		{ "job-queue-length",  required_argument, 0, 'j' },
 		{ "sdo-queue-length",  required_argument, 0, 'S' },
 		{ "rest-port",         required_argument, 0, 'R' },
+		{ "with-quirks",       no_argument,       0, 'Q' },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -984,6 +986,7 @@ int main(int argc, char* argv[])
 		case 'j': job_queue_length = strtoul(optarg, NULL, 0); break;
 		case 'S': sdo_queue_length = strtoul(optarg, NULL, 0); break;
 		case 'R': rest_port = atoi(optarg); break;
+		case 'Q': with_quirks = 1; break;
 		case 'h': return print_usage(stdout, 0);
 		case '?': break;
 		default:  return print_usage(stderr, 1);
@@ -1026,7 +1029,9 @@ int main(int argc, char* argv[])
 	}
 
 	profile("Initialize SDO queues...\n");
-	if (sdo_req_queues_init(socket_, sdo_queue_length) < 0)
+	if (sdo_req_queues_init(socket_, sdo_queue_length,
+				with_quirks ? SDO_ASYNC_QUIRK_ALL
+					    : SDO_ASYNC_QUIRK_NONE) < 0)
 		goto sdo_req_queues_failure;
 
 	profile("Initialize node structure...\n");
