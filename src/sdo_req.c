@@ -1,3 +1,18 @@
+/* SDO Request Abstraction
+ *
+ * An SDO request represents an on-going or pending SDO transaction.
+ *
+ * When an SDO is requested, a request object is returned that can be used to
+ * monitor the status and/or cancel the request. A request can be made to any
+ * node with id between 1 and 127. Multiple requests can be made to the same
+ * node at the same time. They will be queued up in FIFO order.
+ *
+ * There are 126 queues available; one for each possible node.
+ *
+ * A request can be handled in either a synchronous or asynchronous manner, by
+ * either waiting for it to finish using sdo_req_wait() or registering an
+ * "on_done" callback.
+ */
 #include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
