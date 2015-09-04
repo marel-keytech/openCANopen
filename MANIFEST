@@ -1,0 +1,61 @@
+This document contains short descriptions for most source and header files in
+the project. The ones that have been left out either aren't used or have an
+apropriately named source/header counter-part that has already been described.
+
+src:
+byteorder.c        Utilities for converting between host and network byte
+                   order.
+canbridge.c        A small program that forwards traffic between CAN
+                   interfaces over TCP.
+canopen.c          Functions to classify CANopen frames based on COB-IDs
+canopen-dump.c     A small program that interprets CANopen messages on the
+                   bus as simple text messages.
+conversions.c      Functions to convert object dictionary entries to/from
+                   strings.
+Driver.cpp         Old CANopen master driver code.
+DriverManager.cpp  Same as above.
+eds.c              Contains functions to read EDS files and access the data
+                   quickly after it has been loaded.
+fakenode.c         A program that creates a single process that behaves like
+                   a node on the network.
+http.c             HTTP request parser.
+ini_parser.c       INI file parser.
+legacy-driver.c    A C wrapper around the old C++ driver code.
+master.c           The main program.
+network.c          Utility functions for networking.
+rest.c             REST service.
+sdo_async.c        SDO client code. An sdo_async module is a machine that
+                   eats CAN frames and spits out fully formed messages.
+sdo_common.c       Common SDO client/server utility functions.
+sdo_req.c          Request-reply abstraction on top of sdo_async.
+sdo-rest.c         SDO REST service (mostly for configuring Lenze Inverters).
+sdo_srv.c          SDO server code. Used in fakenode.
+socketcan.c        SocketCAN utilites.
+strlcpy.c          BSD's strlcpy() (contrib).
+types.c            Utilities and definitions that identify and describe
+                   CANopen object dictionary types.
+
+inc:
+CanIOHandlerInterface.h Old CANopen master driver code.
+CanMasterInterface.h Same as above.
+Driver.h           Same as above.
+DriverManager.h    Same as above.
+canopen.h          Description of CANopen message types.
+fff.h              Fake function framework (contrib).
+string-utils.h     String manipulation utilities.
+thread-utils.h     Common thread utilities.
+time-utils.h       Common time conversion utilities.
+tst.h              Minimal unit-testing framework.
+vector.h           Dynamic buffers.
+
+inc/canopen:
+emcy.h             EMCY message utility functions.
+heartbeat.h        Heartbeat message utility functions.
+master.h           Shared data in the main program.
+nmt.h              NMT message utility functions.
+sdo.h              SDO message utility functions.
+types.h            Description of CANopen object dictionary types.
+
+inc/sys:
+queue.h            BSD linked lists.
+tree.h             BSD red-black and splay trees.
