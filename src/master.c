@@ -976,7 +976,7 @@ int main(int argc, char* argv[])
 	};
 
 	while (1) {
-		int c = getopt_long(argc, argv, "W:s:j:S:R:", long_options,
+		int c = getopt_long(argc, argv, "W:s:j:S:R:Q", long_options,
 				    NULL);
 		if (c < 0)
 			break;
