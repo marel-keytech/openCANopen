@@ -914,6 +914,7 @@ const char usage_[] =
 "    -j, --job-queue-length    Set length of the job queue (default 64).\n"
 "    -S, --sdo-queue-length    Set length of the sdo queue (default 1024).\n"
 "    -R, --rest-port           Set TCP port of the rest service (default 9191).\n"
+"    -Q, --with-quirks         Try to work with buggy old hardware.\n"
 "\n"
 "Appbase Options:\n"
 "    -v, --version             Get version info.\n"
