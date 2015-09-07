@@ -14,6 +14,8 @@ LDFLAGS := -lrt
 
 PREFIX ?= /usr/local
 
+SMALLOCDIR = $(DESTDIR)$(PREFIX)/var/marel/sharedmalloc/keys/
+
 ifdef RELEASE
 LIBDIR = $(DESTDIR)$(PREFIX)/lib
 BINDIR = $(DESTDIR)$(PREFIX)/bin
@@ -110,6 +112,8 @@ test: tst/test_sdo_srv tst/test_network tst/test_vector tst/test_sdo_async \
 install: all
 	mkdir -p $(BINDIR)
 	install bin/canopen-master $(BINDIR)
+	mkdir -p $(SMALLOCDIR)
+	install canopen2.xml $(SMALLOCDIR)
 
 # vi: noet sw=8 ts=8 tw=80
 
