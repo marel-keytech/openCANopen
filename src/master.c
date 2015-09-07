@@ -20,6 +20,7 @@
 #include "canopen/master.h"
 #include "rest.h"
 #include "sdo-rest.h"
+#include "canopen_info.h"
 
 #include "legacy-driver.h"
 
@@ -39,6 +40,8 @@
 
 #define for_each_node_reverse(index) \
 	for(index = CANOPEN_NODEID_MAX; index >= CANOPEN_NODEID_MIN; --index)
+
+size_t strlcpy(char* dst, const char* src, size_t dsize);
 
 static int socket_ = -1;
 static char nodes_seen_[CANOPEN_NODEID_MAX + 1];
@@ -262,6 +265,9 @@ static void unload_driver(int nodeid)
 	node->is_heartbeat_supported = 0;
 
 	net__send_nmt(socket_, NMT_CS_RESET_NODE, nodeid);
+
+	struct canopen_info* info = canopen_info_get(nodeid);
+	info->is_active = 0;
 }
 
 static void on_heartbeat_timeout(struct mloop_timer* timer)
@@ -352,6 +358,8 @@ static int load_driver(int nodeid)
 	if (!name)
 		goto failure;
 
+	strlcpy(node->name, name, sizeof(node->name));
+
 	if (node_has_identity(nodeid)) {
 		node->vendor_id = get_vendor_id(nodeid);
 		node->product_code = get_product_code(nodeid);
@@ -398,6 +406,12 @@ static void initialize_driver(int nodeid)
 	}
 
 	legacy_driver_iface_process_node_state(node->driver, 1);
+
+	struct canopen_info* info = canopen_info_get(nodeid);
+	info->is_active = 1;
+	info->device_type = node->device_type;
+	info->last_seen = gettime_us() / 1000000ULL;
+	strlcpy(info->name, node->name, sizeof(info->name));
 }
 
 static void run_net_probe(struct mloop_work* self)
@@ -503,6 +517,9 @@ static int handle_heartbeat(struct co_master_node* node,
 	/* Make sure the node is in operational state */
 	if (heartbeat_get_state(frame) != NMT_STATE_OPERATIONAL)
 		net__send_nmt(socket_, NMT_CS_START, nodeid);
+
+	struct canopen_info* info = canopen_info_get(nodeid);
+	info->last_seen = gettime_us() / 1000000ULL;
 
 	return 0;
 }
@@ -1029,6 +1046,11 @@ int main(int argc, char* argv[])
 		goto socketcan_open_failure;
 	}
 
+	if (canopen_info_init() < 0) {
+		perror("Could not initialize info structure");
+		goto info_failure;
+	}
+
 	profile("Initialize SDO queues...\n");
 	if (sdo_req_queues_init(socket_, sdo_queue_length,
 				with_quirks ? SDO_ASYNC_QUIRK_ALL
@@ -1080,6 +1102,8 @@ sdo_req_queues_failure:
 	if (socket_ >= 0)
 		close(socket_);
 
+	canopen_info_cleanup();
+info_failure:
 socketcan_open_failure:
 rest_service_failure:
 	rest_cleanup();

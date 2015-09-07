@@ -16,6 +16,8 @@ struct co_master_node {
 	struct mloop_timer* heartbeat_timer;
 	struct mloop_timer* ping_timer;
 
+	char name[64];
+
 	int is_loading;
 };
 

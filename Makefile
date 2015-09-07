@@ -29,9 +29,9 @@ bin/canopen-master: src/master.o src/sdo_common.o src/sdo_req.o \
 		    src/sdo_async.o src/socketcan.o src/legacy-driver.o \
 		    src/DriverManager.o src/Driver.o src/rest.o src/http.o \
 		    src/eds.o src/ini_parser.o src/types.o src/sdo-rest.o \
-		    src/conversions.o src/strlcpy.o
+		    src/conversions.o src/strlcpy.o src/canopen_info.o
 	@mkdir -p $(@D)
-	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -o $@
+	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lsharedmalloc -o $@
 
 bin/canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
 		  src/network.o src/canopen.o src/socketcan.o

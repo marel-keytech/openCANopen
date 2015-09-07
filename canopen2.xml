@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<memory name="canopen2">
+	<struct name="canopen_node_info">
+		<variable type="boolean" name="is_active"/>
+		<variable type="uint32_t" name="device_type"/>
+		<variable type="uint32_t" name="last_seen"/>
+		<variable type="string" bytesize="64" name="name"/>
+	</struct>
+
+	<array type="canopen_node_info" name="nodes" count="127"/>
+</memory>
