@@ -28,6 +28,8 @@ struct sdo_rest_eds_context {
 	unsigned int nodeid;
 	struct rest_client* client;
 	const struct canopen_eds* eds;
+	char* buffer;
+	size_t length;
 };
 
 static int sdo_rest__convert_path(struct sdo_rest_path* dst,
@@ -399,24 +401,41 @@ done:
 
 	fclose(out);
 
-	struct rest_reply_data reply = {
-		.status_code = "200 OK",
-		.content_type = "application/json",
-		.content_length = len,
-		.content = buffer
-	};
+	context->buffer = buffer;
+	context->length = len;
 
-	rest_reply(client->output, &reply);
-
-	client->state = REST_CLIENT_DONE;
-
-	free(buffer);
 	return;
 
 failure:
 	fclose(out);
 	free(buffer);
 	return;
+}
+
+void sdo_rest__eds_job_done(struct mloop_work* work)
+{
+	struct sdo_rest_eds_context* context = mloop_work_get_context(work);
+	struct rest_client* client = context->client;
+	char* buffer = context->buffer;
+	size_t length = context->length;
+
+	struct rest_reply_data reply = {
+		.status_code = "200 OK",
+		.content_type = "application/json",
+		.content_length = length,
+		.content = buffer
+	};
+
+	rest_reply(client->output, &reply);
+
+	client->state = REST_CLIENT_DONE;
+}
+
+void sdo_rest__eds_job_free(void* ptr)
+{
+	struct sdo_rest_eds_context* context = ptr;
+	free(context->buffer);
+	free(context);
 }
 
 int sdo_rest__send_eds(struct rest_client* client)
@@ -434,6 +453,7 @@ int sdo_rest__send_eds(struct rest_client* client)
 	}
 
 	struct sdo_rest_eds_context* context = malloc(sizeof(*context));
+	memset(context, 0, sizeof(*context));
 	context->client = client;
 	context->eds = eds;
 	context->nodeid = nodeid;
@@ -444,8 +464,9 @@ int sdo_rest__send_eds(struct rest_client* client)
 		goto failure;
 	}
 
-	mloop_work_set_context(work, context, free);
+	mloop_work_set_context(work, context, sdo_rest__eds_job_free);
 	mloop_work_set_work_fn(work, sdo_rest__eds_job);
+	mloop_work_set_done_fn(work, sdo_rest__eds_job_done);
 	if (mloop_start_work(mloop_default(), work) < 0)
 		sdo_rest_server_error(client, "Failed to schedule response\r\n");
 
