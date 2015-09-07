@@ -47,6 +47,8 @@ int rest__open_server(int port)
 	if (fd < 0)
 		return -1;
 
+	net_reuse_addr(fd);
+
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
 
@@ -90,7 +92,7 @@ int rest__read_head(struct vector* buffer, int fd)
 		return -1;
 
 	vector_append(buffer, "", 1);
-	rc = strstr(buffer->data, "\r\n\r\n") != NULL;
+	rc = strstr(buffer->data, "\r\n\r\n") ? 1 : -1;
 	buffer->index--;
 
 	return rc;
@@ -122,7 +124,6 @@ void rest_client_free(struct rest_client* self)
 	vector_destroy(&self->buffer);
 	if (self->state > REST_CLIENT_START)
 		http_req_free(&self->req);
-	fclose(self->output);
 	free(self);
 }
 
@@ -291,6 +292,20 @@ void rest__handle_content(int fd, struct rest_client* client,
 		rest__process_content(client);
 }
 
+void rest__handle_junk(int fd, struct rest_client* client,
+		       struct mloop_socket* socket)
+{
+	char junk[256];
+	ssize_t size;
+
+	do {
+		size = read(fd, &junk, sizeof(junk));
+	} while (size > 0);
+
+	if (size == 0)
+		mloop_socket_stop(socket);
+}
+
 static void rest__on_client_data(struct mloop_socket* socket)
 {
 	struct rest_client* client = mloop_socket_get_context(socket);
@@ -304,8 +319,7 @@ static void rest__on_client_data(struct mloop_socket* socket)
 		rest__handle_content(fd, client, socket);
 		break;
 	case REST_CLIENT_SERVICING:
-		if (fcntl(fd, F_GETFD) < 0 && errno == EBADF)
-			mloop_socket_stop(socket);
+		rest__handle_junk(fd, client, socket);
 		break;
 	case REST_CLIENT_DONE:
 		mloop_socket_stop(socket);
@@ -319,6 +333,7 @@ static void rest__on_socket_free(void* ptr)
 {
 	struct rest_client* client = ptr;
 	client->state = REST_CLIENT_DISCONNECTED;
+	fclose(client->output);
 	rest_client_unref(client);
 }
 
