@@ -367,6 +367,9 @@ void sdo_rest__eds_job(struct mloop_work* work)
 
 	goto first_object;
 	do {
+		if (client->state == REST_CLIENT_DISCONNECTED)
+			goto failure;
+
 		len += fprintf(out, ",\n");
 first_object:
 		is_const = !!(obj->access & EDS_OBJ_CONST);
@@ -407,6 +410,7 @@ done:
 	return;
 
 failure:
+	mloop_work_cancel(work);
 	fclose(out);
 	free(buffer);
 	return;
