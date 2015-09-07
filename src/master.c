@@ -1032,8 +1032,10 @@ int main(int argc, char* argv[])
 	eds_db_load();
 
 	profile("Initialize and register SDO REST service...\n");
-	if (rest_init(rest_port) < 0)
+	if (rest_init(rest_port) < 0) {
+		perror("Could not initialize rest service");
 		goto rest_init_failure;
+	}
 
 	if (rest_register_service(HTTP_GET | HTTP_PUT,
 				  "sdo", sdo_rest_service) < 0)
