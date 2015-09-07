@@ -34,6 +34,7 @@ socketcan.c        SocketCAN utilites.
 strlcpy.c          BSD's strlcpy() (contrib).
 types.c            Utilities and definitions that identify and describe
                    CANopen object dictionary types.
+canopen_info.c     Shared memory map with node information.
 
 inc:
 CanIOHandlerInterface.h Old CANopen master driver code.
