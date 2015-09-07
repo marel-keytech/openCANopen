@@ -139,3 +139,9 @@ int net_fix_sndbuf(int fd)
 	int sndbuf = 0;
 	return setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
 }
+
+int net_reuse_addr(int fd)
+{
+	int one = 1;
+	return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+}

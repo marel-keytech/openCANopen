@@ -61,6 +61,7 @@ int net__wait_for_sdo(int fd, char* nodes_seen, int start, int end,
 int net__gettime_ms();
 
 int net_fix_sndbuf(int fd);
+int net_reuse_addr(int fd);
 
 #endif /* CANOPEN_NETWORK_H_ */
 
