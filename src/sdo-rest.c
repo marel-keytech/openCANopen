@@ -419,6 +419,9 @@ void sdo_rest__eds_job_done(struct mloop_work* work)
 	char* buffer = context->buffer;
 	size_t length = context->length;
 
+	if (client->state == REST_CLIENT_DISCONNECTED)
+		return;
+
 	struct rest_reply_data reply = {
 		.status_code = "200 OK",
 		.content_type = "application/json",
@@ -434,6 +437,8 @@ void sdo_rest__eds_job_done(struct mloop_work* work)
 void sdo_rest__eds_job_free(void* ptr)
 {
 	struct sdo_rest_eds_context* context = ptr;
+	struct rest_client* client = context->client;
+	rest_client_unref(client);
 	free(context->buffer);
 	free(context);
 }
@@ -470,6 +475,7 @@ int sdo_rest__send_eds(struct rest_client* client)
 	if (mloop_start_work(mloop_default(), work) < 0)
 		sdo_rest_server_error(client, "Failed to schedule response\r\n");
 
+	rest_client_ref(client);
 	mloop_work_unref(work);
 	return 0;
 
