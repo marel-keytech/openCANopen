@@ -15,10 +15,12 @@ enum rest_client_state {
 	REST_CLIENT_START = 0,
 	REST_CLIENT_CONTENT,
 	REST_CLIENT_SERVICING,
+	REST_CLIENT_DISCONNECTED,
 	REST_CLIENT_DONE
 };
 
 struct rest_client {
+	int ref;
 	enum rest_client_state state;
 	struct vector buffer;
 	struct http_req req;
@@ -34,5 +36,7 @@ int rest_register_service(enum http_method method, const char* path,
 			  rest_fn fn);
 void rest_reply(FILE* output, struct rest_reply_data* data);
 
+void rest_client_ref(struct rest_client* self);
+int rest_client_unref(struct rest_client* self);
 
 #endif /* CANOPEN_REST_H_ */

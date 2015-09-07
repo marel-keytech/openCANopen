@@ -104,6 +104,8 @@ static struct rest_client* rest_client_new()
 
 	memset(self, 0, sizeof(*self));
 
+	self->ref = 1;
+
 	if (vector_init(&self->buffer, 256) < 0)
 		goto failure;
 
@@ -122,6 +124,20 @@ void rest_client_free(struct rest_client* self)
 		http_req_free(&self->req);
 	fclose(self->output);
 	free(self);
+}
+
+void rest_client_ref(struct rest_client* self)
+{
+	++self->ref;
+}
+
+int rest_client_unref(struct rest_client* self)
+{
+	int ref = --self->ref;
+	if (ref == 0)
+		rest_client_free(self);
+
+	return ref;
 }
 
 static inline void rest__print_status_code(FILE* output, const char* status)
@@ -299,6 +315,13 @@ static void rest__on_client_data(struct mloop_socket* socket)
 	}
 }
 
+static void rest__on_socket_free(void* ptr)
+{
+	struct rest_client* client = ptr;
+	client->state = REST_CLIENT_DISCONNECTED;
+	rest_client_unref(client);
+}
+
 static void rest__on_connection(struct mloop_socket* socket)
 {
 	int sfd = mloop_socket_get_fd(socket);
@@ -326,8 +349,7 @@ static void rest__on_connection(struct mloop_socket* socket)
 
 	mloop_socket_set_fd(client, cfd);
 	mloop_socket_set_callback(client, rest__on_client_data);
-	mloop_socket_set_context(client, state,
-				 (mloop_free_fn)rest_client_free);
+	mloop_socket_set_context(client, state, rest__on_socket_free);
 	mloop_start_socket(mloop_default(), client);
 
 	mloop_socket_unref(client);
