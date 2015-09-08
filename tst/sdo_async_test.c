@@ -7,6 +7,10 @@
 #include "tst.h"
 #include "fff.h"
 
+#ifndef CAN_MAX_DLC
+#define CAN_MAX_DLC 8
+#endif
+
 DEFINE_FFF_GLOBALS;
 
 struct mloop;
