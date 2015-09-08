@@ -255,6 +255,8 @@ static void unload_driver(int nodeid)
 	if (!node->is_heartbeat_supported)
 		stop_ping_timer(nodeid);
 
+	sdo_req_queue_flush(sdo_req_queue_get(nodeid));
+
 	unload_legacy_module(node->device_type, node->driver);
 
 	legacy_master_iface_delete(node->master_iface);
@@ -730,15 +732,7 @@ static void on_master_sdo_request_done(struct sdo_req* req)
 {
 	struct co_master_node* node = get_node_from_sdo_queue(req->parent);
 	void* driver = node->driver;
-
-	/* Handle a rare race condition where the driver is unloaded before an
-	 * SDO request is answered.
-	 *
-	 * TODO: Cancel SDO pending requests when unloading drivers and turn
-	 * this into assert().
-	 */
-	if (!driver)
-		return;
+	assert(driver);
 
 	if (req->status == SDO_REQ_OK) {
 		legacy_driver_iface_process_sdo(driver,
