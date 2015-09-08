@@ -131,6 +131,14 @@ void sdo_req_queue__unlock(struct sdo_req_queue* self)
 	pthread_mutex_unlock(&self->mutex);
 }
 
+void sdo_req_queue_flush(struct sdo_req_queue* self)
+{
+	sdo_req_queue__lock(self);
+	sdo_req__queue_clear(self);
+	sdo_async_stop(&self->sdo_client);
+	sdo_req_queue__unlock(self);
+}
+
 int sdo_req_queue__enqueue(struct sdo_req_queue* self, struct sdo_req* req)
 {
 	assert(req->parent == NULL);

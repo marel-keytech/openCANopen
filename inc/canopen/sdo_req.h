@@ -56,6 +56,7 @@ int sdo_req_queues_init(int fd, size_t limit,
 void sdo_req_queues_cleanup();
 
 struct sdo_req_queue* sdo_req_queue_get(int nodeid);
+void sdo_req_queue_flush(struct sdo_req_queue* self);
 
 struct sdo_req* sdo_req_new(struct sdo_req_info* info);
 void sdo_req_free(struct sdo_req* self);
