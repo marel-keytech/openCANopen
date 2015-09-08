@@ -141,7 +141,7 @@ struct sdo_req* sdo_read(int nodeid, int index, int subindex)
 	return req;
 
 done:
-	sdo_req_free(req);
+	sdo_req_unref(req);
 	return NULL;
 }
 
@@ -159,7 +159,7 @@ static uint32_t sdo_read_u32(int nodeid, int index, int subindex)
 	byteorder2(&value, req->data.data, sizeof(value), req->data.index);
 
 done:
-	sdo_req_free(req);
+	sdo_req_unref(req);
 	return value;
 }
 
@@ -213,7 +213,7 @@ static inline int set_heartbeat_period(int nodeid, uint16_t period)
 
 	rc = 0;
 failure:
-	sdo_req_free(req);
+	sdo_req_unref(req);
 	return rc;
 }
 
@@ -228,7 +228,7 @@ const char* get_name(int nodeid)
 	memcpy(name, req->data.data, MIN(req->data.index, sizeof(name)));
 	clean_node_name(name, sizeof(name));
 
-	sdo_req_free(req);
+	sdo_req_unref(req);
 	return name;
 }
 
@@ -738,7 +738,7 @@ static void on_master_sdo_request_done(struct sdo_req* req)
 	 * this into assert().
 	 */
 	if (!driver)
-		goto done;
+		return;
 
 	if (req->status == SDO_REQ_OK) {
 		legacy_driver_iface_process_sdo(driver,
@@ -752,9 +752,6 @@ static void on_master_sdo_request_done(struct sdo_req* req)
 						req->subindex,
 						NULL, 0);
 	}
-
-done:
-	sdo_req_free(req);
 }
 
 static int master_request_sdo(int nodeid, int index, int subindex)
@@ -770,11 +767,10 @@ static int master_request_sdo(int nodeid, int index, int subindex)
 	if (!req)
 		return -1;
 
-	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) >= 0)
-		return 0;
+	int rc = sdo_req_start(req, sdo_req_queue_get(nodeid));
 
-	sdo_req_free(req);
-	return -1;
+	sdo_req_unref(req);
+	return rc;
 }
 
 static void on_master_sdo_send_done(struct sdo_req* req)
@@ -798,11 +794,10 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 	if (!req)
 		return -1;
 
-	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) >= 0)
-		return 0;
+	int rc = sdo_req_start(req, sdo_req_queue_get(nodeid));
 
-	sdo_req_free(req);
-	return -1;
+	sdo_req_unref(req);
+	return rc;
 }
 
 static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)
