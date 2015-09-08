@@ -17,6 +17,7 @@
 #include "canopen/sdo_async.h"
 #include "canopen/network.h"
 #include "canopen.h"
+#include "co_atomic.h"
 
 #define MIN(a, b) ((a) < (b)) ? (a) : (b);
 
@@ -28,22 +29,19 @@ static inline int sdo_async__change_state(struct sdo_async* self,
 					  enum sdo_async_state before,
 					  enum sdo_async_state after)
 {
-	int rc = __atomic_compare_exchange_n(&self->state, &before, after, 0,
-					     __ATOMIC_SEQ_CST,
-					     __ATOMIC_SEQ_CST);
-	return rc ? 0 : -1;
+	return co_atomic_cas(&self->state, before, after) ? 0 : -1;
 }
 
 static inline void sdo_async__set_state(struct sdo_async* self,
 					enum sdo_async_state state)
 {
-	__atomic_store_n(&self->state, state, __ATOMIC_SEQ_CST);
+	co_atomic_store(&self->state, state);
 }
 
 static inline int sdo_async__check_state(struct sdo_async* self,
 					 enum sdo_async_state state)
 {
-	return __atomic_load_n(&self->state, __ATOMIC_SEQ_CST) == state;
+	return co_atomic_load(&self->state) == state;
 }
 
 void sdo_async__on_done(struct sdo_async* self)
