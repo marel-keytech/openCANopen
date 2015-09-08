@@ -58,6 +58,8 @@ void sdo_req_free(struct sdo_req* self)
 
 ARC_GENERATE(sdo_req, sdo_req_free)
 
+void sdo_req__do_next_req(struct mloop_async* async);
+
 int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 			size_t limit, enum sdo_async_quirks_flags quirks)
 {
@@ -71,6 +73,15 @@ int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 	self->limit = limit;
 	self->nodeid = nodeid;
 
+	struct mloop_async* async = mloop_async_new();
+	if (!async)
+		return -1;
+
+	mloop_async_set_context(async, self, NULL);
+	mloop_async_set_callback(async, sdo_req__do_next_req);
+
+	self->job = async;
+
 	pthread_mutex_init(&self->mutex, NULL);
 	TAILQ_INIT(&self->list);
 
@@ -81,13 +92,15 @@ void sdo_req__queue_clear(struct sdo_req_queue* self)
 {
 	while (!TAILQ_EMPTY(&self->list)) {
 		struct sdo_req* req = TAILQ_FIRST(&self->list);
-		sdo_req_free(req);
+		req->status = SDO_REQ_CANCELLED;
+		sdo_req_unref(req);
 		TAILQ_REMOVE(&self->list, req, links);
 	}
 }
 
 void sdo_req__queue_destroy(struct sdo_req_queue* self)
 {
+	mloop_async_unref(self->job);
 	sdo_async_destroy(&self->sdo_client);
 	sdo_req__queue_clear(self);
 	pthread_mutex_destroy(&self->mutex);
@@ -138,6 +151,7 @@ void sdo_req_queue_flush(struct sdo_req_queue* self)
 {
 	sdo_req_queue__lock(self);
 	sdo_req__queue_clear(self);
+	mloop_async_cancel(self->job);
 	sdo_async_stop(&self->sdo_client);
 	sdo_req_queue__unlock(self);
 }
@@ -232,18 +246,15 @@ void sdo_req__do_next_req(struct mloop_async* async)
 
 void sdo_req__schedule(struct sdo_req_queue* queue)
 {
-	/* TODO: move new() into initializer and re-use */
-	struct mloop_async* async = mloop_async_new();
-	if (!async)
+	struct mloop_async* async = queue->job;
+
+	if (mloop_async_is_started(async))
 		return;
 
-	mloop_async_set_context(async, queue, NULL);
-	mloop_async_set_callback(async, sdo_req__do_next_req);
 	mloop_async_set_priority(async,
 				 SDO_REQ_ASYNC_PRIO + queue->sdo_client.nodeid);
-	mloop_start_async(mloop_default(), async);
-
-	mloop_async_unref(async);
+	int rc = mloop_start_async(mloop_default(), async);
+	assert(rc == 0);
 }
 
 void sdo_req__on_done(struct sdo_async* async)

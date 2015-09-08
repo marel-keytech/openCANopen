@@ -11,6 +11,7 @@ enum sdo_req_status {
 	SDO_REQ_OK,
 	SDO_REQ_LOCAL_ABORT,
 	SDO_REQ_REMOTE_ABORT,
+	SDO_REQ_CANCELLED,
 };
 
 #endif /* SDO_REQ_ENUMS_H_ */
