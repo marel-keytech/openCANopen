@@ -37,11 +37,13 @@ types.c            Utilities and definitions that identify and describe
 canopen_info.c     Shared memory map with node information.
 
 inc:
+arc.h              Atomic reference counting macros.
 CanIOHandlerInterface.h Old CANopen master driver code.
 CanMasterInterface.h Same as above.
 Driver.h           Same as above.
 DriverManager.h    Same as above.
 canopen.h          Description of CANopen message types.
+co_atomic.h        Compatibility layer for atomic operations.
 fff.h              Fake function framework (contrib).
 string-utils.h     String manipulation utilities.
 thread-utils.h     Common thread utilities.
