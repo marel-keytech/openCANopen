@@ -23,7 +23,7 @@ void byteorder(void* dst, const void* src, size_t size)
 		d[i - 1] = s[size - i]; --i;
 	case 2: d[i - 1] = s[size - i]; --i;
 	case 1: d[i - 1] = s[size - i];
-		break;
+	case 0: break;
 	default:
 		abort();
 	}
@@ -48,7 +48,7 @@ void byteorder2(void* dst, const void* src, size_t dst_size, size_t src_size)
 	case 3:	d[--d_i] = s[s_i++];
 	case 2: d[--d_i] = s[s_i++];
 	case 1: d[--d_i] = s[s_i++];
-		break;
+	case 0: break;
 	default:
 		abort();
 	}
