@@ -45,8 +45,8 @@
 	__sync_synchronize(); \
 })
 
-#define __atomic_sub_fetch(ptr, value) __sync_sub_and_fetch(ptr, value)
-#define __atomic_add_fetch(ptr, value) __sync_add_and_fetch(ptr, value)
+#define co_atomic_sub_fetch(ptr, value) __sync_sub_and_fetch(ptr, value)
+#define co_atomic_add_fetch(ptr, value) __sync_add_and_fetch(ptr, value)
 
 #endif /* HAVE_NEW_ATOMICS */
 
