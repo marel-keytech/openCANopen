@@ -157,7 +157,6 @@ static void on_sdo_rest_upload_done(struct sdo_req* req)
 
 done:
 	free(context);
-	sdo_req_free(req);
 }
 
 static int sdo_rest__get(struct sdo_rest_context* context)
@@ -185,16 +184,12 @@ static int sdo_rest__get(struct sdo_rest_context* context)
 		return -1;
 	}
 
-	if (sdo_req_start(req, sdo_req_queue_get(path->nodeid)) < 0)
-		goto failure;
+	int rc = sdo_req_start(req, sdo_req_queue_get(path->nodeid));
 
-	return 0;
+	if (sdo_req_unref(req) == 0)
+		sdo_rest_server_error(client, "Failed to start sdo request\r\n");
 
-failure:
-	sdo_req_free(req);
-
-	sdo_rest_server_error(client, "Failed to start sdo request\r\n");
-	return -1;
+	return rc;
 }
 
 static void on_sdo_rest_download_done(struct sdo_req* req)
@@ -221,7 +216,6 @@ static void on_sdo_rest_download_done(struct sdo_req* req)
 
 done:
 	free(context);
-	sdo_req_free(req);
 }
 
 static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
@@ -241,7 +235,7 @@ static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
 	char* input = malloc(content_length + 1);
 	if (!input) {
 		sdo_rest_server_error(client, "Out of memory\r\n");
-		goto failure;
+		return -1;
 	}
 
 	memcpy(input, content, content_length);
@@ -272,16 +266,12 @@ static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
 		return -1;
 	}
 
-	if (sdo_req_start(req, sdo_req_queue_get(path->nodeid)) < 0)
-		goto failure;
+	int rc = sdo_req_start(req, sdo_req_queue_get(path->nodeid));
 
-	return 0;
+	if (sdo_req_unref(req) == 0)
+		sdo_rest_server_error(client, "Failed to start sdo request\r\n");
 
-failure:
-	sdo_req_free(req);
-
-	sdo_rest_server_error(client, "Failed to start sdo request\r\n");
-	return -1;
+	return rc;
 }
 
 int sdo_rest__process(struct sdo_rest_context* context, const void* content)
@@ -329,11 +319,11 @@ ssize_t sdo_rest__read_value(FILE* out, unsigned int nodeid, int index,
 	if (!str)
 		goto failure;
 
-	sdo_req_free(req);
+	sdo_req_unref(req);
 	return fprintf(out, "\"%s\"", str);
 
 failure:
-	sdo_req_free(req);
+	sdo_req_unref(req);
 nomem:
 	return fprintf(out, "null");
 }
