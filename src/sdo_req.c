@@ -37,6 +37,7 @@ struct sdo_req* sdo_req_new(struct sdo_req_info* info)
 
 	memset(self, 0, sizeof(*self));
 
+	self->ref = 1;
 	self->type = info->type;
 	self->index = info->index;
 	self->subindex = info->subindex;
@@ -54,6 +55,8 @@ void sdo_req_free(struct sdo_req* self)
 	vector_destroy(&self->data);
 	free(self);
 }
+
+ARC_GENERATE(sdo_req, sdo_req_free)
 
 int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 			size_t limit, enum sdo_async_quirks_flags quirks)
@@ -260,6 +263,8 @@ void sdo_req__on_done(struct sdo_async* async)
 	if (on_done)
 		on_done(req);
 
+	sdo_req_unref(req);
+
 	sdo_req__schedule(queue);
 }
 
@@ -268,6 +273,7 @@ int sdo_req_start(struct sdo_req* self, struct sdo_req_queue* queue)
 	if (sdo_req_queue__enqueue(queue, self) < 0)
 		return -1;
 
+	sdo_req_ref(self);
 	sdo_req__schedule(queue);
 
 	return 0;

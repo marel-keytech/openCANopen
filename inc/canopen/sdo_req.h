@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include "vector.h"
 #include "canopen/sdo.h"
+#include "arc.h"
 
 #include "canopen/sdo_async.h"
 #include "canopen/sdo_req_enums.h"
@@ -25,6 +26,7 @@ struct sdo_req_info {
 struct sdo_req_queue;
 
 struct sdo_req {
+	int ref;
 	TAILQ_ENTRY(sdo_req) links;
 	enum sdo_req_type type;
 	int index, subindex;
@@ -74,6 +76,8 @@ struct sdo_req_queue* sdo_req_queue__from_async(const struct sdo_async* async)
 	size_t addr = (size_t)async;
 	return (struct sdo_req_queue*)(addr - offset);
 }
+
+ARC_PROTOTYPE(sdo_req)
 
 #endif /* SDO_REQ_H_ */
 
