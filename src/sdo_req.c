@@ -243,7 +243,8 @@ void sdo_req__do_next_req(struct mloop_async* async)
 		.on_done = sdo_req__on_done
 	};
 
-	sdo_async_start(&queue->sdo_client, &info);
+	int rc = sdo_async_start(&queue->sdo_client, &info);
+	assert(rc == 0);
 }
 
 static inline void sdo_req__schedule(struct sdo_req_queue* queue)
@@ -258,6 +259,7 @@ void sdo_req__on_done(struct sdo_async* async)
 	struct sdo_req* req = sdo_req_queue__dequeue(queue);
 	assert(req != NULL);
 
+	assert(async->status != SDO_REQ_PENDING);
 	req->status = async->status;
 	req->abort_code = async->abort_code;
 
