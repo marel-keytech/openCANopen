@@ -8,6 +8,7 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
+#include <sys/socket.h> // for definition of sa_family_t
 #include <linux/can.h>
 #include "canopen.h"
 #include "socketcan.h"

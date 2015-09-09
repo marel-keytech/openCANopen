@@ -1,3 +1,4 @@
+#include <sys/socket.h> // for definition of sa_family_t
 #include <linux/can.h>
 
 #include "tst.h"
