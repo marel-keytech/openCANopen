@@ -158,6 +158,8 @@ int sdo_async_start(struct sdo_async* self, const struct sdo_async_info* info)
 	if (sdo_async__change_state(self, SDO_ASYNC_IDLE, SDO_ASYNC_STARTING) < 0)
 		return -1;
 
+	self->context = info->context;
+	self->free_fn = info->free_fn;
 	self->pos = 0;
 	self->is_toggled = 0;
 	self->comm_state = SDO_ASYNC_COMM_START;
@@ -181,13 +183,19 @@ int sdo_async_start(struct sdo_async* self, const struct sdo_async_info* info)
 
 int sdo_async_stop(struct sdo_async* self)
 {
-	if (sdo_async__change_state(self, SDO_ASYNC_RUNNING, SDO_ASYNC_IDLE) < 0)
+	if (sdo_async__change_state(self, SDO_ASYNC_RUNNING, SDO_ASYNC_STOPPING) < 0)
 		return -1;
 
-	int rc = mloop_timer_stop(self->timer);
+	mloop_timer_stop(self->timer);
+
+	if (self->context && self->free_fn)
+		self->free_fn(self->context);
+
+	self->context = NULL;
+	self->free_fn = NULL;
 
 	sdo_async__set_state(self, SDO_ASYNC_IDLE);
-	return rc;
+	return 0;
 }
 
 static inline int sdo_async__is_at_end(const struct sdo_async* self)

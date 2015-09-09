@@ -10,6 +10,7 @@ struct sdo_async;
 struct can_frame;
 
 typedef void (*sdo_async_fn)(struct sdo_async* async);
+typedef void (*sdo_async_free_fn)(void* ptr);
 
 enum sdo_async_state {
 	SDO_ASYNC_IDLE,
@@ -45,6 +46,8 @@ struct sdo_async {
 	enum sdo_req_status status;
 	enum sdo_abort_code abort_code;
 	enum sdo_async_quirks_flags quirks;
+	void* context;
+	sdo_async_free_fn free_fn;
 };
 
 struct sdo_async_info {
@@ -54,6 +57,8 @@ struct sdo_async_info {
 	const void* data;
 	size_t size;
 	sdo_async_fn on_done;
+	void* context;
+	sdo_async_free_fn free_fn;
 };
 
 int sdo_async_init(struct sdo_async* self, int fd, int nodeid);
