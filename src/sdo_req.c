@@ -96,6 +96,7 @@ void sdo_req__queue_clear(struct sdo_req_queue* self)
 		sdo_req_unref(req);
 		TAILQ_REMOVE(&self->list, req, links);
 	}
+	self->size = 0;
 }
 
 void sdo_req__queue_destroy(struct sdo_req_queue* self)
