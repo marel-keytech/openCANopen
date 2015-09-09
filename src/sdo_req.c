@@ -79,6 +79,7 @@ int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 
 	mloop_async_set_context(async, self, NULL);
 	mloop_async_set_callback(async, sdo_req__do_next_req);
+	mloop_async_set_priority(async, SDO_REQ_ASYNC_PRIO + nodeid);
 
 	self->job = async;
 
@@ -245,17 +246,9 @@ void sdo_req__do_next_req(struct mloop_async* async)
 	sdo_async_start(&queue->sdo_client, &info);
 }
 
-void sdo_req__schedule(struct sdo_req_queue* queue)
+static inline void sdo_req__schedule(struct sdo_req_queue* queue)
 {
-	struct mloop_async* async = queue->job;
-
-	if (mloop_async_is_started(async))
-		return;
-
-	mloop_async_set_priority(async,
-				 SDO_REQ_ASYNC_PRIO + queue->sdo_client.nodeid);
-	int rc = mloop_start_async(mloop_default(), async);
-	assert(rc == 0);
+	mloop_start_async(mloop_default(), queue->job);
 }
 
 void sdo_req__on_done(struct sdo_async* async)
