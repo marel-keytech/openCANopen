@@ -75,7 +75,7 @@ static int send_pdo(int nodeid, int type, unsigned char* data, size_t size);
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size);
 static void unload_legacy_module(int device_type, void* driver);
 
-struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
+//struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unused */
 
 static int is_profiling_on_ = -1;

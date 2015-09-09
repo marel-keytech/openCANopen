@@ -21,7 +21,8 @@ struct co_master_node {
 	int is_loading;
 };
 
-extern struct co_master_node co_master_node_[];
+//extern struct co_master_node co_master_node_[];
+struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 
 static inline int co_master_get_node_id(const struct co_master_node* node)
 {
