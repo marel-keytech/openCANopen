@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <mloop.h>
 #include "vector.h"
 #include "sys/queue.h"
 #include "canopen/sdo.h"
@@ -57,7 +58,7 @@ void sdo_req_free(struct sdo_req* self)
 
 ARC_GENERATE(sdo_req, sdo_req_free)
 
-void sdo_req__do_next_req(struct sdo_req_queue* queue);
+void sdo_req__do_next_req(struct mloop_async* async);
 
 int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 			size_t limit, enum sdo_async_quirks_flags quirks)
@@ -78,6 +79,16 @@ int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 	pthread_mutex_init(&self->mutex, &attr);
 	pthread_mutexattr_destroy(&attr);
 
+	struct mloop_async* async = mloop_async_new();
+	if (!async)
+		return -1;
+
+	mloop_async_set_context(async, self, NULL);
+	mloop_async_set_callback(async, sdo_req__do_next_req);
+	mloop_async_set_priority(async, SDO_REQ_ASYNC_PRIO + nodeid);
+
+	self->job = async;
+
 	TAILQ_INIT(&self->list);
 
 	return 0;
@@ -96,6 +107,7 @@ void sdo_req__queue_clear(struct sdo_req_queue* self)
 
 void sdo_req__queue_destroy(struct sdo_req_queue* self)
 {
+	mloop_async_unref(self->job);
 	sdo_async_destroy(&self->sdo_client);
 	sdo_req__queue_clear(self);
 	pthread_mutex_destroy(&self->mutex);
@@ -146,6 +158,7 @@ void sdo_req_queue_flush(struct sdo_req_queue* self)
 {
 	sdo_req_queue__lock(self);
 	sdo_req__queue_clear(self);
+	mloop_async_cancel(self->job);
 	sdo_async_stop(&self->sdo_client);
 	sdo_req_queue__unlock(self);
 }
@@ -228,8 +241,9 @@ void sdo_req__on_stop(void* ptr)
 	sdo_req_unref(req);
 }
 
-void sdo_req__do_next_req(struct sdo_req_queue* queue)
+void sdo_req__do_next_req(struct mloop_async* async)
 {
+	struct sdo_req_queue* queue = mloop_async_get_context(async);
 	sdo_req_queue__lock(queue);
 
 	struct sdo_req* req = sdo_req_queue_head(queue);
@@ -255,6 +269,11 @@ done:
 	sdo_req_queue__unlock(queue);
 }
 
+static inline void sdo_req__schedule(struct sdo_req_queue* queue)
+{
+	mloop_start_async(mloop_default(), queue->job);
+}
+
 void sdo_req__on_done(struct sdo_async* async)
 {
 	struct sdo_req_queue* queue = sdo_req_queue__from_async(async);
@@ -273,7 +292,7 @@ void sdo_req__on_done(struct sdo_async* async)
 	if (on_done)
 		on_done(req);
 
-	sdo_req__do_next_req(queue);
+	sdo_req__schedule(queue);
 }
 
 int sdo_req_start(struct sdo_req* self, struct sdo_req_queue* queue)
@@ -282,7 +301,7 @@ int sdo_req_start(struct sdo_req* self, struct sdo_req_queue* queue)
 		return -1;
 
 	sdo_req_ref(self);
-	sdo_req__do_next_req(queue);
+	sdo_req__schedule(queue);
 
 	return 0;
 }
