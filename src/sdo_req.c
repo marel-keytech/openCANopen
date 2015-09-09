@@ -7,7 +7,7 @@
  * node with id between 1 and 127. Multiple requests can be made to the same
  * node at the same time. They will be queued up in FIFO order.
  *
- * There are 126 queues available; one for each possible node.
+ * There are 127 queues available; one for each possible node.
  *
  * A request can be handled in either a synchronous or asynchronous manner, by
  * either waiting for it to finish using sdo_req_wait() or registering an
