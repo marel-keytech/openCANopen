@@ -72,7 +72,12 @@ int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 	self->limit = limit;
 	self->nodeid = nodeid;
 
-	pthread_mutex_init(&self->mutex, NULL);
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&self->mutex, &attr);
+	pthread_mutexattr_destroy(&attr);
+
 	TAILQ_INIT(&self->list);
 
 	return 0;
@@ -213,11 +218,23 @@ void sdo_req_wait(struct sdo_req* self)
 
 void sdo_req__on_done(struct sdo_async* async);
 
+void sdo_req__on_stop(void* ptr)
+{
+	struct sdo_req* req = ptr;
+
+	if (req->status == SDO_REQ_PENDING)
+		req->status = SDO_REQ_CANCELLED;
+
+	sdo_req_unref(req);
+}
+
 void sdo_req__do_next_req(struct sdo_req_queue* queue)
 {
+	sdo_req_queue__lock(queue);
+
 	struct sdo_req* req = sdo_req_queue_head(queue);
 	if (!req)
-		return;
+		goto done;
 
 	struct sdo_async_info info = {
 		.type = req->type,
@@ -226,17 +243,23 @@ void sdo_req__do_next_req(struct sdo_req_queue* queue)
 		.timeout = SDO_REQ_TIMEOUT,
 		.data = req->data.data,
 		.size = req->data.index,
-		.on_done = sdo_req__on_done
+		.on_done = sdo_req__on_done,
+		.context = req,
+		.free_fn = sdo_req__on_stop
 	};
 
-	sdo_async_start(&queue->sdo_client, &info);
+	if (sdo_async_start(&queue->sdo_client, &info) == 0)
+		sdo_req_queue__dequeue(queue);
+
+done:
+	sdo_req_queue__unlock(queue);
 }
 
 void sdo_req__on_done(struct sdo_async* async)
 {
 	struct sdo_req_queue* queue = sdo_req_queue__from_async(async);
 
-	struct sdo_req* req = sdo_req_queue__dequeue(queue);
+	struct sdo_req* req = async->context;
 	assert(req != NULL);
 
 	assert(async->status != SDO_REQ_PENDING);
@@ -249,8 +272,6 @@ void sdo_req__on_done(struct sdo_async* async)
 	sdo_req_fn on_done = req->on_done;
 	if (on_done)
 		on_done(req);
-
-	sdo_req_unref(req);
 
 	sdo_req__do_next_req(queue);
 }
