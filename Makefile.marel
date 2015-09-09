@@ -1,0 +1,53 @@
+##################################################
+#                                                #
+#            Marel Makefile                      #
+#                                                #
+##################################################
+export USE_GCC5_1 := compat
+
+PRJ_NAME = canopen
+
+PRJ_TYPE = PROG
+
+MAIN_SRC = canopen-master.c fakenode.c canbridge.c canopen-dump.c
+
+SRC = byteorder.c canopen.c canopen_info.c DriverManager.cpp  ini_parser.c rest.c sdo_common.c sdo-rest.c socketcan.c types.c conversions.c Driver.cpp eds.c http.c legacy-driver.cpp network.c sdo_async.c sdo_req.c sdo_srv.c strlcpy.c
+
+
+TEST_SRC =  unit_arc_test.c unit_http_test.c unit_json_combi_test.c unit_sdo_async_fuzz_test.c unit_string-utils_test.c unit_conversions_test.c unit_ini_parser_test.c unit_network_test.c unit_sdo_async_test.c unit_sdo_srv.c       unit_vector_test.c
+
+# This test fails:
+#unit_sdo_req_test.c
+
+TEST_REGR_PRGS =
+
+ADD_CFLAGS = -std=gnu99 -std=gnu++0x -I/usr/include/lua5.1 -Wextra -Wno-cpp -D_GNU_SOURCE -fexceptions
+
+ADD_LFLAGS =
+
+TEST_LDFLAGS =
+
+ADD_LIBS = appbase mloop lua5.1 sharedmalloc dl
+
+ADD_LIBS_PATH =
+
+ADD_LINT_FLAGS=
+
+
+default: debug
+
+ifndef MDEV
+    $(error Environment variable MDEV required)
+endif
+
+ifndef CPU
+    $(error Environment variable CPU <x86/ppc> required)
+endif
+
+
+#
+# include main makefile
+#
+include $(MDEV)/make/make.main
+
+#eof
