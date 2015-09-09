@@ -92,9 +92,9 @@ void sdo_req__queue_clear(struct sdo_req_queue* self)
 {
 	while (!TAILQ_EMPTY(&self->list)) {
 		struct sdo_req* req = TAILQ_FIRST(&self->list);
+		TAILQ_REMOVE(&self->list, req, links);
 		req->status = SDO_REQ_CANCELLED;
 		sdo_req_unref(req);
-		TAILQ_REMOVE(&self->list, req, links);
 	}
 	self->size = 0;
 }
