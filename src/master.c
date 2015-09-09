@@ -21,6 +21,8 @@
 #include "rest.h"
 #include "sdo-rest.h"
 #include "canopen_info.h"
+#include "time-utils.h"
+#include "profiling.h"
 
 #include "legacy-driver.h"
 
@@ -77,29 +79,6 @@ static void unload_legacy_module(int device_type, void* driver);
 
 struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unused */
-
-static int is_profiling_on_ = -1;
-
-static inline int is_profiling_on()
-{
-	if (is_profiling_on_ < 0)
-		is_profiling_on_ = getenv("CANOPEN_PROFILE") != NULL;
-	return is_profiling_on_;
-}
-
-static inline uint64_t gettime_us()
-{
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return ts.tv_sec * 1000000LL + ts.tv_nsec / 1000LL;
-}
-
-static uint64_t start_time_ = 0;
-
-#define tprintf(fmt, ...) \
-	printf("%07llu\t" fmt, gettime_us() - start_time_, ## __VA_ARGS__)
-
-#define profile(fmt, ...) if (is_profiling_on()) tprintf(fmt, ## __VA_ARGS__)
 
 void clean_node_name(char* name, size_t size)
 {
@@ -1018,7 +997,7 @@ int main(int argc, char* argv[])
 
 	const char* iface = args[0];
 
-	start_time_ = gettime_us();
+	profiling_reset();
 	profile("Starting up canopen-master...\n");
 
 	memset(nodes_seen_, 0, sizeof(nodes_seen_));

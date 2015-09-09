@@ -26,4 +26,26 @@ static inline void add_to_timespec(struct timespec* ts, uint64_t addition)
 	*ts = ns_to_timespec(timespec_to_ns(ts) + addition);
 }
 
+static inline uint64_t gettime_ns(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return timespec_to_ns(&ts);
+}
+
+static inline uint64_t gettime_us(void)
+{
+	return gettime_ns() / 1000ULL;
+}
+
+static inline uint64_t gettime_ms(void)
+{
+	return gettime_us() / 1000ULL;
+}
+
+static inline uint64_t gettime_s(void)
+{
+	return gettime_ms() / 1000ULL;
+}
+
 #endif /* TIME_UTILS_H_ */
