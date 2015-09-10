@@ -48,8 +48,7 @@ struct sdo_req_queue {
 	struct sdo_req_list list;
 	struct sdo_async sdo_client;
 	int nodeid;
-	struct mloop_async* job[2];
-	int which_job;
+	struct mloop_async* job;
 };
 
 int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid, size_t,

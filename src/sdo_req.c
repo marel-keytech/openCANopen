@@ -17,13 +17,6 @@
  * to be processed via mloop_async. This is because sdo_async cannot start
  * itself within its own on_done callback. The same is also true for mloop_async
  * but because they are starting each other, the problem is solved for both.
- *
- * There are two mloop_async objects because when an mloop_async object has been
- * cancelled it cannot be started again until it has been processed by the main
- * loop. Thus, there would otherwise exist a race condition where the currently
- * pending request is cancelled shortly before it's started which would leave
- * an unprocessed request on the queue. This is solved by switching to the other
- * object after cancelling.
  */
 #include <assert.h>
 #include <pthread.h>
@@ -91,29 +84,19 @@ int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 	pthread_mutex_init(&self->mutex, &attr);
 	pthread_mutexattr_destroy(&attr);
 
-	self->job[0] = mloop_async_new();
-	if (!self->job[0])
+	struct mloop_async* async = mloop_async_new();
+	if (!async)
 		return -1;
 
-	self->job[1] = mloop_async_new();
-	if (!self->job[1])
-		goto failure;
+	mloop_async_set_context(async, self, NULL);
+	mloop_async_set_callback(async, sdo_req__do_next_req);
+	mloop_async_set_priority(async, SDO_REQ_ASYNC_PRIO + nodeid);
 
-	mloop_async_set_context(self->job[0], self, NULL);
-	mloop_async_set_callback(self->job[0], sdo_req__do_next_req);
-	mloop_async_set_priority(self->job[0], SDO_REQ_ASYNC_PRIO + nodeid);
-
-	mloop_async_set_context(self->job[1], self, NULL);
-	mloop_async_set_callback(self->job[1], sdo_req__do_next_req);
-	mloop_async_set_priority(self->job[1], SDO_REQ_ASYNC_PRIO + nodeid);
+	self->job = async;
 
 	TAILQ_INIT(&self->list);
 
 	return 0;
-
-failure:
-	mloop_async_unref(self->job[0]);
-	return -1;
 }
 
 void sdo_req__queue_clear(struct sdo_req_queue* self)
@@ -129,8 +112,7 @@ void sdo_req__queue_clear(struct sdo_req_queue* self)
 
 void sdo_req__queue_destroy(struct sdo_req_queue* self)
 {
-	mloop_async_unref(self->job[0]);
-	mloop_async_unref(self->job[1]);
+	mloop_async_unref(self->job);
 	sdo_async_destroy(&self->sdo_client);
 	sdo_req__queue_clear(self);
 	pthread_mutex_destroy(&self->mutex);
@@ -181,8 +163,7 @@ void sdo_req_queue_flush(struct sdo_req_queue* self)
 {
 	sdo_req_queue__lock(self);
 	sdo_req__queue_clear(self);
-	mloop_async_cancel(self->job[self->which_job]);
-	self->which_job ^= 1;
+	mloop_async_cancel(self->job);
 	sdo_async_stop(&self->sdo_client);
 	sdo_req_queue__unlock(self);
 }
@@ -295,7 +276,7 @@ done:
 
 static inline void sdo_req__schedule(struct sdo_req_queue* queue)
 {
-	mloop_start_async(mloop_default(), queue->job[queue->which_job]);
+	mloop_start_async(mloop_default(), queue->job);
 }
 
 void sdo_req__on_done(struct sdo_async* async)
