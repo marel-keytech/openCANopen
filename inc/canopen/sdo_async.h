@@ -2,6 +2,7 @@
 #define SDO_ASYNC_H_
 
 #include <mloop.h>
+#include <pthread.h>
 #include "vector.h"
 #include "canopen/sdo_req_enums.h"
 #include "canopen/sdo.h"
@@ -11,13 +12,6 @@ struct can_frame;
 
 typedef void (*sdo_async_fn)(struct sdo_async* async);
 typedef void (*sdo_async_free_fn)(void* ptr);
-
-enum sdo_async_state {
-	SDO_ASYNC_IDLE,
-	SDO_ASYNC_STARTING,
-	SDO_ASYNC_RUNNING,
-	SDO_ASYNC_STOPPING
-};
 
 enum sdo_async_comm_state {
 	SDO_ASYNC_COMM_START = 0,
@@ -35,7 +29,8 @@ struct sdo_async {
 	int fd;
 	unsigned int nodeid;
 	enum sdo_req_type type;
-	enum sdo_async_state state;
+	pthread_mutex_t mutex;
+	int is_running;
 	enum sdo_async_comm_state comm_state;
 	struct mloop_timer* timer;
 	struct vector buffer;
