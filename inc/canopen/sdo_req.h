@@ -3,7 +3,6 @@
 
 #include <sys/queue.h>
 #include <stddef.h>
-#include <mloop.h>
 #include "vector.h"
 #include "canopen/sdo.h"
 #include "arc.h"
@@ -48,7 +47,6 @@ struct sdo_req_queue {
 	struct sdo_req_list list;
 	struct sdo_async sdo_client;
 	int nodeid;
-	struct mloop_async* job;
 };
 
 int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid, size_t,
