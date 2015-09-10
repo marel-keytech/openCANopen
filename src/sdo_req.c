@@ -12,11 +12,6 @@
  * A request can be handled in either a synchronous or asynchronous manner, by
  * either waiting for it to finish using sdo_req_wait() or registering an
  * "on_done" callback.
- *
- * Note: When an SDO request is done, the next request on the queue is scheduled
- * to be processed via mloop_async. This is because sdo_async cannot start
- * itself within its own on_done callback. The same is also true for mloop_async
- * but because they are starting each other, the problem is solved for both.
  */
 #include <assert.h>
 #include <pthread.h>
