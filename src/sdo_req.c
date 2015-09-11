@@ -57,7 +57,8 @@ void sdo_req_free(struct sdo_req* self)
 
 ARC_GENERATE(sdo_req, sdo_req_free)
 
-void sdo_req__do_next_req(struct sdo_req_queue* queue);
+void sdo_req__process_queue(struct mloop_idle* idle);
+int sdo_req__have_req(struct mloop_idle* idle);
 
 int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 			size_t limit, enum sdo_async_quirks_flags quirks)
@@ -66,6 +67,15 @@ int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 
 	if (sdo_async_init(&self->sdo_client, fd, nodeid) < 0)
 		return -1;
+
+	self->idle = mloop_idle_new();
+	if (!self->idle)
+		goto failure;
+
+	mloop_idle_set_idle_fn(self->idle, sdo_req__process_queue);
+	mloop_idle_set_cond_fn(self->idle, sdo_req__have_req);
+	mloop_idle_set_context(self->idle, self, NULL);
+	mloop_start_idle(mloop_default(), self->idle);
 
 	self->sdo_client.quirks = quirks;
 
@@ -81,6 +91,10 @@ int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
 	TAILQ_INIT(&self->list);
 
 	return 0;
+
+failure:
+	sdo_async_destroy(&self->sdo_client);
+	return -1;
 }
 
 void sdo_req__queue_clear(struct sdo_req_queue* self)
@@ -96,6 +110,7 @@ void sdo_req__queue_clear(struct sdo_req_queue* self)
 
 void sdo_req__queue_destroy(struct sdo_req_queue* self)
 {
+	mloop_idle_unref(self->idle);
 	sdo_async_destroy(&self->sdo_client);
 	sdo_req__queue_clear(self);
 	pthread_mutex_destroy(&self->mutex);
@@ -163,6 +178,7 @@ int sdo_req_queue__enqueue(struct sdo_req_queue* self, struct sdo_req* req)
 
 	req->parent = self;
 	TAILQ_INSERT_TAIL(&self->list, req, links);
+	mloop_iterate(mloop_default());
 
 	rc = 0;
 done:
@@ -228,8 +244,15 @@ void sdo_req__on_stop(void* ptr)
 	sdo_req_unref(req);
 }
 
-void sdo_req__do_next_req(struct sdo_req_queue* queue)
+int sdo_req__have_req(struct mloop_idle* idle)
 {
+	struct sdo_req_queue* queue = mloop_idle_get_context(idle);
+	return sdo_req_queue_head(queue) != NULL;
+}
+
+void sdo_req__process_queue(struct mloop_idle* idle)
+{
+	struct sdo_req_queue* queue = mloop_idle_get_context(idle);
 	sdo_req_queue__lock(queue);
 
 	struct sdo_req* req = sdo_req_queue_head(queue);
@@ -272,18 +295,16 @@ void sdo_req__on_done(struct sdo_async* async)
 	sdo_req_fn on_done = req->on_done;
 	if (on_done)
 		on_done(req);
-
-	sdo_req__do_next_req(queue);
 }
 
 int sdo_req_start(struct sdo_req* self, struct sdo_req_queue* queue)
 {
-	if (sdo_req_queue__enqueue(queue, self) < 0)
-		return -1;
-
 	sdo_req_ref(self);
-	sdo_req__do_next_req(queue);
 
-	return 0;
+	if (sdo_req_queue__enqueue(queue, self) == 0)
+		return 0;
+
+	sdo_req_unref(self);
+	return -1;
 }
 

@@ -3,6 +3,7 @@
 
 #include <sys/queue.h>
 #include <stddef.h>
+#include <mloop.h>
 #include "vector.h"
 #include "canopen/sdo.h"
 #include "arc.h"
@@ -46,6 +47,7 @@ struct sdo_req_queue {
 	size_t limit;
 	struct sdo_req_list list;
 	struct sdo_async sdo_client;
+	struct mloop_idle* idle;
 	int nodeid;
 };
 
