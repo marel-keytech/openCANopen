@@ -247,15 +247,18 @@ void sdo_req__on_stop(void* ptr)
 int sdo_req__have_req(struct mloop_idle* idle)
 {
 	struct sdo_req_queue* queue = mloop_idle_get_context(idle);
-	return sdo_req_queue_head(queue) != NULL;
+	return !queue->sdo_client.is_running
+	    && sdo_req_queue_head(queue) != NULL;
 }
 
 void sdo_req__process_queue(struct mloop_idle* idle)
 {
 	struct sdo_req_queue* queue = mloop_idle_get_context(idle);
+	assert(!queue->sdo_client.is_running);
+
 	sdo_req_queue__lock(queue);
 
-	struct sdo_req* req = sdo_req_queue_head(queue);
+	struct sdo_req* req = sdo_req_queue__dequeue(queue);
 	if (!req)
 		goto done;
 
@@ -271,8 +274,7 @@ void sdo_req__process_queue(struct mloop_idle* idle)
 		.free_fn = sdo_req__on_stop
 	};
 
-	if (sdo_async_start(&queue->sdo_client, &info) == 0)
-		sdo_req_queue__dequeue(queue);
+	sdo_async_start(&queue->sdo_client, &info);
 
 done:
 	sdo_req_queue__unlock(queue);
@@ -295,6 +297,8 @@ void sdo_req__on_done(struct sdo_async* async)
 	sdo_req_fn on_done = req->on_done;
 	if (on_done)
 		on_done(req);
+
+	mloop_iterate(mloop_default());
 }
 
 int sdo_req_start(struct sdo_req* self, struct sdo_req_queue* queue)
