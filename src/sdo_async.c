@@ -24,23 +24,11 @@
 #define CAN_MAX_DLC 8
 #endif
 
-static inline void sdo_async__lock(struct sdo_async* self)
-{
-	pthread_mutex_lock(&self->mutex);
-}
-
-static inline void sdo_async__unlock(struct sdo_async* self)
-{
-	pthread_mutex_unlock(&self->mutex);
-}
-
 int sdo_async_stop(struct sdo_async* self)
 {
 	int rc = -1;
-	sdo_async__lock(self);
-
 	if (!self->is_running)
-		goto done;
+		return -1;
 
 	mloop_timer_stop(self->timer);
 
@@ -49,10 +37,7 @@ int sdo_async_stop(struct sdo_async* self)
 
 	self->is_running = 0;
 
-	rc = 0;
-done:
-	sdo_async__unlock(self);
-	return rc;
+	return 0;
 }
 
 void sdo_async__on_done(struct sdo_async* self)
@@ -97,9 +82,7 @@ static int sdo_async__abort(struct sdo_async* self, enum sdo_abort_code code)
 void sdo_async__on_timeout(struct mloop_timer* timer)
 {
 	struct sdo_async* self = mloop_timer_get_context(timer);
-	sdo_async__lock(self);
 	sdo_async__abort(self, SDO_ABORT_TIMEOUT);
-	sdo_async__unlock(self);
 }
 
 int sdo_async_init(struct sdo_async* self, int fd, int nodeid)
@@ -115,18 +98,11 @@ int sdo_async_init(struct sdo_async* self, int fd, int nodeid)
 	mloop_timer_set_context(self->timer, self, NULL);
 	mloop_timer_set_callback(self->timer, sdo_async__on_timeout);
 
-	pthread_mutexattr_t attr;
-	pthread_mutexattr_init(&attr);
-	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-	pthread_mutex_init(&self->mutex, &attr);
-	pthread_mutexattr_destroy(&attr);
-
 	return 0;
 }
 
 void sdo_async_destroy(struct sdo_async* self)
 {
-	pthread_mutex_destroy(&self->mutex);
 	vector_destroy(&self->buffer);
 	mloop_timer_unref(self->timer);
 }
@@ -185,12 +161,8 @@ int sdo_async__send_init(struct sdo_async* self)
 
 int sdo_async_start(struct sdo_async* self, const struct sdo_async_info* info)
 {
-	int rc = -1;
-
-	sdo_async__lock(self);
-
 	if (self->is_running)
-		goto done;
+		return -1;
 
 	self->context = info->context;
 	self->free_fn = info->free_fn;
@@ -214,10 +186,7 @@ int sdo_async_start(struct sdo_async* self, const struct sdo_async_info* info)
 
 	sdo_async__send_init(self);
 
-	rc = 0;
-done:
-	sdo_async__unlock(self);
-	return rc;
+	return 0;
 }
 
 static inline int sdo_async__is_at_end(const struct sdo_async* self)
@@ -418,7 +387,7 @@ int sdo_async__feed_seg_response(struct sdo_async* self,
 	return -1;
 }
 
-int sdo_async__feed(struct sdo_async* self, const struct can_frame* cf)
+int sdo_async_feed(struct sdo_async* self, const struct can_frame* cf)
 {
 	assert(cf->can_id == R_TSDO + self->nodeid);
 
@@ -444,17 +413,3 @@ int sdo_async__feed(struct sdo_async* self, const struct can_frame* cf)
 	return -1;
 }
 
-int sdo_async_feed(struct sdo_async* self, const struct can_frame* cf)
-{
-	int rc = -1;
-
-	sdo_async__lock(self);
-
-	if (!self->is_running)
-		goto done;
-
-	rc = sdo_async__feed(self, cf);
-done:
-	sdo_async__unlock(self);
-	return rc;
-}

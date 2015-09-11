@@ -2,7 +2,6 @@
 #define SDO_ASYNC_H_
 
 #include <mloop.h>
-#include <pthread.h>
 #include "vector.h"
 #include "canopen/sdo_req_enums.h"
 #include "canopen/sdo.h"
@@ -29,7 +28,6 @@ struct sdo_async {
 	int fd;
 	unsigned int nodeid;
 	enum sdo_req_type type;
-	pthread_mutex_t mutex;
 	int is_running;
 	enum sdo_async_comm_state comm_state;
 	struct mloop_timer* timer;
