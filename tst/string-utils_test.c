@@ -40,6 +40,13 @@ static int test_is_empty()
 	return 0;
 }
 
+static int test_keep_if_alpha()
+{
+	ASSERT_STR_EQ("foobar", string_keep_if(isalpha, string(".f.o.o.b.a.r.")));
+	ASSERT_STR_EQ("", string_keep_if(isalpha, string("12345")));
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -47,5 +54,6 @@ int main()
 	RUN_TEST(test_trim_right);
 	RUN_TEST(test_trim);
 	RUN_TEST(test_is_empty);
+	RUN_TEST(test_keep_if_alpha);
 	return r;
 }
