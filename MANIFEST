@@ -30,6 +30,7 @@ sdo_async.c        SDO client code. An sdo_async module is a machine that
 sdo_common.c       Common SDO client/server utility functions.
 sdo_req.c          Request-reply abstraction on top of sdo_async.
 sdo-rest.c         SDO REST service (mostly for configuring Lenze Inverters).
+sdo_sync.c         Synchronous (blocking) SDO functions.
 sdo_srv.c          SDO server code. Used in fakenode.
 socketcan.c        SocketCAN utilites.
 strlcpy.c          BSD's strlcpy() (contrib).
