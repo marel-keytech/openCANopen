@@ -23,6 +23,7 @@
 #include "canopen_info.h"
 #include "time-utils.h"
 #include "profiling.h"
+#include "string-utils.h"
 
 #include "legacy-driver.h"
 
@@ -48,8 +49,6 @@ size_t strlcpy(char* dst, const char* src, size_t dsize);
 static int socket_ = -1;
 static char nodes_seen_[CANOPEN_NODEID_MAX + 1];
 /* Note: nodes_seen_[0] is unused */
-
-typedef void (*void_cb_fn)(void*);
 
 enum master_state {
 	MASTER_STATE_STARTUP = 0,
@@ -79,23 +78,6 @@ static void unload_legacy_module(int device_type, void* driver);
 
 struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unused */
-
-void clean_node_name(char* name, size_t size)
-{
-	size_t i, k = 0;
-
-	for (i = 0; i < size && name[i]; ++i)
-		if (isalnum(name[i])) {
-			int c = name[i];
-			name[k++] = c;
-		}
-
-	if (i == size)
-		name[i-1] = '\0';
-	else if (k < i)
-		name[k] = '\0';
-
-}
 
 struct sdo_req* sdo_read(int nodeid, int index, int subindex)
 {
@@ -205,7 +187,8 @@ const char* get_name(int nodeid)
 		return NULL;
 
 	memcpy(name, req->data.data, MIN(req->data.index, sizeof(name)));
-	clean_node_name(name, sizeof(name));
+	name[MIN(req->data.index, sizeof(name) - 1)] = '\0';
+	string_keep_if(isalnum, name);
 
 	sdo_req_unref(req);
 	return name;
