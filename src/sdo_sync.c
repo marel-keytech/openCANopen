@@ -52,3 +52,44 @@ DECLARE_SDO_READ(uint16_t, u16)
 DECLARE_SDO_READ(int8_t, i8)
 DECLARE_SDO_READ(uint8_t, u8)
 
+int sdo_sync_write(int nodeid, struct sdo_req_info* info)
+{
+	int rc = -1;
+	info->type = SDO_REQ_DOWNLOAD;
+
+	struct sdo_req* req = sdo_req_new(info);
+	if (!req)
+		return -1;
+
+	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) < 0)
+		goto failure;
+
+	sdo_req_wait(req);
+
+	if (req->status != SDO_REQ_OK)
+		goto failure;
+
+	rc = 0;
+failure:
+	sdo_req_unref(req);
+	return rc;
+}
+
+#define DECLARE_SDO_WRITE(type, name) \
+int sdo_sync_write_ ## name(int nodeid, struct sdo_req_info* info, type value) \
+{ \
+	type network_order = 0; \
+	byteorder(&network_order, &value, sizeof(network_order)); \
+	info->dl_data = &network_order; \
+	info->dl_size = sizeof(network_order); \
+	return sdo_sync_write(nodeid, info); \
+}
+
+DECLARE_SDO_WRITE(int64_t, i64)
+DECLARE_SDO_WRITE(uint64_t, u64)
+DECLARE_SDO_WRITE(int32_t, i32)
+DECLARE_SDO_WRITE(uint32_t, u32)
+DECLARE_SDO_WRITE(int16_t, i16)
+DECLARE_SDO_WRITE(uint16_t, u16)
+DECLARE_SDO_WRITE(int8_t, i8)
+DECLARE_SDO_WRITE(uint8_t, u8)
