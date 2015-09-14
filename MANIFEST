@@ -21,7 +21,8 @@ fakenode.c         A program that creates a single process that behaves like
 http.c             HTTP request parser.
 ini_parser.c       INI file parser.
 legacy-driver.c    A C wrapper around the old C++ driver code.
-master.c           The main program.
+master.c           The master program.
+master-main.c      The main function for the master program.
 network.c          Utility functions for networking.
 profiling.c        Instrumentation for profiling execution time.
 rest.c             REST service.
