@@ -23,6 +23,7 @@ ini_parser.c       INI file parser.
 legacy-driver.c    A C wrapper around the old C++ driver code.
 master.c           The main program.
 network.c          Utility functions for networking.
+profiling.c        Instrumentation for profiling execution time.
 rest.c             REST service.
 sdo_async.c        SDO client code. An sdo_async module is a machine that
                    eats CAN frames and spits out fully formed messages.
