@@ -5,7 +5,6 @@
 #include <stddef.h>
 #include <ctype.h>
 #include <appcbase.h>
-#include <getopt.h>
 
 #include <mloop.h>
 #include "socketcan.h"
@@ -31,9 +30,6 @@
 #define __unused __attribute__((unused))
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
-
-#define SDO_FIFO_MAX_LENGTH 1024
-#define REST_DEFAULT_PORT 9191
 
 #define HEARTBEAT_PERIOD 10000 /* ms */
 #define HEARTBEAT_TIMEOUT 11000 /* ms */
@@ -809,103 +805,9 @@ static void unload_all_drivers()
 			unload_driver(i);
 }
 
-const char usage_[] =
-"Usage: canopen-master [options] <interface>\n"
-"\n"
-"Options:\n"
-"    -h, --help                Get help.\n"
-"    -W, --worker-threads      Set the number of worker threads (default 4).\n"
-"    -s, --worker-stack-size   Set worker thread stack size.\n"
-"    -j, --job-queue-length    Set length of the job queue (default 64).\n"
-"    -S, --sdo-queue-length    Set length of the sdo queue (default 1024).\n"
-"    -R, --rest-port           Set TCP port of the rest service (default 9191).\n"
-"    -Q, --with-quirks         Try to work with buggy old hardware.\n"
-"\n"
-"Appbase Options:\n"
-"    -v, --version             Get version info.\n"
-"    -V, --longversion         Get more detailed version info.\n"
-"    -i, --instance            Set instance id.\n"
-"    -r, --num-of-response     Set maximum skipped heartbeats (default 3).\n"
-"    -q, --queue-length        Set mqs queue length.\n"
-"    -m, --queue-msg-size      Set mqs queue message size.\n"
-"    -e, --realtime-priority   Set the realtime priority of the main process.\n"
-"    -c, --nice-level          Set the nice level.\n"
-"\n"
-"Examples:\n"
-"    $ canopen-master can0 -i0\n"
-"    $ canopen-master can1 -i1 -R9192\n"
-"\n";
-
-static inline int print_usage(FILE* output, int status)
-{
-	fprintf(output, "%s", usage_);
-	return status;
-}
-
-static inline int have_help_argument(int argc, char* argv[])
-{
-	for (int i = 1; i < argc; ++i)
-		if (strcmp(argv[i], "-h") == 0
-		 || strcmp(argv[i], "--help") == 0)
-			return 1;
-
-	return 0;
-}
-
-int main(int argc, char* argv[])
+int co_master_initialize(const struct co_master_options* opt)
 {
 	int rc = 0;
-
-	/* Override appbase help */
-	if (have_help_argument(argc, argv))
-		return print_usage(stdout, 0);
-
-	if (appbase_cmdline(&argc, argv) != 0)
-		return 1;
-
-	int nworkers = 4;
-	size_t worker_stack_size = 0;
-	size_t job_queue_length = 64;
-	size_t sdo_queue_length = SDO_FIFO_MAX_LENGTH;
-	int rest_port = REST_DEFAULT_PORT;
-	int with_quirks = 0;
-
-	static const struct option long_options[] = {
-		{ "worker-threads",    required_argument, 0, 'W' },
-		{ "worker-stack-size", required_argument, 0, 's' },
-		{ "job-queue-length",  required_argument, 0, 'j' },
-		{ "sdo-queue-length",  required_argument, 0, 'S' },
-		{ "rest-port",         required_argument, 0, 'R' },
-		{ "with-quirks",       no_argument,       0, 'Q' },
-		{ 0, 0, 0, 0 }
-	};
-
-	while (1) {
-		int c = getopt_long(argc, argv, "W:s:j:S:R:Q", long_options,
-				    NULL);
-		if (c < 0)
-			break;
-
-		switch (c) {
-		case 'W': nworkers = atoi(optarg); break;
-		case 's': worker_stack_size = strtoul(optarg, NULL, 0); break;
-		case 'j': job_queue_length = strtoul(optarg, NULL, 0); break;
-		case 'S': sdo_queue_length = strtoul(optarg, NULL, 0); break;
-		case 'R': rest_port = atoi(optarg); break;
-		case 'Q': with_quirks = 1; break;
-		case 'h': return print_usage(stdout, 0);
-		case '?': break;
-		default:  return print_usage(stderr, 1);
-		}
-	}
-
-	int nargs = argc - optind;
-	char** args = &argv[optind];
-
-	if (nargs < 1)
-		return print_usage(stderr, 1);
-
-	const char* iface = args[0];
 
 	profiling_reset();
 	profile("Starting up canopen-master...\n");
@@ -920,7 +822,7 @@ int main(int argc, char* argv[])
 	eds_db_load();
 
 	profile("Initialize and register SDO REST service...\n");
-	if (rest_init(rest_port) < 0) {
+	if (rest_init(opt->rest_port) < 0) {
 		perror("Could not initialize rest service");
 		goto rest_init_failure;
 	}
@@ -930,7 +832,7 @@ int main(int argc, char* argv[])
 		goto rest_service_failure;
 
 	profile("Open interface...\n");
-	socket_ = socketcan_open(iface);
+	socket_ = socketcan_open(opt->iface);
 	if (socket_ < 0) {
 		perror("Could not open interface");
 		goto socketcan_open_failure;
@@ -941,10 +843,12 @@ int main(int argc, char* argv[])
 		goto info_failure;
 	}
 
+	enum sdo_async_quirks_flags sdo_quirks;
+	sdo_quirks = opt->flags & CO_MASTER_OPTION_WITH_QUIRKS
+		   ? SDO_ASYNC_QUIRK_ALL : SDO_ASYNC_QUIRK_NONE;
+
 	profile("Initialize SDO queues...\n");
-	if (sdo_req_queues_init(socket_, sdo_queue_length,
-				with_quirks ? SDO_ASYNC_QUIRK_ALL
-					    : SDO_ASYNC_QUIRK_NONE) < 0)
+	if (sdo_req_queues_init(socket_, opt->sdo_queue_length, sdo_quirks) < 0)
 		goto sdo_req_queues_failure;
 
 	profile("Initialize node structure...\n");
@@ -962,8 +866,8 @@ int main(int argc, char* argv[])
 	}
 
 	profile("Start worker threads...\n");
-	if (mloop_start_workers(nworkers, job_queue_length,
-				worker_stack_size) != 0) {
+	if (mloop_start_workers(opt->nworkers, opt->job_queue_length,
+				opt->worker_stack_size) != 0) {
 		rc = 1;
 		goto worker_failure;
 	}

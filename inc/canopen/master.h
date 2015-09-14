@@ -4,6 +4,20 @@
 #include <assert.h>
 #include "canopen.h"
 
+enum co_master_options_flags {
+	CO_MASTER_OPTION_WITH_QUIRKS = 1
+};
+
+struct co_master_options {
+	const char* iface;
+	int nworkers;
+	size_t worker_stack_size;
+	size_t job_queue_length;
+	size_t sdo_queue_length;
+	int rest_port;
+	size_t flags;
+};
+
 struct co_master_node {
 	void* driver;
 	void* master_iface;
@@ -34,5 +48,7 @@ static inline struct co_master_node* co_master_get_node(int nodeid)
 	assert(CANOPEN_NODEID_MIN <= nodeid && nodeid <= CANOPEN_NODEID_MAX);
 	return &co_master_node_[nodeid];
 }
+
+int co_master_initialize(const struct co_master_options* options);
 
 #endif /* CANOPEN_MASTER_H_ */

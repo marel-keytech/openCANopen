@@ -32,7 +32,7 @@ bin/canopen-master: src/master.o src/sdo_common.o src/sdo_req.o \
 		    src/DriverManager.o src/Driver.o src/rest.o src/http.o \
 		    src/eds.o src/ini_parser.o src/types.o src/sdo-rest.o \
 		    src/conversions.o src/strlcpy.o src/canopen_info.o \
-		    src/profiling.o src/sdo_sync.o
+		    src/profiling.o src/sdo_sync.o src/master-main.o
 	@mkdir -p $(@D)
 	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lsharedmalloc -o $@
 
