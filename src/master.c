@@ -18,6 +18,7 @@
 #include "canopen/emcy.h"
 #include "canopen/eds.h"
 #include "canopen/master.h"
+#include "canopen/sdo_sync.h"
 #include "rest.h"
 #include "sdo-rest.h"
 #include "canopen_info.h"
@@ -73,74 +74,29 @@ static void unload_legacy_module(int device_type, void* driver);
 struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unused */
 
-struct sdo_req* sdo_read(int nodeid, int index, int subindex)
-{
-	struct sdo_req_info info = {
-		.type = SDO_REQ_UPLOAD,
-		.index = index,
-		.subindex = subindex
-	};
-
-	struct sdo_req* req = sdo_req_new(&info);
-	if (!req)
-		return NULL;
-
-	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) < 0)
-		goto done;
-
-	sdo_req_wait(req);
-
-	if (req->status != SDO_REQ_OK)
-		goto done;
-
-	return req;
-
-done:
-	sdo_req_unref(req);
-	return NULL;
-}
-
-static uint32_t sdo_read_u32(int nodeid, int index, int subindex)
-{
-	uint32_t value = 0;
-
-	struct sdo_req* req = sdo_read(nodeid, index, subindex);
-	if (!req)
-		return 0;
-
-	if (req->data.index > sizeof(value))
-		goto done;
-
-	byteorder2(&value, req->data.data, sizeof(value), req->data.index);
-
-done:
-	sdo_req_unref(req);
-	return value;
-}
-
 static inline uint32_t get_device_type(int nodeid)
 {
-	return sdo_read_u32(nodeid, 0x1000, 0);
+	return sdo_sync_read_u32(nodeid, 0x1000, 0);
 }
 
 static inline int node_has_identity(int nodeid)
 {
-	return !!sdo_read_u32(nodeid, 0x1018, 0);
+	return !!sdo_sync_read_u32(nodeid, 0x1018, 0);
 }
 
 static inline uint32_t get_vendor_id(int nodeid)
 {
-	return sdo_read_u32(nodeid, 0x1018, 1);
+	return sdo_sync_read_u32(nodeid, 0x1018, 1);
 }
 
 static inline uint32_t get_product_code(int nodeid)
 {
-	return sdo_read_u32(nodeid, 0x1018, 2);
+	return sdo_sync_read_u32(nodeid, 0x1018, 2);
 }
 
 static inline uint32_t get_revision_number(int nodeid)
 {
-	return sdo_read_u32(nodeid, 0x1018, 3);
+	return sdo_sync_read_u32(nodeid, 0x1018, 3);
 }
 
 static inline int set_heartbeat_period(int nodeid, uint16_t period)
@@ -176,7 +132,7 @@ const char* get_name(int nodeid)
 {
 	static __thread char name[256];
 
-	struct sdo_req* req = sdo_read(nodeid, 0x1008, 0);
+	struct sdo_req* req = sdo_sync_read(nodeid, 0x1008, 0);
 	if (!req)
 		return NULL;
 
