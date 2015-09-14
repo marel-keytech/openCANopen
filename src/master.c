@@ -101,31 +101,8 @@ static inline uint32_t get_revision_number(int nodeid)
 
 static inline int set_heartbeat_period(int nodeid, uint16_t period)
 {
-	int rc = -1;
-
-	struct sdo_req_info info = {
-		.type = SDO_REQ_DOWNLOAD,
-		.index = 0x1017,
-		.subindex = 0,
-		.dl_data = &period,
-		.dl_size = sizeof(period)
-	};
-
-	struct sdo_req* req = sdo_req_new(&info);
-	if (!req)
-		return -1;
-
-	if (sdo_req_start(req, sdo_req_queue_get(nodeid)) < 0)
-		goto failure;
-
-	sdo_req_wait(req);
-	if (req->status != SDO_REQ_OK)
-		goto failure;
-
-	rc = 0;
-failure:
-	sdo_req_unref(req);
-	return rc;
+	struct sdo_req_info info = { .index = 0x1017, .subindex = 0 };
+	return sdo_sync_write_u16(nodeid, &info, period);
 }
 
 const char* get_name(int nodeid)
