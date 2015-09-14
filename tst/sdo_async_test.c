@@ -162,7 +162,7 @@ static int download(const char* str)
 	reset_srv_data();
 	push_to_server();
 	ASSERT_STR_EQ(str, srv_data);
-	ASSERT_INT_EQ(size, client.buffer.index);
+	ASSERT_UINT_EQ(size, client.buffer.index);
 	ASSERT_INT_EQ(0x1234, srv_index);
 	ASSERT_INT_EQ(42, srv_subindex);
 	ASSERT_INT_EQ(1, on_done_fake.call_count);
@@ -186,7 +186,7 @@ static int upload(const char* str)
 	ASSERT_INT_EQ(0, sdo_async_start(&client, &info));
 	push_to_server();
 	ASSERT_STR_EQ(str, client.buffer.data);
-	ASSERT_INT_EQ(strlen(str) + 1, client.buffer.index);
+	ASSERT_UINT_EQ(strlen(str) + 1, client.buffer.index);
 	ASSERT_INT_EQ(0x1234, srv_index);
 	ASSERT_INT_EQ(42, srv_subindex);
 	ASSERT_INT_EQ(1, on_done_fake.call_count);

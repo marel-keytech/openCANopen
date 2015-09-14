@@ -24,10 +24,10 @@ int my_sdo_get_obj(struct sdo_obj* obj, int index, int subindex)
 int set_get_cs()
 {
 	struct can_frame frame = { .data = { 0xff } };
-	sdo_set_cs(&frame, 0); ASSERT_INT_EQ(0, sdo_get_cs(&frame));
-	sdo_set_cs(&frame, 1); ASSERT_INT_EQ(1, sdo_get_cs(&frame));
-	sdo_set_cs(&frame, 2); ASSERT_INT_EQ(2, sdo_get_cs(&frame));
-	sdo_set_cs(&frame, 3); ASSERT_INT_EQ(3, sdo_get_cs(&frame));
+	sdo_set_cs(&frame, 0); ASSERT_UINT_EQ(0, sdo_get_cs(&frame));
+	sdo_set_cs(&frame, 1); ASSERT_UINT_EQ(1, sdo_get_cs(&frame));
+	sdo_set_cs(&frame, 2); ASSERT_UINT_EQ(2, sdo_get_cs(&frame));
+	sdo_set_cs(&frame, 3); ASSERT_UINT_EQ(3, sdo_get_cs(&frame));
 	return 0;
 }
 
@@ -57,7 +57,7 @@ int set_get_abort_code()
 {
 	struct can_frame frame = { 0 };
 	sdo_set_abort_code(&frame, 0xdeadbeef);
-	ASSERT_INT_EQ(0xdeadbeef, sdo_get_abort_code(&frame));
+	ASSERT_UINT_EQ(0xdeadbeef, sdo_get_abort_code(&frame));
 	return 0;
 }
 
@@ -270,7 +270,7 @@ int sdo_srv_dl_expediated_1byte()
 	ASSERT_INT_EQ(SDO_SCS_DL_INIT_RES, sdo_get_cs(&frame_out));
 
 	ASSERT_UINT_EQ(42, _test_data[0]);
-	ASSERT_UINT_EQ(-1, _test_data[1]);
+	ASSERT_INT_EQ(-1, _test_data[1]);
 
 	return 0;
 }

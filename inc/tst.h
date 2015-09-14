@@ -32,7 +32,7 @@
 } while(0)
 
 #define ASSERT_INT_EQ(value, expr) TST_ASSERT_EQ_(value, expr, int, "%d")
-#define ASSERT_UINT_EQ(value, expr) TST_ASSERT_EQ_(value, expr, unsigned int, "%d")
+#define ASSERT_UINT_EQ(value, expr) TST_ASSERT_EQ_(value, expr, unsigned int, "%u")
 #define ASSERT_DOUBLE_EQ(value, expr) TST_ASSERT_EQ_(value, expr, double, "%f")
 #define ASSERT_PTR_EQ(value, expr) TST_ASSERT_EQ_(value, expr, void*, "%p")
 
@@ -46,7 +46,7 @@
 } while(0)
 
 #define ASSERT_INT_GT(value, expr) TST_ASSERT_GT_(value, expr, int, "%d")
-#define ASSERT_UINT_GT(value, expr) TST_ASSERT_GT_(value, expr, unsigned int, "%d")
+#define ASSERT_UINT_GT(value, expr) TST_ASSERT_GT_(value, expr, unsigned int, "%u")
 #define ASSERT_DOUBLE_GT(value, expr) TST_ASSERT_GT_(value, expr, double, "%f")
 
 #define TST_ASSERT_GE_(value, expr, type, fmt) do { \
@@ -59,7 +59,7 @@
 } while(0)
 
 #define ASSERT_INT_GE(value, expr) TST_ASSERT_GE_(value, expr, int, "%d")
-#define ASSERT_UINT_GE(value, expr) TST_ASSERT_GE_(value, expr, unsigned int, "%d")
+#define ASSERT_UINT_GE(value, expr) TST_ASSERT_GE_(value, expr, unsigned int, "%u")
 #define ASSERT_DOUBLE_GE(value, expr) TST_ASSERT_GE_(value, expr, double, "%f")
 
 #define TST_ASSERT_LT_(value, expr, type, fmt) do { \
@@ -72,7 +72,7 @@
 } while(0)
 
 #define ASSERT_INT_LT(value, expr) TST_ASSERT_LT_(value, expr, int, "%d")
-#define ASSERT_UINT_LT(value, expr) TST_ASSERT_LT_(value, expr, unsigned int, "%d")
+#define ASSERT_UINT_LT(value, expr) TST_ASSERT_LT_(value, expr, unsigned int, "%u")
 #define ASSERT_DOUBLE_LT(value, expr) TST_ASSERT_LT_(value, expr, double, "%f")
 
 #define TST_ASSERT_LE_(value, expr, type, fmt) do { \
@@ -85,7 +85,7 @@
 } while(0)
 
 #define ASSERT_INT_LE(value, expr) TST_ASSERT_LE_(value, expr, int, "%d")
-#define ASSERT_UINT_LE(value, expr) TST_ASSERT_LE_(value, expr, unsigned int, "%d")
+#define ASSERT_UINT_LE(value, expr) TST_ASSERT_LE_(value, expr, unsigned int, "%u")
 #define ASSERT_DOUBLE_LE(value, expr) TST_ASSERT_LE_(value, expr, double, "%f")
 
 #define ASSERT_STR_EQ(value, expr) do { \

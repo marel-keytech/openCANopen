@@ -5,7 +5,7 @@ static int test_init_destroy()
 {
 	struct vector vector;
 	ASSERT_INT_EQ(0, vector_init(&vector, 42));
-	ASSERT_INT_EQ(0, vector.index);
+	ASSERT_UINT_EQ(0, vector.index);
 	ASSERT_UINT_EQ(42, vector.size);
 	ASSERT_TRUE(vector.data);
 	vector_destroy(&vector);
@@ -41,7 +41,7 @@ static int test_append_nothing()
 	struct vector vector;
 	vector_init(&vector, 42);
 	vector_append(&vector, "", 0);
-	ASSERT_INT_EQ(0, vector.index);
+	ASSERT_UINT_EQ(0, vector.index);
 	ASSERT_UINT_EQ(42, vector.size);
 	vector_destroy(&vector);
 	return 0;
@@ -52,7 +52,7 @@ static int test_append_something()
 	struct vector vector;
 	vector_init(&vector, 42);
 	vector_append(&vector, "a", 1);
-	ASSERT_INT_EQ(1, vector.index);
+	ASSERT_UINT_EQ(1, vector.index);
 	ASSERT_UINT_EQ(42, vector.size);
 	ASSERT_INT_EQ('a', *(char*)vector.data);
 	vector_destroy(&vector);
@@ -64,7 +64,7 @@ static int test_vector_clear()
 	struct vector vector;
 	vector.index = 42;
 	vector_clear(&vector);
-	ASSERT_INT_EQ(0, vector.index);
+	ASSERT_UINT_EQ(0, vector.index);
 	return 0;
 }
 
@@ -76,7 +76,7 @@ static int test_vector_assign_once()
 	size_t size = strlen(str) + 1;
 	vector_assign(&vector, str, size);
 	ASSERT_UINT_GE(size, vector.size);
-	ASSERT_INT_EQ(size, vector.index);
+	ASSERT_UINT_EQ(size, vector.index);
 	ASSERT_STR_EQ("foobar", vector.data);
 	vector_destroy(&vector);
 	return 0;

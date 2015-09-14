@@ -10,7 +10,7 @@ int test_get_empty_path()
 
 	ASSERT_INT_EQ(HTTP_GET, req.method);
 	ASSERT_INT_EQ(0, req.url_index);
-	ASSERT_INT_EQ(strlen(text)-4, req.header_length);
+	ASSERT_UINT_EQ(strlen(text)-4, req.header_length);
 
 	http_req_free(&req);
 	return 0;
@@ -26,7 +26,7 @@ int test_get_one_elem_path()
 	ASSERT_INT_EQ(HTTP_GET, req.method);
 	ASSERT_INT_EQ(1, req.url_index);
 	ASSERT_STR_EQ("foo", req.url[0]);
-	ASSERT_INT_EQ(strlen(text)-4, req.header_length);
+	ASSERT_UINT_EQ(strlen(text)-4, req.header_length);
 
 	http_req_free(&req);
 	return 0;
@@ -43,7 +43,7 @@ int test_get_two_elem_path()
 	ASSERT_INT_EQ(2, req.url_index);
 	ASSERT_STR_EQ("foo", req.url[0]);
 	ASSERT_STR_EQ("bar", req.url[1]);
-	ASSERT_INT_EQ(strlen(text)-4, req.header_length);
+	ASSERT_UINT_EQ(strlen(text)-4, req.header_length);
 
 	http_req_free(&req);
 	return 0;
@@ -58,7 +58,7 @@ int test_put_empty_path()
 
 	ASSERT_INT_EQ(HTTP_PUT, req.method);
 	ASSERT_INT_EQ(0, req.url_index);
-	ASSERT_INT_EQ(strlen(text)-4, req.header_length);
+	ASSERT_UINT_EQ(strlen(text)-4, req.header_length);
 
 	http_req_free(&req);
 	return 0;
@@ -76,8 +76,8 @@ int test_put_with_content_length()
 
 	ASSERT_INT_EQ(HTTP_PUT, req.method);
 	ASSERT_INT_EQ(0, req.url_index);
-	ASSERT_INT_EQ(42, req.content_length);
-	ASSERT_INT_EQ(strlen(text), req.header_length);
+	ASSERT_UINT_EQ(42, req.content_length);
+	ASSERT_UINT_EQ(strlen(text), req.header_length);
 
 	http_req_free(&req);
 	return 0;
@@ -96,7 +96,7 @@ int test_get_with_content_type()
 	ASSERT_INT_EQ(HTTP_GET, req.method);
 	ASSERT_INT_EQ(0, req.url_index);
 	ASSERT_STR_EQ("foo/bar", req.content_type);
-	ASSERT_INT_EQ(strlen(text), req.header_length);
+	ASSERT_UINT_EQ(strlen(text), req.header_length);
 
 	http_req_free(&req);
 	return 0;
@@ -112,7 +112,7 @@ int test_get_with_single_query()
 	ASSERT_INT_EQ(HTTP_GET, req.method);
 	ASSERT_INT_EQ(1, req.url_index);
 	ASSERT_STR_EQ("path", req.url[0]);
-	ASSERT_INT_EQ(strlen(text)-4, req.header_length);
+	ASSERT_UINT_EQ(strlen(text)-4, req.header_length);
 
 	ASSERT_INT_EQ(1, req.url_query_index);
 	ASSERT_STR_EQ("key", req.url_query[0].key);
@@ -132,7 +132,7 @@ int test_get_with_two_query_pairs()
 	ASSERT_INT_EQ(HTTP_GET, req.method);
 	ASSERT_INT_EQ(1, req.url_index);
 	ASSERT_STR_EQ("path", req.url[0]);
-	ASSERT_INT_EQ(strlen(text)-4, req.header_length);
+	ASSERT_UINT_EQ(strlen(text)-4, req.header_length);
 
 	ASSERT_INT_EQ(2, req.url_query_index);
 	ASSERT_STR_EQ("foo", req.url_query[0].key);
