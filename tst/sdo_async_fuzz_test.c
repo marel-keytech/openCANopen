@@ -56,7 +56,7 @@ int upload_fuzz()
 
 	assert(sdo_async_start(&client, &info) == 0);
 
-	while (client.state == SDO_ASYNC_RUNNING) {
+	while (client.is_running) {
 		struct can_frame cf;
 		sdo_clear_frame(&cf);
 		cf.can_id = R_TSDO + 42;
@@ -89,7 +89,7 @@ int download_fuzz()
 
 	assert(sdo_async_start(&client, &info) == 0);
 
-	while (client.state == SDO_ASYNC_RUNNING) {
+	while (client.is_running) {
 		struct can_frame cf;
 		sdo_clear_frame(&cf);
 		cf.can_id = R_TSDO + 42;
