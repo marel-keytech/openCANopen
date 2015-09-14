@@ -34,7 +34,6 @@
 #define SDO_FIFO_MAX_LENGTH 1024
 #define REST_DEFAULT_PORT 9191
 
-#define SDO_TIMEOUT 100 /* ms */
 #define HEARTBEAT_PERIOD 10000 /* ms */
 #define HEARTBEAT_TIMEOUT 11000 /* ms */
 
@@ -62,11 +61,6 @@ pthread_mutex_t driver_manager_lock_ = PTHREAD_MUTEX_INITIALIZER;
 
 static struct mloop* mloop_ = NULL;
 static struct mloop_socket* mux_handler_ = NULL;
-
-struct rest_context {
-	struct rest_client* client;
-	const struct eds_obj* eds_obj;
-};
 
 static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
