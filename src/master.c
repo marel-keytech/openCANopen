@@ -838,7 +838,7 @@ int co_master_initialize(const struct co_master_options* opt)
 		goto socketcan_open_failure;
 	}
 
-	if (canopen_info_init() < 0) {
+	if (canopen_info_init(opt->iface) < 0) {
 		perror("Could not initialize info structure");
 		goto info_failure;
 	}

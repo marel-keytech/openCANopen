@@ -19,7 +19,7 @@ static inline struct canopen_info* canopen_info_get(int nodeid)
 	return &canopen_info_[nodeid - 1];
 }
 
-int canopen_info_init(void);
+int canopen_info_init(const char* iface);
 void canopen_info_cleanup(void);
 
 #endif /* CANOPEN_INFO_H_ */
