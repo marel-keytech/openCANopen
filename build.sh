@@ -25,10 +25,11 @@ EOF
 
 make_target_control()
 {
-	local arch=$1
-	local version=$2
+	local name=$1
+	local arch=$2
+	local version=$3
 
-	make_control canopen2 $arch $version "libmloop, appbase"
+	make_control $name $arch $version "libmloop, appbase"
 }
 
 make_host_control()
@@ -50,7 +51,7 @@ build_package()
 		arch=i386
 		make_host_control $version >$path/DEBIAN/control
 	else
-		make_target_control $arch $version >$path/DEBIAN/control
+		make_target_control $name $arch $version >$path/DEBIAN/control
 	fi
 
 	fakeroot dpkg-deb -b -Zgzip $path $name\_$version\_$arch\.deb
