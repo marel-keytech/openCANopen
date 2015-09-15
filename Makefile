@@ -89,7 +89,7 @@ tst/fuzz_test_sdo_async: tst/sdo_async_fuzz_test.o src/sdo_srv.o \
 	$(CC) $^ -o $@
 
 tst/test_sdo_req: tst/sdo_req_test.o src/sdo_req.o
-	$(CC) $^ -o $@
+	$(CC) $^ -pthread -o $@
 
 tst/test_http: tst/http_test.o src/http.o
 	$(CC) $^ -o $@
@@ -110,7 +110,8 @@ tst/test_arc: tst/arc_test.o
 .PHONY:
 test: tst/test_sdo_srv tst/test_network tst/test_vector tst/test_sdo_async \
       tst/fuzz_test_sdo_async tst/test_sdo_req tst/test_http \
-      tst/test_ini_parser
+      tst/test_ini_parser tst/test_conversions tst/test_string-utils \
+      tst/test_arc
 	run-parts tst
 
 install: all
