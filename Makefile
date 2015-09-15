@@ -7,10 +7,16 @@ else
 RELEASE_FLAGS := -ggdb -O0
 endif
 
-COMMON_FLAGS := -Wextra -Wno-cpp -D_GNU_SOURCE -Iinc/ $(RELEASE_FLAGS)
+ifdef MAREL_ROOT
+SYSROOT_FLAG := --sysroot=$(MAREL_ROOT)
+else
+SYSROOT_FLAG :=
+endif
+
+COMMON_FLAGS := $(SYSROOT_FLAG) -Wextra -Wno-cpp -D_GNU_SOURCE -Iinc/ $(RELEASE_FLAGS)
 CFLAGS := -std=gnu99 $(COMMON_FLAGS) -fexceptions
-CXXFLAGS := -std=gnu++11 $(COMMON_FLAGS)
-LDFLAGS := -lrt
+CXXFLAGS := -std=gnu++0x $(COMMON_FLAGS)
+LDFLAGS := $(SYSROOT_FLAG) -lrt
 
 PREFIX ?= /usr/local
 

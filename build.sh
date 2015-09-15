@@ -65,7 +65,7 @@ build_target_release()
 	local path=build-$arch-release
 	local rootfs=build-host$(marel_getrootprefix $arch)
 
-	USE_GCC5_1=compat marel_make.sh $arch -j8 RELEASE=yes
+	marel_make.sh $arch -j8 RELEASE=yes
 	make install RELEASE=yes PREFIX=/usr DESTDIR=$path
 	make install RELEASE=yes PREFIX=/usr DESTDIR=$rootfs
 	make clean
@@ -78,7 +78,7 @@ build_target_debug()
 	local path=build-$arch-debug
 	local rootfs=build-host$(marel_getrootprefix $arch)
 
-	USE_GCC5_1=compat marel_make.sh $arch -j8
+	marel_make.sh $arch -j8
 	make install PREFIX=/usr DESTDIR=$path
 	make install PREFIX=/usr DESTDIR=$rootfs
 	make clean
