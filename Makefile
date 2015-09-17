@@ -13,7 +13,7 @@ else
 SYSROOT_FLAG :=
 endif
 
-COMMON_FLAGS := $(SYSROOT_FLAG) -Wextra -Wno-cpp -D_GNU_SOURCE -Iinc/ $(RELEASE_FLAGS)
+COMMON_FLAGS := $(SYSROOT_FLAG) -fpic -Wextra -Wno-cpp -D_GNU_SOURCE -Iinc/ -fvisibility=hidden $(RELEASE_FLAGS)
 CFLAGS := -std=gnu99 $(COMMON_FLAGS) -fexceptions
 CXXFLAGS := -std=gnu++0x $(COMMON_FLAGS)
 LDFLAGS := $(SYSROOT_FLAG) -lrt
@@ -32,15 +32,35 @@ endif
 
 all: bin/canopen-master
 
-bin/canopen-master: src/master.o src/sdo_common.o src/sdo_req.o \
-		    src/byteorder.o src/network.o src/canopen.o \
-		    src/sdo_async.o src/socketcan.o src/legacy-driver.o \
-		    src/DriverManager.o src/Driver.o src/rest.o src/http.o \
-		    src/eds.o src/ini_parser.o src/types.o src/sdo-rest.o \
-		    src/conversions.o src/strlcpy.o src/canopen_info.o \
-		    src/profiling.o src/sdo_sync.o src/master-main.o
+lib/libcanopen-master.so: \
+		src/master.o \
+		src/sdo_common.o \
+		src/sdo_req.o \
+		src/byteorder.o \
+		src/network.o \
+		src/canopen.o \
+		src/sdo_async.o \
+		src/socketcan.o \
+		src/legacy-driver.o \
+		src/DriverManager.o \
+		src/Driver.o \
+		src/rest.o \
+		src/http.o \
+		src/eds.o \
+		src/ini_parser.o \
+		src/types.o \
+		src/sdo-rest.o \
+		src/conversions.o \
+		src/strlcpy.o \
+		src/canopen_info.o \
+		src/profiling.o \
+		src/sdo_sync.o
 	@mkdir -p $(@D)
-	$(CXX) $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lsharedmalloc -o $@
+	$(CXX) -shared $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lsharedmalloc -o $@
+
+bin/canopen-master: src/master-main.o lib/libcanopen-master.so
+	@mkdir -p $(@D)
+	$(CC) src/master-main.o -Llib -lcanopen-master $(LDFLAGS) -lappbase -o $@
 
 bin/canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
 		  src/network.o src/canopen.o src/socketcan.o
@@ -67,6 +87,7 @@ bin/fakenode: src/fakenode.o src/canopen.o src/socketcan.o \
 .PHONY: clean
 clean:
 	rm -rf bin
+	rm -rf lib
 	rm -f src/*.o tst/*.o
 	rm -f tst/test_* tst/fuzz_test_*
 
@@ -121,6 +142,8 @@ test: tst/test_sdo_srv tst/test_network tst/test_vector tst/test_sdo_async \
 	run-parts tst
 
 install: all
+	mkdir -p $(LIBDIR)
+	install lib/libcanopen-master.so $(LIBDIR)
 	mkdir -p $(BINDIR)
 	install bin/canopen-master $(BINDIR)
 	mkdir -p $(SMALLOCDIR)
