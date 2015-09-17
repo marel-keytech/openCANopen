@@ -805,6 +805,7 @@ static void unload_all_drivers()
 			unload_driver(i);
 }
 
+__attribute__((visibility("default")))
 int co_master_run(const struct co_master_options* opt)
 {
 	int rc = 0;
