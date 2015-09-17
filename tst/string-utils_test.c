@@ -47,6 +47,27 @@ static int test_keep_if_alpha()
 	return 0;
 }
 
+static int test_string_begins_with()
+{
+	ASSERT_FALSE(string_begins_with("foo", ""));
+	ASSERT_FALSE(string_begins_with("foo", "f"));
+	ASSERT_FALSE(string_begins_with("foo", "fo"));
+	ASSERT_TRUE(string_begins_with("foo", "foo"));
+	ASSERT_TRUE(string_begins_with("foo", "foobar"));
+	return 0;
+}
+
+static int test_string_ends_with()
+{
+	ASSERT_FALSE(string_ends_with("bar", "foo"));
+	ASSERT_FALSE(string_ends_with("bar", "foor"));
+	ASSERT_FALSE(string_ends_with("bar", "fooar"));
+	ASSERT_TRUE(string_ends_with("bar", "foobar"));
+	ASSERT_TRUE(string_ends_with("bar", "bar"));
+	ASSERT_TRUE(string_ends_with("r", "foobar"));
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -55,5 +76,7 @@ int main()
 	RUN_TEST(test_trim);
 	RUN_TEST(test_is_empty);
 	RUN_TEST(test_keep_if_alpha);
+	RUN_TEST(test_string_begins_with);
+	RUN_TEST(test_string_ends_with);
 	return r;
 }

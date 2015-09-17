@@ -41,6 +41,32 @@ static inline char* string_keep_if(int (*cond)(int c), char* str)
 	return str;
 }
 
+static inline int string_begins_with(const char* cmp, const char* str)
+{
+	return strncmp(str, cmp, strlen(cmp)) == 0;
+}
+
+static inline int string_ends_with(const char* cmp, const char* str)
+{
+	size_t cmp_len = strlen(cmp);
+	size_t str_len = strlen(str);
+
+	if (cmp_len > str_len)
+		return 0;
+
+	return strcmp(str + str_len - cmp_len, cmp) == 0;
+}
+
+static inline char* string_tolower(char* str)
+{
+	char* ptr = str;
+	while (*ptr) {
+		*ptr = tolower(*ptr);
+		++ptr;
+	}
+	return str;
+}
+
 #undef SPACE_CHARACTER
 
 #endif /* STRING_UTILS_H_ */
