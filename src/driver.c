@@ -11,8 +11,6 @@
 
 size_t strlcpy(char*, const char*, size_t);
 
-typedef int (*co_drv_init_fn)(struct co_drv*);
-
 struct co_sdo_req {
 	struct sdo_req req;
 	struct co_drv* drv;
@@ -49,20 +47,19 @@ int co_drv_load(struct co_drv* drv, const char* name)
 	if (!drv->dso)
 		return -1;
 
-	co_drv_init_fn co_drv_init = dlsym(drv->dso, "co_drv_init");
+	drv->init_fn = dlsym(drv->dso, "co_drv_init");
 	dlerror();
-	if (!co_drv_init)
-		goto failure;
+	if (drv->init_fn)
+		return 0;
 
-	if (co_drv_init(drv) < 0)
-		goto failure;
-
-	return 0;
-
-failure:
 	dlclose(drv->dso);
 	memset(drv, 0, sizeof(*drv));
 	return -1;
+}
+
+int co_drv_init(struct co_drv* drv)
+{
+	return drv->init_fn(drv);
 }
 
 void co_drv_unload(struct co_drv* drv)

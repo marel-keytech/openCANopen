@@ -25,8 +25,11 @@ struct co_master_options {
 	size_t flags;
 };
 
+typedef int (*co_drv_init_fn)(struct co_drv*);
+
 struct co_drv {
 	void* dso;
+	co_drv_init_fn init_fn;
 
 	struct co_master_node* node;
 	struct sdo_req_queue* sdo_queue;
@@ -78,6 +81,7 @@ static inline struct co_master_node* co_master_get_node(int nodeid)
 int co_master_run(const struct co_master_options* options);
 
 int co_drv_load(struct co_drv* drv, const char* name);
+int co_drv_init(struct co_drv* drv);
 void co_drv_unload(struct co_drv* drv);
 
 #endif /* CANOPEN_MASTER_H_ */
