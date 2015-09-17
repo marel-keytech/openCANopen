@@ -411,34 +411,68 @@ static int handle_heartbeat(struct co_master_node* node,
 	return 0;
 }
 
-static void handle_sdo(struct co_master_node* node, const struct can_frame* cf)
+static int handle_sdo(struct co_master_node* node, const struct can_frame* cf)
 {
 	int nodeid = co_master_get_node_id(node);
 	struct sdo_async* sdo_proc = &sdo_req_queue_get(nodeid)->sdo_client;
-	sdo_async_feed(sdo_proc, cf);
+	return sdo_async_feed(sdo_proc, cf);
 }
 
-static void handle_not_loaded(struct co_master_node* node,
-			      const struct canopen_msg* msg,
-			      const struct can_frame* frame)
+static int handle_not_loaded(struct co_master_node* node,
+			     const struct canopen_msg* msg,
+			     const struct can_frame* frame)
 {
 	switch (msg->object)
 	{
 	case CANOPEN_NMT:
-		break; /* TODO: this is illegal */
+		return 0; /* TODO: this is illegal */
 	case CANOPEN_EMCY:
-		handle_emcy(node, frame);
-		break;
+		return handle_emcy(node, frame);
 	case CANOPEN_HEARTBEAT:
-		handle_heartbeat(node, frame);
-		break;
+		return handle_heartbeat(node, frame);
 	case CANOPEN_TSDO:
-		handle_sdo(node, frame);
-		break;
+		return handle_sdo(node, frame);
 	default:
 		break;
 	}
+
+	return -1;
 }
+
+static int handle_with_legacy(void* driver,
+			      struct co_master_node* node,
+			      const struct canopen_msg* msg,
+			      const struct can_frame* cf)
+{
+	switch (msg->object)
+	{
+	case CANOPEN_NMT:
+		return 0; /* TODO: this is illegal */
+	case CANOPEN_TPDO1:
+		return legacy_driver_iface_process_pdo(driver, 1, cf->data,
+						       cf->can_dlc);
+	case CANOPEN_TPDO2:
+		return legacy_driver_iface_process_pdo(driver, 2, cf->data,
+						       cf->can_dlc);
+	case CANOPEN_TPDO3:
+		return legacy_driver_iface_process_pdo(driver, 3, cf->data,
+						       cf->can_dlc);
+	case CANOPEN_TPDO4:
+		return legacy_driver_iface_process_pdo(driver, 4, cf->data,
+						       cf->can_dlc);
+	case CANOPEN_TSDO:
+		return handle_sdo(node, cf);
+	case CANOPEN_EMCY:
+		return handle_emcy(node, cf);
+	case CANOPEN_HEARTBEAT:
+		return handle_heartbeat(node, cf);
+	default:
+		break;
+	}
+
+	return -1;
+}
+
 
 static void mux_handler_fn(struct mloop_socket* self)
 {
@@ -460,36 +494,8 @@ static void mux_handler_fn(struct mloop_socket* self)
 
 	if (!driver) {
 		handle_not_loaded(node, &msg, &cf);
-		return;
-	}
-
-	switch (msg.object)
-	{
-	case CANOPEN_NMT:
-		break; /* TODO: this is illegal */
-	case CANOPEN_TPDO1:
-		legacy_driver_iface_process_pdo(driver, 1, cf.data, cf.can_dlc);
-		break;
-	case CANOPEN_TPDO2:
-		legacy_driver_iface_process_pdo(driver, 2, cf.data, cf.can_dlc);
-		break;
-	case CANOPEN_TPDO3:
-		legacy_driver_iface_process_pdo(driver, 3, cf.data, cf.can_dlc);
-		break;
-	case CANOPEN_TPDO4:
-		legacy_driver_iface_process_pdo(driver, 4, cf.data, cf.can_dlc);
-		break;
-	case CANOPEN_TSDO:
-		handle_sdo(node, &cf);
-		break;
-	case CANOPEN_EMCY:
-		handle_emcy(node, &cf);
-		break;
-	case CANOPEN_HEARTBEAT:
-		handle_heartbeat(node, &cf);
-		break;
-	default:
-		break;
+	} else {
+		handle_with_legacy(driver, node, &msg, &cf);
 	}
 }
 
