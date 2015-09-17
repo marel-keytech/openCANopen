@@ -231,19 +231,43 @@ static void unload_legacy_module(int device_type, void* driver)
 	pthread_mutex_unlock(&driver_manager_lock_);
 }
 
+static int load_legacy_driver(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	void* master_iface = master_iface_init(nodeid);
+	if (!master_iface)
+		return -1;
+
+	void* driver = load_legacy_module(node->name, node->device_type,
+					  master_iface);
+	if (!driver)
+		goto failure;
+
+	node->driver = driver;
+	node->master_iface = master_iface;
+
+	return 0;
+
+failure:
+	legacy_master_iface_delete(master_iface);
+	node->master_iface = NULL;
+	return -1;
+}
+
 static int load_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 	if (node->driver)
 		unload_driver(nodeid);
 
-	uint32_t device_type = get_device_type(nodeid);
-	if (device_type == 0)
-		goto failure;
+	node->device_type = get_device_type(nodeid);
+	if (node->device_type == 0)
+		return -1;
 
 	const char* name = get_name(nodeid);
 	if (!name)
-		goto failure;
+		return -1;
 
 	strlcpy(node->name, name, sizeof(node->name));
 
@@ -253,32 +277,13 @@ static int load_driver(int nodeid)
 		node->revision_number = get_revision_number(nodeid);
 	}
 
-	void* master_iface = master_iface_init(nodeid);
-	if (!master_iface)
-		goto failure;
+	if (load_legacy_driver(nodeid) < 0)
+		return -1;
 
-	void* driver = load_legacy_module(name, device_type, master_iface);
-	if (!driver)
-		goto driver_create_failure;
-
-	int is_heartbeat_supported =
+	node->is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
 
-	node->driver = driver;
-	node->device_type = device_type;
-	node->master_iface = master_iface;
-	node->is_heartbeat_supported = is_heartbeat_supported;
-
 	return 0;
-
-driver_create_failure:
-	legacy_master_iface_delete(master_iface);
-
-	node->driver = NULL;
-	node->master_iface = NULL;
-failure:
-
-	return -1;
 }
 
 static void initialize_driver(int nodeid)
