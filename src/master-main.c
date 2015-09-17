@@ -113,5 +113,5 @@ int main(int argc, char* argv[])
 
 	mopt.iface = args[0];
 
-	return co_master_initialize(&mopt) == 0 ? 0 : 1;
+	return co_master_run(&mopt) == 0 ? 0 : 1;
 }

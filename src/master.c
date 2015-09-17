@@ -805,7 +805,7 @@ static void unload_all_drivers()
 			unload_driver(i);
 }
 
-int co_master_initialize(const struct co_master_options* opt)
+int co_master_run(const struct co_master_options* opt)
 {
 	int rc = 0;
 

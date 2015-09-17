@@ -49,6 +49,6 @@ static inline struct co_master_node* co_master_get_node(int nodeid)
 	return &co_master_node_[nodeid];
 }
 
-int co_master_initialize(const struct co_master_options* options);
+int co_master_run(const struct co_master_options* options);
 
 #endif /* CANOPEN_MASTER_H_ */
