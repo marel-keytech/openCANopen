@@ -151,17 +151,17 @@ int legacy_driver_iface_process_sdo(void* obj, int index, int subindex,
 	}
 }
 
-int legacy_driver_iface_process_pdo(void* obj, int n, unsigned char* data,
+int legacy_driver_iface_process_pdo(void* obj, int n, const unsigned char* data,
 				    size_t size)
 {
 	auto iface = (CanIOHandlerInterface*)obj;
 
 	try {
 		switch (n) {
-		case 1: return iface->processPdo1(data, size);
-		case 2: return iface->processPdo2(data, size);
-		case 3: return iface->processPdo3(data, size);
-		case 4: return iface->processPdo4(data, size);
+		case 1: return iface->processPdo1((unsigned char*)data, size);
+		case 2: return iface->processPdo2((unsigned char*)data, size);
+		case 3: return iface->processPdo3((unsigned char*)data, size);
+		case 4: return iface->processPdo4((unsigned char*)data, size);
 		}
 	} catch (...) {
 		return -1;

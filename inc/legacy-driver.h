@@ -35,7 +35,7 @@ int legacy_driver_iface_process_emr(void* iface, int code, int reg,
 int legacy_driver_iface_process_sdo(void* obj, int index, int subindex,
 				    unsigned char* data, size_t size);
 
-int legacy_driver_iface_process_pdo(void* obj, int n, unsigned char* data,
+int legacy_driver_iface_process_pdo(void* obj, int n, const unsigned char* data,
 				    size_t size);
 
 int legacy_driver_iface_process_node_state(void* obj, int state);
