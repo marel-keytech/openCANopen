@@ -13,21 +13,6 @@ size_t strlcpy(char*, const char*, size_t);
 
 typedef int (*co_drv_init_fn)(struct co_drv*);
 
-struct co_drv {
-	void* dso;
-
-	struct co_master_node* node;
-	struct sdo_req_queue* sdo_queue;
-
-	void* context;
-	co_free_fn free_fn;
-
-	co_pdo_fn pdo1_fn, pdo2_fn, pdo3_fn, pdo4_fn;
-	co_emcy_fn emcy_fn;
-
-	char iface[256];
-};
-
 struct co_sdo_req {
 	struct sdo_req req;
 	struct co_drv* drv;

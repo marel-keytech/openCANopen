@@ -3,9 +3,16 @@
 
 #include <assert.h>
 #include "canopen.h"
+#include "canopen-driver.h"
 
 enum co_master_options_flags {
 	CO_MASTER_OPTION_WITH_QUIRKS = 1
+};
+
+enum co_master_driver_type {
+	CO_MASTER_DRIVER_NONE = 0,
+	CO_MASTER_DRIVER_LEGACY,
+	CO_MASTER_DRIVER_NEW
 };
 
 struct co_master_options {
@@ -18,9 +25,28 @@ struct co_master_options {
 	size_t flags;
 };
 
+struct co_drv {
+	void* dso;
+
+	struct co_master_node* node;
+	struct sdo_req_queue* sdo_queue;
+
+	void* context;
+	co_free_fn free_fn;
+
+	co_pdo_fn pdo1_fn, pdo2_fn, pdo3_fn, pdo4_fn;
+	co_emcy_fn emcy_fn;
+
+	char iface[256];
+};
+
 struct co_master_node {
+	enum co_master_driver_type driver_type;
+
 	void* driver;
 	void* master_iface;
+
+	struct co_drv ndrv;
 
 	int device_type;
 	int is_heartbeat_supported;
@@ -50,5 +76,8 @@ static inline struct co_master_node* co_master_get_node(int nodeid)
 }
 
 int co_master_run(const struct co_master_options* options);
+
+int co_drv_load(struct co_drv* drv, const char* name);
+void co_drv_unload(struct co_drv* drv);
 
 #endif /* CANOPEN_MASTER_H_ */
