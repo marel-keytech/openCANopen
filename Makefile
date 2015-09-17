@@ -54,7 +54,8 @@ lib/libcanopen-master.so: \
 		src/strlcpy.o \
 		src/canopen_info.o \
 		src/profiling.o \
-		src/sdo_sync.o
+		src/sdo_sync.o \
+		src/driver.o
 	@mkdir -p $(@D)
 	$(CXX) -shared $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lsharedmalloc -o $@
 
