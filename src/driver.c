@@ -1,13 +1,21 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <dlfcn.h>
+#include <unistd.h>
 #include "socketcan.h"
 #include "canopen/master.h"
 #include "canopen/sdo_req.h"
 #include "canopen/emcy.h"
 #include "canopen-driver.h"
+#include "string-utils.h"
+
+size_t strlcpy(char*, const char*, size_t);
+
+typedef int (*co_drv_init_fn)(struct co_drv*);
 
 struct co_drv {
+	void* dso;
+
 	struct co_master_node* node;
 	struct sdo_req_queue* sdo_queue;
 
@@ -25,6 +33,62 @@ struct co_sdo_req {
 	struct co_drv* drv;
 	co_sdo_done_fn on_done;
 };
+
+const char* co__drv_find_dso(const char* name)
+{
+	static __thread char result[256];
+
+	char name_buffer[256];
+	strlcpy(name_buffer, name, 256);
+
+	snprintf(result, sizeof(result), "/usr/lib/canopen/co_drv_%s.so",
+		 string_tolower(name_buffer));
+	result[sizeof(result) - 1] = '\0';
+
+	if (access(result, R_OK) < 0)
+		return NULL;
+
+	return result;
+}
+
+int co_drv_load(struct co_drv* drv, const char* name)
+{
+	assert(!drv->dso);
+
+	const char* path = co__drv_find_dso(name);
+	if (!path)
+		return -1;
+
+	drv->dso = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+	dlerror();
+	if (!drv->dso)
+		return -1;
+
+	co_drv_init_fn co_drv_init = dlsym(drv->dso, "co_drv_init");
+	dlerror();
+	if (!co_drv_init)
+		goto failure;
+
+	if (co_drv_init(drv) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	dlclose(drv->dso);
+	memset(drv, 0, sizeof(*drv));
+	return -1;
+}
+
+void co_drv_unload(struct co_drv* drv)
+{
+	if (drv->context && drv->free_fn)
+		drv->free_fn(drv->context);
+
+	dlclose(drv->dso);
+
+	memset(drv, 0, sizeof(*drv));
+}
 
 #pragma GCC visibility push(default)
 
