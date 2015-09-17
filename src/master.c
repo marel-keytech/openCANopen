@@ -131,6 +131,18 @@ static void stop_ping_timer(int nodeid)
 	mloop_timer_stop(timer);
 }
 
+static void unload_legacy_driver(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	unload_legacy_module(node->device_type, node->driver);
+
+	legacy_master_iface_delete(node->master_iface);
+
+	node->driver = NULL;
+	node->master_iface = NULL;
+}
+
 static void unload_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -142,14 +154,22 @@ static void unload_driver(int nodeid)
 
 	sdo_req_queue_flush(sdo_req_queue_get(nodeid));
 
-	unload_legacy_module(node->device_type, node->driver);
+	switch (node->driver_type) {
+	case CO_MASTER_DRIVER_LEGACY:
+		unload_legacy_driver(nodeid);
+		break;
+	case CO_MASTER_DRIVER_NEW:
+		co_drv_unload(&node->ndrv);
+		break;
+	case CO_MASTER_DRIVER_NONE:
+	default:
+		abort();
+		break;
+	}
 
-	legacy_master_iface_delete(node->master_iface);
-
-	node->driver = NULL;
-	node->master_iface = NULL;
 	node->device_type = 0;
 	node->is_heartbeat_supported = 0;
+	node->driver_type = CO_MASTER_DRIVER_NONE;
 
 	net__send_nmt(socket_, NMT_CS_RESET_NODE, nodeid);
 
@@ -231,6 +251,18 @@ static void unload_legacy_module(int device_type, void* driver)
 	pthread_mutex_unlock(&driver_manager_lock_);
 }
 
+static int load_new_driver(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	if (co_drv_load(&node->ndrv, node->name) < 0)
+		return -1;
+
+	node->driver_type = CO_MASTER_DRIVER_NEW;
+
+	return 0;
+}
+
 static int load_legacy_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -244,6 +276,7 @@ static int load_legacy_driver(int nodeid)
 	if (!driver)
 		goto failure;
 
+	node->driver_type = CO_MASTER_DRIVER_LEGACY;
 	node->driver = driver;
 	node->master_iface = master_iface;
 
@@ -277,8 +310,9 @@ static int load_driver(int nodeid)
 		node->revision_number = get_revision_number(nodeid);
 	}
 
-	if (load_legacy_driver(nodeid) < 0)
-		return -1;
+	if (load_new_driver(nodeid) < 0)
+		if (load_legacy_driver(nodeid) < 0)
+			return -1;
 
 	node->is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
@@ -286,24 +320,58 @@ static int load_driver(int nodeid)
 	return 0;
 }
 
-static void initialize_driver(int nodeid)
+static void initialize_info_structure(int nodeid)
 {
-	struct co_master_node* node = co_master_get_node(nodeid);
-	if (legacy_driver_iface_initialize(node->driver) < 0) {
-		unload_legacy_module(node->device_type, node->driver);
-		legacy_master_iface_delete(node->master_iface);
-		node->driver = NULL;
-		node->master_iface = NULL;
-		return;
-	}
-
-	legacy_driver_iface_process_node_state(node->driver, 1);
-
 	struct canopen_info* info = canopen_info_get(nodeid);
+	struct co_master_node* node = co_master_get_node(nodeid);
+
 	info->is_active = 1;
 	info->device_type = node->device_type;
 	info->last_seen = gettime_us() / 1000000ULL;
 	strlcpy(info->name, node->name, sizeof(info->name));
+}
+
+static void initialize_legacy_driver(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	if (legacy_driver_iface_initialize(node->driver) >= 0) {
+		legacy_driver_iface_process_node_state(node->driver, 1);
+		initialize_info_structure(nodeid);
+	} else {
+		unload_legacy_module(node->device_type, node->driver);
+		legacy_master_iface_delete(node->master_iface);
+		node->driver = NULL;
+		node->master_iface = NULL;
+	}
+}
+
+static void initialize_new_driver(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	if (co_drv_init(&node->ndrv) >= 0)
+		initialize_info_structure(nodeid);
+	else
+		co_drv_unload(&node->ndrv);
+}
+
+static void initialize_driver(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	switch (node->driver_type) {
+	case CO_MASTER_DRIVER_NEW:
+		initialize_new_driver(nodeid);
+		break;
+	case CO_MASTER_DRIVER_LEGACY:
+		initialize_legacy_driver(nodeid);
+		break;
+	case CO_MASTER_DRIVER_NONE:
+	default:
+		abort();
+		break;
+	}
 }
 
 static void run_net_probe(struct mloop_work* self)
@@ -376,16 +444,28 @@ static int handle_emcy(struct co_master_node* node,
 	if (frame->can_dlc == 0)
 		return handle_bootup(node);
 
-	if (!node->driver)
-		return -1;
-
 	if (frame->can_dlc != 8)
 		return -1;
 
-	legacy_driver_iface_process_emr(node->driver,
-					emcy_get_code(frame),
-					emcy_get_register(frame),
-					emcy_get_manufacturer_error(frame));
+	struct co_emcy emcy = {
+		.code = emcy_get_code(frame),
+		.reg = emcy_get_register(frame),
+		.manufacturer_error = emcy_get_manufacturer_error(frame)
+	};
+
+	switch (node->driver_type) {
+	case CO_MASTER_DRIVER_NONE:
+		return -1;
+	case CO_MASTER_DRIVER_LEGACY:
+		legacy_driver_iface_process_emr(node->driver, emcy.code,
+						emcy.reg,
+						emcy.manufacturer_error);
+		break;
+	case CO_MASTER_DRIVER_NEW:
+		if (node->ndrv.emcy_fn)
+			node->ndrv.emcy_fn(&node->ndrv, &emcy);
+		break;
+	}
 
 	return 0;
 }
@@ -444,11 +524,12 @@ static int handle_not_loaded(struct co_master_node* node,
 	return -1;
 }
 
-static int handle_with_legacy(void* driver,
-			      struct co_master_node* node,
+static int handle_with_legacy(struct co_master_node* node,
 			      const struct canopen_msg* msg,
 			      const struct can_frame* cf)
 {
+	void* driver = node->driver;
+
 	switch (msg->object)
 	{
 	case CANOPEN_NMT:
@@ -478,6 +559,44 @@ static int handle_with_legacy(void* driver,
 	return -1;
 }
 
+static int handle_with_new_driver(struct co_master_node* node,
+				  const struct canopen_msg* msg,
+				  const struct can_frame* cf)
+{
+	struct co_drv* drv = &node->ndrv;
+
+	switch (msg->object)
+	{
+	case CANOPEN_NMT:
+		return 0; /* TODO: this is illegal */
+	case CANOPEN_TPDO1:
+		if (drv->pdo1_fn)
+			drv->pdo1_fn(drv, cf->data, cf->can_dlc);
+		return 0;
+	case CANOPEN_TPDO2:
+		if (drv->pdo2_fn)
+			drv->pdo2_fn(drv, cf->data, cf->can_dlc);
+		return 0;
+	case CANOPEN_TPDO3:
+		if (drv->pdo3_fn)
+			drv->pdo3_fn(drv, cf->data, cf->can_dlc);
+		return 0;
+	case CANOPEN_TPDO4:
+		if (drv->pdo4_fn)
+			drv->pdo4_fn(drv, cf->data, cf->can_dlc);
+		return 0;
+	case CANOPEN_TSDO:
+		return handle_sdo(node, cf);
+	case CANOPEN_EMCY:
+		return handle_emcy(node, cf);
+	case CANOPEN_HEARTBEAT:
+		return handle_heartbeat(node, cf);
+	default:
+		break;
+	}
+
+	return -1;
+}
 
 static void mux_handler_fn(struct mloop_socket* self)
 {
@@ -495,12 +614,17 @@ static void mux_handler_fn(struct mloop_socket* self)
 		return;
 
 	struct co_master_node* node = co_master_get_node(msg.id);
-	void* driver = node->driver;
 
-	if (!driver) {
+	switch (node->driver_type) {
+	case CO_MASTER_DRIVER_NONE:
 		handle_not_loaded(node, &msg, &cf);
-	} else {
-		handle_with_legacy(driver, node, &msg, &cf);
+		break;
+	case CO_MASTER_DRIVER_LEGACY:
+		handle_with_legacy(node, &msg, &cf);
+		break;
+	case CO_MASTER_DRIVER_NEW:
+		handle_with_new_driver(node, &msg, &cf);
+		break;
 	}
 }
 
