@@ -1,154 +1,53 @@
-CC := $(CROSS_COMPILE)gcc
-CXX := $(CROSS_COMPILE)g++
+PRJ_NAME := canopen2
+PRJ_TYPE := SOLIB
 
-ifdef RELEASE
-RELEASE_FLAGS := -O3 -DNDEBUG
-else
-RELEASE_FLAGS := -ggdb -O0
-endif
+ADD_CFLAGS := -std=gnu99 -std=gnu++0x -D_GNU_SOURCE -Wextra -fexceptions \
+	      -fvisibility=hidden -pthread
 
-ifdef MAREL_ROOT
-SYSROOT_FLAG := --sysroot=$(MAREL_ROOT)
-else
-SYSROOT_FLAG :=
-endif
+ADD_LIBS := mloop appbase dl sharedmalloc
+ADD_LFLAGS := -pthread
 
-COMMON_FLAGS := $(SYSROOT_FLAG) -fpic -Wextra -Wno-cpp -D_GNU_SOURCE -Iinc/ -fvisibility=hidden $(RELEASE_FLAGS)
-CFLAGS := -std=gnu99 $(COMMON_FLAGS) -fexceptions
-CXXFLAGS := -std=gnu++0x $(COMMON_FLAGS)
-LDFLAGS := $(SYSROOT_FLAG) -lrt
+MAIN_SRC := canopen-master.c
 
-PREFIX ?= /usr/local
+SRC := \
+	master.c \
+	sdo_common.c \
+	sdo_req.c \
+	byteorder.c \
+	network.c \
+	canopen.c \
+	sdo_async.c \
+	socketcan.c \
+	legacy-driver.cpp \
+	DriverManager.cpp \
+	Driver.cpp \
+	rest.c \
+	http.c \
+	eds.c \
+	ini_parser.c \
+	types.c \
+	sdo-rest.c \
+	conversions.c \
+	strlcpy.c \
+	canopen_info.c \
+	profiling.c \
+	sdo_sync.c \
+	driver.c
 
-SMALLOCDIR = $(DESTDIR)$(PREFIX)/var/marel/sharedmalloc/keys/
+TEST_SRC := \
+	unit_arc.c \
+	unit_conversions.c \
+	unit_http.c \
+	unit_init_parser.c \
+	unit_json_combi.c \
+	unit_network.c \
+	unit_sdo_req.c \
+	unit_string-utils.c \
+	unit_vector.c
+#	unit_sdo_srv.c
+#	unit_sdo_async.c
 
-ifdef RELEASE
-LIBDIR = $(DESTDIR)$(PREFIX)/lib
-BINDIR = $(DESTDIR)$(PREFIX)/bin
-else
-LIBDIR = $(DESTDIR)$(PREFIX)/lib/debug
-BINDIR = $(DESTDIR)$(PREFIX)/bin/debug
-endif
-
-all: bin/canopen-master
-
-lib/libcanopen-master.so: \
-		src/master.o \
-		src/sdo_common.o \
-		src/sdo_req.o \
-		src/byteorder.o \
-		src/network.o \
-		src/canopen.o \
-		src/sdo_async.o \
-		src/socketcan.o \
-		src/legacy-driver.o \
-		src/DriverManager.o \
-		src/Driver.o \
-		src/rest.o \
-		src/http.o \
-		src/eds.o \
-		src/ini_parser.o \
-		src/types.o \
-		src/sdo-rest.o \
-		src/conversions.o \
-		src/strlcpy.o \
-		src/canopen_info.o \
-		src/profiling.o \
-		src/sdo_sync.o \
-		src/driver.o
-	@mkdir -p $(@D)
-	$(CXX) -shared $^ $(LDFLAGS) -pthread -lappbase -lmloop -ldl -lsharedmalloc -o $@
-
-bin/canopen-master: src/master-main.o lib/libcanopen-master.so
-	@mkdir -p $(@D)
-	$(CC) src/master-main.o -Llib -lcanopen-master $(LDFLAGS) -lappbase -o $@
-
-bin/canopen-dump: src/canopen-dump.o src/sdo_common.o src/byteorder.o \
-		  src/network.o src/canopen.o src/socketcan.o
-	@mkdir -p $(@D)
-	$(CC) $^ $(LDFLAGS) -o $@
-
-bin/canbridge: src/canopen.o src/socketcan.o src/network.o src/canbridge.o
-	@mkdir -p $(@D)
-	$(CC) $^ $(LDFLAGS) -o $@
-
-bin/fakenode: src/fakenode.o src/canopen.o src/socketcan.o \
-	      src/sdo_common.o src/sdo_srv.o src/byteorder.o src/network.o
-	@mkdir -p $(@D)
-	$(CC) $^ $(LDFLAGS) -llua5.1 -o $@
-
-.PHONY: .c.o
-.c.o:
-	$(CC) -c $(CFLAGS) $< -o $@
-
-.PHONY: .cpp.o
-.cpp.o:
-	$(CXX) -c $(CXXFLAGS) $< -o $@
-
-.PHONY: clean
-clean:
-	rm -rf bin
-	rm -rf lib
-	rm -f src/*.o tst/*.o
-	rm -f tst/test_* tst/fuzz_test_*
-
-.PHONY: distclean
-distclean: clean
-	rm -rf build-*
-	rm -f *.deb
-
-tst/test_sdo_srv: src/sdo_common.o src/sdo_srv.o src/byteorder.o tst/sdo_srv.o
-	$(CC) $^ $(LDFLAGS) -o $@
-
-tst/test_network: src/canopen.o src/byteorder.o src/network.o tst/network_test.o
-	$(CC) $^ -o $@
-
-tst/test_vector: tst/vector_test.o
-	$(CC) $^ -o $@
-
-tst/test_sdo_async: tst/sdo_async_test.o src/sdo_srv.o src/byteorder.o \
-		    src/sdo_common.o src/sdo_async.o src/network.o \
-		    src/canopen.o
-	$(CC) $^ -o $@
-
-tst/fuzz_test_sdo_async: tst/sdo_async_fuzz_test.o src/sdo_srv.o \
-			 src/byteorder.o src/sdo_common.o src/sdo_async.o \
-			 src/canopen.o
-	$(CC) $^ -o $@
-
-tst/test_sdo_req: tst/sdo_req_test.o src/sdo_req.o
-	$(CC) $^ -pthread -o $@
-
-tst/test_http: tst/http_test.o src/http.o
-	$(CC) $^ -o $@
-
-tst/test_ini_parser: tst/ini_parser_test.o src/ini_parser.o
-	$(CC) $^ -o $@
-
-tst/test_conversions: tst/conversions_test.o src/conversions.o src/types.o \
-		      src/byteorder.o src/strlcpy.o
-	$(CC) $^ -o $@
-
-tst/test_string-utils: tst/string-utils_test.o
-	$(CC) $^ -o $@
-
-tst/test_arc: tst/arc_test.o
-	$(CC) $^ -o $@
-
-.PHONY:
-test: tst/test_sdo_srv tst/test_network tst/test_vector tst/test_sdo_async \
-      tst/fuzz_test_sdo_async tst/test_sdo_req tst/test_http \
-      tst/test_ini_parser tst/test_conversions tst/test_string-utils \
-      tst/test_arc
-	run-parts tst
-
-install: all
-	mkdir -p $(LIBDIR)
-	install lib/libcanopen-master.so $(LIBDIR)
-	mkdir -p $(BINDIR)
-	install bin/canopen-master $(BINDIR)
-	mkdir -p $(SMALLOCDIR)
-	install canopen2.xml $(SMALLOCDIR)
+include $(MDEV)/make/make.main
 
 # vi: noet sw=8 ts=8 tw=80
 

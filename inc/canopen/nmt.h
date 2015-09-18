@@ -1,6 +1,7 @@
 #ifndef _CANOPEN_NMT_H
 #define _CANOPEN_NMT_H
 
+#include <sys/socket.h>
 #include <linux/can.h>
 
 #define NMT_ALL_NODES 0

@@ -1,0 +1,33 @@
+Package: canopen2
+Version: 0.0.0
+ExtraVersion: beta
+Description: CANopen master version 2.
+
+Destination: target
+BuildDepends: marel-env-host, libmloop-crossdevelopment, appbase-crossdevelopment
+Depends: libmloop, appbase
+
+Type: release
+Install: ##BUILDRELEASE##lib/ usr/lib
+Install: ##BUILDRELEASE##bin/ usr/bin
+
+Type: debug
+Install: ##BUILDDEBUG##lib/ usr/lib/debug
+Install: ##BUILDDEBUG##bin/ usr/bin/debug
+
+Destination: host
+BuildDepends: marel-env-host, libmloop-crossdevelopment, appbase-crossdevelopment
+Depends: libmloop-crossdevelopment, appbase-crossdevelopment
+Type: development
+
+Install: ##BUILDRELEASE##lib/ usr/lib
+Install: ##BUILDDEBUG##lib/ usr/lib/debug
+Install: ##BUILDRELEASE##bin/ usr/bin
+Install: ##BUILDDEBUG##bin/ usr/bin/debug
+Install: inc/canopen-master.h usr/include
+
+InstallTarget: ##BUILDRELEASE##lib/ usr/lib
+InstallTarget: ##BUILDDEBUG##lib/ usr/lib/debug
+InstallTarget: ##BUILDRELEASE##bin/ usr/bin
+InstallTarget: ##BUILDDEBUG##bin/ usr/bin/debug
+InstallTarget: inc/canopen-master.h usr/include
