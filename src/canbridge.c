@@ -1,219 +1,157 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <poll.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include <getopt.h>
+#include <mloop.h>
 
-#include "socketcan.h"
-#include "canopen/network.h"
+#include "network-bridge.h"
 
-static int open_can(char* iface)
+const char usage_[] =
+"Usage: canbridge [options] <interface>\n"
+"\n"
+"Options:\n"
+"    -h, --help                 Get help.\n"
+"    -L, --listen[=port]        Listen on TCP port. Default 5555.\n"
+"    -c, --connect=host[:port]  Connect to TCP server. Default 5555.\n"
+"    -C, --create               Try to create a virtual CAN interface.\n"
+"\n"
+"Examples:\n"
+"    $ canbridge can0 --listen=1234\n"
+"    $ canbridge vcan0 --connect=127.0.0.1:1234\n"
+"\n";
+
+static inline int print_usage(FILE* output, int status)
 {
-	int fd = socketcan_open(iface);
-	if (fd < 0) {
-		perror("Could not open interface");
-		return -1;
-	}
-	net_dont_block(fd);
-	net_fix_sndbuf(fd);
-	return fd;
-}
-
-static int open_tcp_server(int port)
-{
-	int fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (fd < 0) {
-		perror("Could not open socket");
-		return -1;
-	}
-
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	if (bind(fd, &addr, sizeof(addr)) < 0) {
-		perror("Failed to bind to address");
-		return -1;
-	}
-
-	if (listen(fd, 16) < 0) {
-		perror("Failed to listen");
-		return -1;
-	}
-
-	return fd;
-}
-
-static int open_tcp_client(const char* address, int port)
-{
-	int fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (fd < 0) {
-		perror("Could not open socket");
-		return -1;
-	}
-
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = inet_addr(address);
-
-	if (connect(fd, &addr, sizeof(addr)) < 0) {
-		perror("Failed to connect");
-		return -1;
-	}
-
-	net_dont_block(fd);
-
-	return fd;
-}
-
-static int wait_for_connection(int port)
-{
-	int srv = open_tcp_server(port);
-	if (srv < 0)
-		return -1;
-
-	int fd = accept(srv, NULL, 0);
-
-	if (fd >= 0)
-		net_dont_block(fd);
-
-	return fd;
-}
-
-static int forward_to_network(int src, int dst)
-{
-	struct can_frame rcf, tcf;
-
-	ssize_t rsize = net_read_frame(src, &rcf, 0);
-	if (rsize == 0) {
-		return 0;
-	} else if (rsize < 0) {
-		perror("Read frame");
-		return -1;
-	}
-
-	tcf.can_id = htonl(rcf.can_id);
-	tcf.can_dlc = rcf.can_dlc;
-	memcpy(tcf.data, rcf.data, 8);
-
-	if (net_write_frame(dst, &tcf, -1) < 0)
-		perror("Write frame");
-
-	return rsize;
-}
-
-static int forward_to_can(int src, int dst)
-{
-	struct can_frame rcf, tcf;
-
-	ssize_t rsize = net_read_frame(src, &rcf, 0);
-	if (rsize == 0) {
-		return 0;
-	} else if (rsize < 0) {
-		perror("Read frame");
-		return -1;
-	}
-
-	tcf.can_id = ntohl(rcf.can_id);
-	tcf.can_dlc = rcf.can_dlc;
-	memcpy(tcf.data, rcf.data, 8);
-
-	if (net_write_frame(dst, &tcf, -1) < 0)
-		perror("Write frame");
-
-	return rsize;
+	fprintf(output, "%s", usage_);
+	return status;
 }
 
 
-static int forward_all_messages(int network, int can)
+static int try_create(const char* iface)
 {
-	struct pollfd fds[2];
-
-	fds[0].fd = network;
-	fds[0].events = POLLIN;
-	fds[1].fd = can;
-	fds[1].events = POLLIN;
-
-	while (1) {
-		fds[0].revents = 0;
-		fds[1].revents = 0;
-
-		int n = poll(fds, 2, -1);
-		if (n < 0) {
-			perror("poll()");
-			return -1;
-		}
-
-		if (fds[0].revents == POLLIN)
-			if (forward_to_can(network, can) == 0)
-				return -1;
-
-		if (fds[1].revents == POLLIN)
-			if (forward_to_network(can, network) == 0)
-				return -1;
-	}
-
-	return 0;
+	char buffer[256];
+	snprintf(buffer, sizeof(buffer), "ip link add dev %s type vcan", iface);
+	buffer[sizeof(buffer) - 1] = '\0';
+	return system(buffer);
 }
 
-static int server(int argc, char* argv[])
+static int try_setup(const char* iface)
 {
-	char* iface = argv[1];
-	int port = atoi(argv[2]);
-
-	int can_fd = open_can(iface);
-	if (can_fd < 0)
-		return -1;
-
-	int conn_fd = wait_for_connection(port);
-	if (conn_fd < 0)
-		return -1;
-
-	forward_all_messages(conn_fd, can_fd);
-	close(conn_fd);
-	close(can_fd);
-
-	return 0;
+	char buffer[256];
+	snprintf(buffer, sizeof(buffer), "ip link set %s up", iface);
+	buffer[sizeof(buffer) - 1] = '\0';
+	return system(buffer);
 }
 
-static int client(int argc, char* argv[])
+static void on_signal_event(struct mloop_signal* sig, int signo)
 {
-	char* iface = argv[1];
-	char* address = argv[2];
-	int port = atoi(argv[3]);
-
-	int can_fd = open_can(iface);
-	if (can_fd < 0)
-		return -1;
-
-	int conn_fd = open_tcp_client(address, port);
-	if (conn_fd < 0)
-		return -1;
-
-	forward_all_messages(conn_fd, can_fd);
-	close(can_fd);
-	close(conn_fd);
-
-	return 0;
+	(void)sig;
+	(void)signo;
+	mloop_exit(mloop_default());
 }
 
 int main(int argc, char* argv[])
 {
-	char* what = argv[1];
+	static const struct option long_options[] = {
+		{ "help",    no_argument,       0, 'h' },
+		{ "listen",  optional_argument, 0, 'L' },
+		{ "connect", required_argument, 0, 'c' },
+		{ "create",  no_argument,       0, 'C' },
+		{ 0, 0, 0, 0 }
+	};
 
-	if (strcmp(what, "client") == 0)
-		return client(argc-1, &argv[1]);
+	const char* listen_ = NULL;
+	const char* connect_ = NULL;
+	int create = 0;
 
-	if (strcmp(what, "server") == 0)
-		return server(argc-1, &argv[1]);
+	while (1) {
+		int c = getopt_long(argc, argv, "hL::c:C", long_options, NULL);
+		if (c < 0)
+			break;
 
+		switch (c) {
+		case 'h': return print_usage(stdout, 0);
+		case 'L': listen_ = optarg ? optarg : "5555"; break;
+		case 'c': connect_ = optarg; break;
+		case 'C': create = 1; break;
+		}
+	}
+
+	int nargs = argc - optind;
+	char** args = &argv[optind];
+
+	if (nargs < 1)
+		return print_usage(stderr, 1);
+
+	const char* iface = args[0];
+
+	if (listen_ && connect_) {
+		fprintf(stderr, "Can't have both listen and connect arguments\n");
+		return print_usage(stderr, 1);
+	}
+
+	if (!listen_ && !connect_) {
+		fprintf(stderr, "You must either listen or connect\n");
+		return print_usage(stderr, 1);
+	}
+
+	if (create) {
+		if (try_create(iface) < 0) {
+			perror("Could not create interface");
+			return 1;
+		}
+
+		if (try_setup(iface) < 0) {
+			perror("Could not set up interface");
+			return 1;
+		}
+	}
+
+	struct mloop* mloop = mloop_default();
+	mloop_ref(mloop);
+
+	if (listen_) {
+		int port = atoi(listen_);
+		if (can_network_bridge_server(iface, port) < 0) {
+			perror("Could not create interface bridge");
+			goto failure;
+		}
+	} else {
+		int port = 5555;
+		char* portptr = strchr(connect_, ':');
+		if (portptr) {
+			*portptr++ = '\0';
+			port = atoi(portptr);
+		}
+
+		if (can_network_bridge_client(iface, connect_, port) < 0) {
+			perror("Could not create interface bridge");
+			goto failure;
+		}
+	}
+
+	sigset_t sigset;
+	sigemptyset(&sigset);
+	sigaddset(&sigset, SIGINT);
+	sigaddset(&sigset, SIGTERM);
+	sigaddset(&sigset, SIGHUP);
+
+	pthread_sigmask(SIG_BLOCK, &sigset, NULL);
+
+	struct mloop_signal* sig = mloop_signal_new();
+	if (!sig) {
+		perror("Could not allocate signal handler");
+		return 1;
+	}
+
+	mloop_signal_set_signals(sig, &sigset);
+	mloop_signal_set_callback(sig, on_signal_event);
+	mloop_start_signal(mloop, sig);
+	mloop_signal_unref(sig);
+
+	mloop_run(mloop);
+
+failure:
+	mloop_unref(mloop);
 	return 1;
 }

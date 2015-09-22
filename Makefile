@@ -7,7 +7,7 @@ ADD_CFLAGS := -std=gnu99 -std=gnu++0x -D_GNU_SOURCE -Wextra -fexceptions \
 ADD_LIBS := mloop appbase dl sharedmalloc
 ADD_LFLAGS := -pthread
 
-MAIN_SRC := canopen-master.c
+MAIN_SRC := canopen-master.c canbridge.c
 
 SRC := \
 	master.c \
@@ -33,7 +33,8 @@ SRC := \
 	profiling.c \
 	sdo_sync.c \
 	sdo_srv.c \
-	driver.c
+	driver.c \
+	network-bridge.c
 
 TEST_SRC := \
 	unit_arc.c \
