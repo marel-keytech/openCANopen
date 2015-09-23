@@ -8,26 +8,26 @@ BuildDepends: marel-env-host, libmloop-crossdevelopment, appbase-crossdevelopmen
 Depends: libmloop, appbase
 
 Type: release
-Install: ##BUILDRELEASE##lib/ usr/lib
-Install: ##BUILDRELEASE##bin/ usr/bin
+Install: ##BUILDRELEASE##lib/libcanopen2.so usr/lib
+Install: ##BUILDRELEASE##bin/canopen-master usr/bin
 
 Type: debug
-Install: ##BUILDDEBUG##lib/ usr/lib/debug
-Install: ##BUILDDEBUG##bin/ usr/bin/debug
+Install: ##BUILDDEBUG##lib/libcanopen2.so usr/lib/debug
+Install: ##BUILDDEBUG##bin/canopen-master usr/bin/debug
 
 Destination: host
 BuildDepends: marel-env-host, libmloop-crossdevelopment, appbase-crossdevelopment
 Depends: libmloop-crossdevelopment, appbase-crossdevelopment
 Type: development
 
-Install: ##BUILDRELEASE##lib/ usr/lib
-Install: ##BUILDDEBUG##lib/ usr/lib/debug
-Install: ##BUILDRELEASE##bin/ usr/bin
-Install: ##BUILDDEBUG##bin/ usr/bin/debug
-Install: inc/canopen-master.h usr/include
+Install: ##BUILDRELEASE##lib/libcanopen2.so usr/lib
+Install: ##BUILDDEBUG##lib/libcanopen2.so usr/lib/debug
+Install: ##BUILDRELEASE##bin/canopen-master usr/bin
+Install: ##BUILDDEBUG##bin/canopen-master usr/bin/debug
+Install: inc/canopen-driver.h usr/include
 
-InstallTarget: ##BUILDRELEASE##lib/ usr/lib
-InstallTarget: ##BUILDDEBUG##lib/ usr/lib/debug
-InstallTarget: ##BUILDRELEASE##bin/ usr/bin
-InstallTarget: ##BUILDDEBUG##bin/ usr/bin/debug
-InstallTarget: inc/canopen-master.h usr/include
+InstallTarget: ##BUILDRELEASE##lib/libcanopen2.so usr/lib
+InstallTarget: ##BUILDDEBUG##lib/libcanopen2.so usr/lib/debug
+InstallTarget: ##BUILDRELEASE##bin/canopen-master usr/bin
+InstallTarget: ##BUILDDEBUG##bin/canopen-master usr/bin/debug
+InstallTarget: inc/canopen-driver.h usr/include
