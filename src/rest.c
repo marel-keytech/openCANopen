@@ -166,6 +166,16 @@ static inline void rest__print_connection_type(FILE* output)
 	fprintf(output, "Connection: close\r\n");
 }
 
+static inline void rest__print_allow_origin(FILE* output)
+{
+	fprintf(output, "Access-Control-Allow-Origin: *\r\n");
+}
+
+static inline void rest__print_allow_methods(FILE* output)
+{
+	fprintf(output, "Access-Control-Allow-Methods: GET, PUT\r\n");
+}
+
 void rest_reply(FILE* output, struct rest_reply_data* data)
 {
 	rest__print_status_code(output, data->status_code);
@@ -173,6 +183,8 @@ void rest_reply(FILE* output, struct rest_reply_data* data)
 	rest__print_connection_type(output);
 	rest__print_content_type(output, data->content_type);
 	rest__print_content_length(output, data->content_length);
+	rest__print_allow_origin(output);
+	rest__print_allow_methods(output);
 	fprintf(output, "\r\n");
 	fwrite(data->content, 1, data->content_length, output);
 	fflush(output);
