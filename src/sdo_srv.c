@@ -23,16 +23,15 @@ static int dl_expediated(struct sdo_srv_sm* self, struct can_frame* frame_in,
 			 struct can_frame* frame_out)
 {
 	enum sdo_abort_code abort_code;
-	size_t size;
+	size_t size = sdo_is_size_indicated(frame_in)
+		    ? sdo_get_expediated_size(frame_in)
+		    : SDO_EXPEDIATED_DATA_SIZE;
 
-	if (sdo_is_size_indicated(frame_in)) {
-		size = sdo_get_expediated_size(frame_in);
-		if (!sdo_match_obj_size(&self->obj, size, &abort_code))
-			return sdo_srv_sm_abort(self, frame_out, abort_code);
-	}
+	if (!sdo_match_obj_size(&self->obj, size, &abort_code))
+		return sdo_srv_sm_abort(self, frame_out, abort_code);
 
 	memcpy(self->obj.addr, &frame_in->data[SDO_EXPEDIATED_DATA_IDX],
-	       self->obj.size);
+	       MIN(self->obj.size, size));
 
 	return self->state = SDO_SRV_DONE;
 }

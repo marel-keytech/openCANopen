@@ -261,6 +261,7 @@ int sdo_srv_dl_expediated_1byte()
 	_test_size = 1;
 
 	sdo_expediate(&frame_in);
+	sdo_indicate_size(&frame_in);
 	sdo_set_expediated_size(&frame_in, 1);
 	frame_in.data[SDO_EXPEDIATED_DATA_IDX] = 42;
 
