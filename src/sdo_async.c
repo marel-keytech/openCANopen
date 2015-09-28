@@ -391,6 +391,9 @@ int sdo_async_feed(struct sdo_async* self, const struct can_frame* cf)
 {
 	assert(cf->can_id == R_TSDO + self->nodeid);
 
+	if (!self->is_running)
+		return -1;
+
 	mloop_timer_stop(self->timer);
 
 	if (sdo_get_cs(cf) == SDO_SCS_ABORT) {
