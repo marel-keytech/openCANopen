@@ -32,6 +32,7 @@ SRC := \
 	canopen_info.c \
 	profiling.c \
 	sdo_sync.c \
+	sdo_srv.c \
 	driver.c
 
 TEST_SRC := \
@@ -43,9 +44,10 @@ TEST_SRC := \
 	unit_network.c \
 	unit_sdo_req.c \
 	unit_string-utils.c \
-	unit_vector.c
-#	unit_sdo_srv.c
-#	unit_sdo_async.c
+	unit_vector.c \
+	unit_sdo_srv.c \
+	unit_sdo_async.c \
+	sdo_async_fuzz_test.c
 
 include $(MDEV)/make/make.main
 
