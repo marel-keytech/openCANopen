@@ -334,7 +334,6 @@ void sdo_rest__eds_job(struct mloop_work* work)
 {
 	char* buffer = NULL;
 	size_t size = 0;
-	size_t len = 0;
 
 	struct sdo_rest_eds_context* context = mloop_work_get_context(work);
 	const struct canopen_eds* eds = context->eds;
@@ -352,7 +351,7 @@ void sdo_rest__eds_job(struct mloop_work* work)
 		return;
 	}
 
-	len += fprintf(out, "{\n");
+	fprintf(out, "{\n");
 	const struct eds_obj* obj = eds_obj_first(eds);
 	if (!obj)
 		goto done;
@@ -362,7 +361,7 @@ void sdo_rest__eds_job(struct mloop_work* work)
 		if (client->state == REST_CLIENT_DISCONNECTED)
 			goto failure;
 
-		len += fprintf(out, ",\n");
+		fprintf(out, ",\n");
 first_object:
 		is_const = !!(obj->access & EDS_OBJ_CONST);
 		is_readable = !!(obj->access & EDS_OBJ_R);
@@ -371,33 +370,33 @@ first_object:
 		index = eds_obj_index(obj);
 		subindex = eds_obj_subindex(obj);
 
-		len += fprintf(out, " \"%#x:%#x\": {\n", index, subindex);
+		fprintf(out, " \"%#x:%#x\": {\n", index, subindex);
 
-		len += fprintf(out, "  \"type\": %u,\n", obj->type);
+		fprintf(out, "  \"type\": %u,\n", obj->type);
 		if (is_const) {
-			len += fprintf(out, "  \"const\": true");
+			fprintf(out, "  \"const\": true");
 		} else {
-			len += fprintf(out, "  \"read-write\": [%s, %s]",
+			fprintf(out, "  \"read-write\": [%s, %s]",
 				       is_readable ? "true" : "false",
 				       is_writable ? "true" : "false");
 		}
 
 		if ((is_const || is_readable) && with_value) {
-			len += fprintf(out, ",\n  \"value\": ");
-			len += sdo_rest__read_value(out, nodeid, index,
+			fprintf(out, ",\n  \"value\": ");
+			sdo_rest__read_value(out, nodeid, index,
 						    subindex, obj->type);
 		}
 
-		len += fprintf(out, "\n }");
+		fprintf(out, "\n }");
 		obj = eds_obj_next(eds, obj);
 	} while (obj);
 done:
-	len += fprintf(out, "\n}\n");
+	fprintf(out, "\n}\n");
 
 	fclose(out);
 
 	context->buffer = buffer;
-	context->length = len;
+	context->length = size;
 
 	return;
 
