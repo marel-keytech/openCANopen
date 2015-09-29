@@ -8,3 +8,6 @@ mcv14.lua
 bin/*
 build-*
 *.deb
+.sconsign.dblite
+*_version.c
+lib.map
