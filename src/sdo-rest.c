@@ -281,6 +281,8 @@ int sdo_rest__process(struct sdo_rest_context* context, const void* content)
 	switch (client->req.method) {
 	case HTTP_GET: return sdo_rest__get(context);
 	case HTTP_PUT: return sdo_rest__put(context, content);
+	case HTTP_OPTIONS:
+		       break;
 	}
 
 	abort();
