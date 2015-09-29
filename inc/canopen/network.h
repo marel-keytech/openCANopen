@@ -62,6 +62,7 @@ int net__gettime_ms();
 
 int net_fix_sndbuf(int fd);
 int net_reuse_addr(int fd);
+int net_dont_delay(int fd);
 
 #endif /* CANOPEN_NETWORK_H_ */
 

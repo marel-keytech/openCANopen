@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <time.h>
 #include <poll.h>
+#include <sys/socket.h>
+#include <netinet/tcp.h>
 
 #include "socketcan.h"
 #include "canopen.h"
@@ -144,4 +146,10 @@ int net_reuse_addr(int fd)
 {
 	int one = 1;
 	return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+}
+
+int net_dont_delay(int fd)
+{
+	int one = 1;
+	return setsockopt(fd, SOL_TCP, TCP_NODELAY, &one, sizeof(one));
 }
