@@ -222,6 +222,29 @@ void rest__print_index(struct rest_client* client)
 	client->state = REST_CLIENT_DONE;
 }
 
+void rest__print_options(struct rest_client* client,
+			 const struct rest_service* service)
+{
+	FILE* output = client->output;
+	enum http_method methods = service ? service->method : 0xff;
+
+	rest__print_status_code(client->output, "200 OK");
+	rest__print_server(output);
+	rest__print_connection_type(output);
+	rest__print_content_length(output, 0);
+	rest__print_allow_origin(output);
+	rest__print_allow_methods(output);
+
+	fprintf(output, "Allow:%s%s OPTIONS\r\n",
+		 methods & HTTP_GET ? " GET," : "",
+		 methods & HTTP_PUT ? " PUT," : "");
+
+	fprintf(client->output, "\r\n");
+	fflush(client->output);
+
+	client->state = REST_CLIENT_DONE;
+}
+
 static inline int rest__have_full_content(struct rest_client* client)
 {
 	size_t full_length = client->req.header_length
@@ -265,6 +288,27 @@ void rest__handle_get(struct rest_client* client)
 	service->fn(client, NULL);
 }
 
+void rest__handle_options(struct rest_client* client)
+{
+	if (client->req.url_index == 0) {
+		rest__print_options(client, NULL);
+		return;
+	}
+
+	if (strcmp(client->req.url[0], "*") == 0) {
+		rest__print_options(client, NULL);
+		return;
+	}
+
+	const struct rest_service* service = rest__find_service(&client->req);
+	if (!service) {
+		rest__not_found(client);
+		return;
+	}
+
+	rest__print_options(client, service);
+}
+
 void rest__handle_header(int fd, struct rest_client* client,
 			 struct mloop_socket* socket)
 {
@@ -287,6 +331,9 @@ void rest__handle_header(int fd, struct rest_client* client,
 	case HTTP_PUT:
 		client->state = REST_CLIENT_CONTENT;
 		rest__process_content(client);
+		break;
+	case HTTP_OPTIONS:
+		rest__handle_options(client);
 		break;
 	}
 }
@@ -398,7 +445,7 @@ int rest_register_service(enum http_method method, const char* path, rest_fn fn)
 	if (!service)
 		return -1;
 
-	service->method = method;
+	service->method = method | HTTP_OPTIONS;
 	service->path = path;
 	service->fn = fn;
 
