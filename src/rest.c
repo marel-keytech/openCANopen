@@ -405,6 +405,8 @@ static void rest__on_connection(struct mloop_socket* socket)
 		return;
 
 	net_dont_block(cfd);
+	net_dont_delay(cfd);
+
 	struct mloop_socket* client = mloop_socket_new();
 	if (!client)
 		goto socket_failure;
