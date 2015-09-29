@@ -261,6 +261,22 @@ int http__put(struct http_req* req, struct httplex* lex)
 	return 1;
 }
 
+int http__options(struct http_req* req, struct httplex* lex)
+{
+	if (!http__literal(lex, "OPTIONS"))
+		return 0;
+
+	req->method = HTTP_OPTIONS;
+	return 1;
+}
+
+int http__method(struct http_req* req, struct httplex* lex)
+{
+	return http__get(req, lex)
+	    || http__put(req, lex)
+	    || http__options(req, lex);
+}
+
 int http__peek(struct httplex* lex, enum httplex_token_type type)
 {
 	struct httplex_token* tok = httplex_next_token(lex);
@@ -371,7 +387,7 @@ int http__url(struct http_req* req, struct httplex* lex)
 
 int http__request(struct http_req* req, struct httplex* lex)
 {
-	return (http__get(req, lex) || http__put(req, lex))
+	return http__method(req, lex)
 	    && http__expect(lex, HTTPLEX_WS)
 	    && http__url(req, lex)
 	    && http__expect(lex, HTTPLEX_WS)
