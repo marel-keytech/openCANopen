@@ -6,7 +6,8 @@
 #include "canopen-driver.h"
 
 enum co_master_options_flags {
-	CO_MASTER_OPTION_WITH_QUIRKS = 1
+	CO_MASTER_OPTION_WITH_QUIRKS = 1,
+	CO_MASTER_OPTION_USE_TCP     = 1 << 1,
 };
 
 enum co_master_driver_type {

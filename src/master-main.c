@@ -21,6 +21,7 @@ const char usage_[] =
 "    -S, --sdo-queue-length    Set length of the sdo queue (default 1024).\n"
 "    -R, --rest-port           Set TCP port of the rest service (default 9191).\n"
 "    -Q, --with-quirks         Try to work with buggy old hardware.\n"
+"    -T, --use-tcp             Interface argument is a TCP service address.\n"
 "\n"
 "Appbase Options:\n"
 "    -v, --version             Get version info.\n"
@@ -80,11 +81,12 @@ int main(int argc, char* argv[])
 		{ "sdo-queue-length",  required_argument, 0, 'S' },
 		{ "rest-port",         required_argument, 0, 'R' },
 		{ "with-quirks",       no_argument,       0, 'Q' },
+		{ "use-tcp",           no_argument,       0, 'T' },
 		{ 0, 0, 0, 0 }
 	};
 
 	while (1) {
-		int c = getopt_long(argc, argv, "W:s:j:S:R:Q", long_options,
+		int c = getopt_long(argc, argv, "W:s:j:S:R:QT", long_options,
 				    NULL);
 		if (c < 0)
 			break;
@@ -99,6 +101,7 @@ int main(int argc, char* argv[])
 			  break;
 		case 'R': mopt.rest_port = atoi(optarg); break;
 		case 'Q': mopt.flags |= CO_MASTER_OPTION_WITH_QUIRKS; break;
+		case 'T': mopt.flags |= CO_MASTER_OPTION_USE_TCP; break;
 		case 'h': return print_usage(stdout, 0);
 		case '?': break;
 		default:  return print_usage(stderr, 1);
