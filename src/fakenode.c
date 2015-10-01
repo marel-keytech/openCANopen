@@ -13,8 +13,8 @@
 #include "socketcan.h"
 #include "canopen/sdo_srv.h"
 #include "canopen/byteorder.h"
-#include "canopen/network.h"
 #include "canopen/nmt.h"
+#include "net-util.h"
 
 static struct sdo_srv sdo_srv_;
 static lua_State* lua_state_;

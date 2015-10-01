@@ -4,7 +4,7 @@
 #include <limits.h>
 #include "canopen/sdo_async.h"
 #include "canopen/sdo_srv.h"
-#include "canopen/network.h"
+#include "net-util.h"
 #include "canopen.h"
 #include "fff.h"
 

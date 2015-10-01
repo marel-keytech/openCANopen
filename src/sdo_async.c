@@ -15,8 +15,8 @@
 #include <mloop.h>
 #include "canopen/sdo.h"
 #include "canopen/sdo_async.h"
-#include "canopen/network.h"
 #include "canopen.h"
+#include "net-util.h"
 
 #define MIN(a, b) ((a) < (b)) ? (a) : (b);
 

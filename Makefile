@@ -34,6 +34,7 @@ SRC := \
 	sdo_sync.c \
 	sdo_srv.c \
 	driver.c \
+	net-util.c \
 	can-tcp.c
 
 TEST_SRC := \

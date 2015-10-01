@@ -5,6 +5,7 @@
 #include "tst.h"
 #include "fff.h"
 #include "canopen/network.h"
+#include "net-util.h"
 #include "canopen/nmt.h"
 #include "canopen/sdo.h"
 #include "canopen/heartbeat.h"
@@ -104,19 +105,6 @@ int custom_gettime(clockid_t id, struct timespec* ts)
 	return 0;
 }
 
-int test_net__gettime_ms()
-{
-	RESET_FAKE(clock_gettime);
-	clock_gettime_fake.custom_fake = custom_gettime;
-
-	gettime_timespec.tv_sec = 1;
-	gettime_timespec.tv_nsec = 1000000;
-
-	ASSERT_INT_EQ(1001, net__gettime_ms());
-
-	return 0;
-}
-
 static char enabled_nodes[128];
 int enabled_nodes_index;
 
@@ -181,7 +169,6 @@ int main()
 	RUN_TEST(test_net_write);
 	RUN_TEST(test_net_read);
 	RUN_TEST(test_net__send_nmt);
-	RUN_TEST(test_net__gettime_ms);
 	RUN_TEST(test_net__wait_for_bootup);
 	return r;
 }

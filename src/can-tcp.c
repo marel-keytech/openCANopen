@@ -9,7 +9,7 @@
 #include <mloop.h>
 
 #include "socketcan.h"
-#include "canopen/network.h"
+#include "net-util.h"
 
 size_t strlcpy(char*, const char*, size_t);
 

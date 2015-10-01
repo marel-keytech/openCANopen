@@ -10,7 +10,7 @@
 #include <mloop.h>
 #include <sys/queue.h>
 
-#include "canopen/network.h"
+#include "net-util.h"
 #include "http.h"
 #include "vector.h"
 #include "rest.h"

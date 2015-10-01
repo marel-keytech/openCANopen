@@ -24,6 +24,7 @@
 #include "time-utils.h"
 #include "profiling.h"
 #include "string-utils.h"
+#include "net-util.h"
 
 #include "legacy-driver.h"
 

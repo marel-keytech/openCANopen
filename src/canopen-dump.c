@@ -8,6 +8,7 @@
 #include "canopen/network.h"
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
+#include "net-util.h"
 
 static const char* nmt_cs_str(enum nmt_cs cs)
 {
