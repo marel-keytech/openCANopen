@@ -110,7 +110,7 @@ failure:
 	return -1;
 }
 
-static int open_tcp_client(const char* address, int port)
+int can_tcp_open(const char* address, int port)
 {
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (fd < 0)
@@ -217,7 +217,7 @@ int can_tcp_bridge_client(const char* can, const char* address, int port)
 	if (cfd < 0)
 		return -1;
 
-	int connfd = open_tcp_client(address, port);
+	int connfd = can_tcp_open(address, port);
 	if (connfd < 0)
 		goto client_failure;
 
