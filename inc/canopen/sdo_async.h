@@ -5,6 +5,7 @@
 #include "vector.h"
 #include "canopen/sdo_req_enums.h"
 #include "canopen/sdo.h"
+#include "sock.h"
 
 struct sdo_async;
 struct can_frame;
@@ -25,7 +26,7 @@ enum sdo_async_quirks_flags {
 };
 
 struct sdo_async {
-	int fd;
+	struct sock sock;
 	unsigned int nodeid;
 	enum sdo_req_type type;
 	int is_running;
@@ -54,7 +55,7 @@ struct sdo_async_info {
 	sdo_async_free_fn free_fn;
 };
 
-int sdo_async_init(struct sdo_async* self, int fd, int nodeid);
+int sdo_async_init(struct sdo_async* self, const struct sock* sock, int nodeid);
 void sdo_async_destroy(struct sdo_async* self);
 
 int sdo_async_start(struct sdo_async* self, const struct sdo_async_info* info);

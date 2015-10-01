@@ -36,8 +36,9 @@ static struct sdo_async client;
 
 static void initialize()
 {
+	static struct sock sock = { .fd = 10, .type = SOCK_TYPE_CAN };
 	mloop_timer_new_fake.return_val = &timer;
-	sdo_async_init(&client, 10, 42);
+	sdo_async_init(&client, &sock, 42);
 }
 
 static void cleanup()

@@ -17,6 +17,7 @@
 #include "canopen/sdo_async.h"
 #include "canopen.h"
 #include "net-util.h"
+#include "sock.h"
 
 #define MIN(a, b) ((a) < (b)) ? (a) : (b);
 
@@ -72,7 +73,7 @@ static int sdo_async__abort(struct sdo_async* self, enum sdo_abort_code code)
 	mloop_timer_stop(self->timer);
 	sdo_async__init_frame(self, &cf);
 	sdo_abort(&cf, code, self->index, self->subindex);
-	net_write_frame(self->fd, &cf, -1);
+	sock_send(&self->sock, &cf, -1);
 	self->status = SDO_REQ_LOCAL_ABORT;
 	self->abort_code = code;
 	sdo_async__on_done(self);
@@ -85,7 +86,7 @@ void sdo_async__on_timeout(struct mloop_timer* timer)
 	sdo_async__abort(self, SDO_ABORT_TIMEOUT);
 }
 
-int sdo_async_init(struct sdo_async* self, int fd, int nodeid)
+int sdo_async_init(struct sdo_async* self, const struct sock* sock, int nodeid)
 {
 	memset(self, 0, sizeof(*self));
 
@@ -93,7 +94,7 @@ int sdo_async_init(struct sdo_async* self, int fd, int nodeid)
 	if (!self->timer)
 		return -1;
 
-	self->fd = fd;
+	self->sock = *sock;
 	self->nodeid = nodeid;
 	mloop_timer_set_context(self->timer, self, NULL);
 	mloop_timer_set_callback(self->timer, sdo_async__on_timeout);
@@ -131,7 +132,7 @@ int sdo_async__send_init_dl(struct sdo_async* self)
 		cf.can_dlc = CAN_MAX_DLC;
 	}
 	mloop_start_timer(mloop_default(), self->timer);
-	net_write_frame(self->fd, &cf, -1);
+	sock_send(&self->sock, &cf, -1);
 	return 0;
 }
 
@@ -144,7 +145,7 @@ int sdo_async__send_init_ul(struct sdo_async* self)
 	sdo_set_subindex(&cf, self->subindex);
 	cf.can_dlc = 4;
 	mloop_start_timer(mloop_default(), self->timer);
-	net_write_frame(self->fd, &cf, -1);
+	sock_send(&self->sock, &cf, -1);
 	return 0;
 }
 
@@ -214,7 +215,7 @@ int sdo_async__request_dl_segment(struct sdo_async* self)
 		sdo_end_segment(&cf);
 
 	mloop_start_timer(mloop_default(), self->timer);
-	net_write_frame(self->fd, &cf, -1);
+	sock_send(&self->sock, &cf, -1);
 
 	return 0;
 }
@@ -269,7 +270,7 @@ int sdo_async__request_ul_segment(struct sdo_async* self)
 	if (self->is_toggled) sdo_toggle(&cf);
 	cf.can_dlc = 1;
 	mloop_start_timer(mloop_default(), self->timer);
-	net_write_frame(self->fd, &cf, -1);
+	sock_send(&self->sock, &cf, -1);
 	return 0;
 }
 

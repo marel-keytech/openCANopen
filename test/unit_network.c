@@ -11,6 +11,7 @@
 #include "canopen/heartbeat.h"
 #include "socketcan.h"
 #include "canopen.h"
+#include "sock.h"
 
 DEFINE_FFF_GLOBALS;
 
@@ -82,7 +83,9 @@ int test_net__send_nmt()
 	poll_fake.return_val = 1;
 	write_fake.return_val = sizeof(struct can_frame);
 
-	ASSERT_INT_GE(0, co_net_send_nmt(42, 7, 11));
+	struct sock sock = { .fd = 42, .type = SOCK_TYPE_CAN };
+
+	ASSERT_INT_GE(0, co_net_send_nmt(&sock, 7, 11));
 
 	ASSERT_INT_EQ(42, write_fake.arg0_val);
 	ASSERT_INT_EQ(sizeof(struct can_frame), write_fake.arg2_val);
@@ -111,6 +114,8 @@ int enabled_nodes_index;
 static ssize_t read_bootup(int fd, void* dst, size_t size)
 {
 	(void)fd;
+	(void)size;
+
 	struct can_frame* cf = dst;
 
 	while (enabled_nodes_index < 128 && !enabled_nodes[enabled_nodes_index])
@@ -143,9 +148,12 @@ int test_net__wait_for_bootup()
 	enabled_nodes[7] = 1;
 	enabled_nodes[127] = 1;
 
+	struct sock sock = { .fd = 42, .type = SOCK_TYPE_CAN };
+
 	char nodes_seen[128];
 	memset(nodes_seen, 0, sizeof(nodes_seen));
-	ASSERT_INT_EQ(0, co_net__wait_for_bootup(42, nodes_seen, 0, 127, 1000));
+	ASSERT_INT_EQ(0, co_net__wait_for_bootup(&sock, nodes_seen, 0, 127,
+						 1000));
 
 	ASSERT_INT_EQ(4, poll_fake.call_count);
 	ASSERT_INT_EQ(4, read_fake.call_count);

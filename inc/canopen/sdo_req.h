@@ -12,6 +12,7 @@
 #include "canopen/sdo_req_enums.h"
 
 struct sdo_req;
+struct sock;
 
 typedef void (*sdo_req_fn)(struct sdo_req*);
 
@@ -51,11 +52,11 @@ struct sdo_req_queue {
 	int nodeid;
 };
 
-int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid, size_t,
-			enum sdo_async_quirks_flags quirks);
+int sdo_req__queue_init(struct sdo_req_queue* self, const struct sock* sock,
+			int nodeid, size_t, enum sdo_async_quirks_flags quirks);
 void sdo_req__queue_destroy(struct sdo_req_queue* self);
 
-int sdo_req_queues_init(int fd, size_t limit,
+int sdo_req_queues_init(const struct sock* sock, size_t limit,
 			enum sdo_async_quirks_flags quirks);
 void sdo_req_queues_cleanup();
 

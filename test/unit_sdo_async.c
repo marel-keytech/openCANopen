@@ -89,6 +89,8 @@ static void initialize()
 	pipe(fds);
 	rfd = fds[0];
 	wfd = fds[1];
+	static struct sock sock = { .type = SOCK_TYPE_CAN };
+	sock.fd = wfd;
 
 	net_dont_block(rfd);
 
@@ -97,7 +99,7 @@ static void initialize()
 	sdo_srv_init(&server);
 
 	mloop_timer_new_fake.return_val = &timer;
-	sdo_async_init(&client, wfd, 42);
+	sdo_async_init(&client, &sock, 42);
 }
 
 static void cleanup()

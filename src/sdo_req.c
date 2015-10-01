@@ -21,6 +21,7 @@
 #include "canopen/sdo.h"
 #include "canopen/sdo_async.h"
 #include "canopen/sdo_req.h"
+#include "sock.h"
 
 #define SDO_REQ_TIMEOUT 1000 /* ms */
 #define SDO_REQ_ASYNC_PRIO 1000
@@ -60,12 +61,13 @@ ARC_GENERATE(sdo_req, sdo_req_free)
 void sdo_req__process_queue(struct mloop_idle* idle);
 int sdo_req__have_req(struct mloop_idle* idle);
 
-int sdo_req__queue_init(struct sdo_req_queue* self, int fd, int nodeid,
-			size_t limit, enum sdo_async_quirks_flags quirks)
+int sdo_req__queue_init(struct sdo_req_queue* self, const struct sock* sock,
+			int nodeid, size_t limit,
+			enum sdo_async_quirks_flags quirks)
 {
 	memset(self, 0, sizeof(*self));
 
-	if (sdo_async_init(&self->sdo_client, fd, nodeid) < 0)
+	if (sdo_async_init(&self->sdo_client, sock, nodeid) < 0)
 		return -1;
 
 	self->idle = mloop_idle_new();
@@ -116,13 +118,13 @@ void sdo_req__queue_destroy(struct sdo_req_queue* self)
 	pthread_mutex_destroy(&self->mutex);
 }
 
-int sdo_req_queues_init(int fd, size_t limit,
+int sdo_req_queues_init(const struct sock* sock, size_t limit,
 			enum sdo_async_quirks_flags quirks)
 {
 	size_t i;
 
 	for (i = 1; i < 128; ++i)
-		if (sdo_req__queue_init(&sdo_req__queues[i], fd, i, limit,
+		if (sdo_req__queue_init(&sdo_req__queues[i], sock, i, limit,
 					quirks) < 0)
 			goto failure;
 

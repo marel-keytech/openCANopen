@@ -1,6 +1,7 @@
 #include "tst.h"
 #include "fff.h"
 #include "canopen/sdo_req.h"
+#include "sock.h"
 
 DEFINE_FFF_GLOBALS;
 
@@ -15,7 +16,8 @@ FAKE_VALUE_FUNC(void*, mloop_idle_get_context, const struct mloop_idle*);
 FAKE_VOID_FUNC(mloop_idle_set_idle_fn, struct mloop_idle*, mloop_idle_fn);
 FAKE_VOID_FUNC(mloop_idle_set_cond_fn, struct mloop_idle*, mloop_idle_cond_fn);
 FAKE_VOID_FUNC(mloop_idle_set_priority, struct mloop_idle*, unsigned long);
-FAKE_VALUE_FUNC(int, sdo_async_init, struct sdo_async*, int, int);
+FAKE_VALUE_FUNC(int, sdo_async_init, struct sdo_async*, const struct sock*,
+		int);
 FAKE_VALUE_FUNC(int, sdo_async_stop, struct sdo_async*);
 FAKE_VOID_FUNC(sdo_async_destroy, struct sdo_async*);
 FAKE_VALUE_FUNC(int, sdo_async_start, struct sdo_async*,
@@ -58,10 +60,13 @@ static int test_req_queue_init_destroy()
 	RESET_FAKE(mloop_idle_new);
 	mloop_idle_new_fake.return_val = idle;
 
-	struct sdo_req_queue queue;
-	ASSERT_INT_EQ(0, sdo_req__queue_init(&queue, 4, 42, 10, 0));
+	struct sock sock = { .fd = 4, .type = SOCK_TYPE_CAN };
 
-	ASSERT_INT_EQ(4, sdo_async_init_fake.arg1_val);
+	struct sdo_req_queue queue;
+	ASSERT_INT_EQ(0, sdo_req__queue_init(&queue, &sock, 42, 10, 0));
+
+	ASSERT_INT_EQ(4, sdo_async_init_fake.arg1_val->fd);
+	ASSERT_INT_EQ(SOCK_TYPE_CAN, sdo_async_init_fake.arg1_val->type);
 	ASSERT_INT_EQ(42, sdo_async_init_fake.arg2_val);
 	ASSERT_INT_EQ(10, queue.limit);
 

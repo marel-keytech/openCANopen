@@ -4,13 +4,14 @@
 #include <stdint.h>
 
 struct can_frame;
+struct sock;
 
 /* Reset the network and see which nodes respond to the reset signal.
  *
  * nodes_seen must be an array of length 128; prior values are not cleared.
  * timeout is in ms.
  */
-int co_net_reset(int fd, char* nodes_seen, int timeout);
+int co_net_reset(const struct sock* sock, char* nodes_seen, int timeout);
 
 /* Reset each node individually and see if it responds to the reset signal.
  *
@@ -18,8 +19,8 @@ int co_net_reset(int fd, char* nodes_seen, int timeout);
  * start/stop is an inclusive range of node ids to probe
  * timeout is in ms.
  */
-int co_net_reset_range(int fd, char* nodes_seen, int start, int end,
-		       int timeout);
+int co_net_reset_range(const struct sock* sock, char* nodes_seen, int start,
+		       int end, int timeout);
 
 /* Probe the network for nodes.
  *
@@ -27,16 +28,17 @@ int co_net_reset_range(int fd, char* nodes_seen, int start, int end,
  * start/stop is an inclusive range of node ids to probe
  * timeout is in ms.
  */
-int co_net_probe(int fd, char* nodes_seen, int start, int end, int timeout);
+int co_net_probe(const struct sock* sock, char* nodes_seen, int start, int end,
+		 int timeout);
 
-int co_net_send_nmt(int fd, int cs, int nodeid);
-int co_net__request_device_type(int fd, int nodeid);
+int co_net_send_nmt(const struct sock* sock, int cs, int nodeid);
+int co_net__request_device_type(const struct sock* sock, int nodeid);
 
-int co_net__wait_for_bootup(int fd, char* nodes_seen, int start, int end,
-			    int timeout);
+int co_net__wait_for_bootup(const struct sock* sock, char* nodes_seen,
+			    int start, int end, int timeout);
 
-int co_net__wait_for_sdo(int fd, char* nodes_seen, int start, int end,
-			 int timeout);
+int co_net__wait_for_sdo(const struct sock* sock, char* nodes_seen, int start,
+			 int end, int timeout);
 
 #endif /* CANOPEN_NETWORK_H_ */
 

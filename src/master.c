@@ -25,6 +25,7 @@
 #include "profiling.h"
 #include "string-utils.h"
 #include "net-util.h"
+#include "sock.h"
 
 #include "legacy-driver.h"
 
@@ -43,7 +44,7 @@
 
 size_t strlcpy(char* dst, const char* src, size_t dsize);
 
-static int socket_ = -1;
+static struct sock socket_ = { .fd = -1 };
 static char nodes_seen_[CANOPEN_NODEID_MAX + 1];
 /* Note: nodes_seen_[0] is unused */
 
@@ -172,7 +173,7 @@ static void unload_driver(int nodeid)
 	node->is_heartbeat_supported = 0;
 	node->driver_type = CO_MASTER_DRIVER_NONE;
 
-	co_net_send_nmt(socket_, NMT_CS_RESET_NODE, nodeid);
+	co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->is_active = 0;
@@ -208,7 +209,7 @@ static void on_ping_timeout(struct mloop_timer* timer)
 	cf.can_dlc = 1;
 	heartbeat_set_state(&cf, 1);
 
-	net_write_frame(socket_, &cf, -1);
+	sock_send(&socket_, &cf, -1);
 }
 
 static int start_ping_timer(int nodeid)
@@ -216,11 +217,6 @@ static int start_ping_timer(int nodeid)
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->ping_timer;
 	return mloop_start_timer(mloop_, timer);
-}
-
-ssize_t write_frame(const struct can_frame* frame)
-{
-	return net_write_frame(socket_, frame, -1);
 }
 
 static void start_nodeguarding(int nodeid)
@@ -380,8 +376,8 @@ static void run_net_probe(struct mloop_work* self)
 	(void)self;
 
 	profile("Probe network...\n");
-	co_net_reset(socket_, nodes_seen_, 100);
-	co_net_probe(socket_, nodes_seen_, 1, 127, 100);
+	co_net_reset(&socket_, nodes_seen_, 100);
+	co_net_probe(&socket_, nodes_seen_, 1, 127, 100);
 }
 
 static void run_load_driver(struct mloop_work* self)
@@ -405,7 +401,7 @@ static void on_load_driver_done(struct mloop_work* self)
 	start_nodeguarding(nodeid);
 
 	if (master_state_ > MASTER_STATE_STARTUP)
-		co_net_send_nmt(socket_, NMT_CS_START, nodeid);
+		co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
 }
 
 static int schedule_load_driver(int nodeid)
@@ -489,7 +485,7 @@ static int handle_heartbeat(struct co_master_node* node,
 
 	/* Make sure the node is in operational state */
 	if (heartbeat_get_state(frame) != NMT_STATE_OPERATIONAL)
-		co_net_send_nmt(socket_, NMT_CS_START, nodeid);
+		co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
 
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->last_seen = gettime_us() / 1000000ULL;
@@ -601,12 +597,12 @@ static int handle_with_new_driver(struct co_master_node* node,
 
 static void mux_handler_fn(struct mloop_socket* self)
 {
-	int fd = mloop_socket_get_fd(self);
+	(void)self;
 
 	struct can_frame cf;
 	struct canopen_msg msg;
 
-	net_read_frame(fd, &cf, -1);
+	sock_recv(&socket_, &cf, -1);
 
 	if (canopen_get_object_type(&msg, &cf) < 0)
 		return;
@@ -635,7 +631,7 @@ static int init_multiplexer()
 	if (!mux_handler_)
 		return -1;
 
-	mloop_socket_set_fd(mux_handler_, socket_);
+	mloop_socket_set_fd(mux_handler_, socket_.fd);
 	mloop_socket_set_callback(mux_handler_, mux_handler_fn);
 
 	return mloop_start_socket(mloop_, mux_handler_);
@@ -668,7 +664,7 @@ static void on_bootup_done(struct mloop_work* self)
 	profile("Start nodes...\n");
 	for_each_node_reverse(i)
 		if (co_master_get_node(i)->driver)
-			co_net_send_nmt(socket_, NMT_CS_START, i);
+			co_net_send_nmt(&socket_, NMT_CS_START, i);
 
 	profile("Start node guarding...\n");
 	for_each_node(i)
@@ -825,7 +821,7 @@ static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)
 	if (data)
 		memcpy(cf.data, data, size);
 
-	return net_write_frame(socket_, &cf, -1);
+	return sock_send(&socket_, &cf, -1);
 
 }
 
@@ -969,9 +965,10 @@ int co_master_run(const struct co_master_options* opt)
 		goto rest_service_failure;
 
 	profile("Open interface...\n");
-	socket_ = socketcan_open(opt->iface);
-	if (socket_ < 0) {
-		perror("Could not open interface");
+	enum sock_type sock_type = opt->flags & CO_MASTER_OPTION_USE_TCP
+				 ? SOCK_TYPE_TCP : SOCK_TYPE_CAN;
+	if (sock_open(&socket_, sock_type, opt->iface) < 0) {
+		perror("Could not open CAN bus");
 		goto socketcan_open_failure;
 	}
 
@@ -985,15 +982,18 @@ int co_master_run(const struct co_master_options* opt)
 		   ? SDO_ASYNC_QUIRK_ALL : SDO_ASYNC_QUIRK_NONE;
 
 	profile("Initialize SDO queues...\n");
-	if (sdo_req_queues_init(socket_, opt->sdo_queue_length, sdo_quirks) < 0)
+	if (sdo_req_queues_init(&socket_, opt->sdo_queue_length, sdo_quirks)
+			< 0)
 		goto sdo_req_queues_failure;
 
 	profile("Initialize node structure...\n");
 	if (init_all_node_structures() < 0)
 		goto node_init_failure;
 
-	net_dont_block(socket_);
-	net_fix_sndbuf(socket_);
+	net_dont_block(socket_.fd);
+
+	if (sock_type == SOCK_TYPE_CAN)
+		net_fix_sndbuf(socket_.fd);
 
 	profile("Create legacy driver manager...\n");
 	driver_manager_ = legacy_driver_manager_new();
@@ -1030,8 +1030,8 @@ node_init_failure:
 	sdo_req_queues_cleanup();
 
 sdo_req_queues_failure:
-	if (socket_ >= 0)
-		close(socket_);
+	if (socket_.fd >= 0)
+		sock_close(&socket_);
 
 	canopen_info_cleanup();
 info_failure:
