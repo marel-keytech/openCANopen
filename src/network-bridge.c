@@ -13,18 +13,18 @@
 
 size_t strlcpy(char*, const char*, size_t);
 
-struct can_network__context {
+struct can_tcp__context {
 	int is_can;
 	int other_fd;
 };
 
-struct can_network__server_context {
+struct can_tcp__server_context {
 	char iface[256];
 };
 
-static void can_network__forward_message(struct mloop_socket* socket)
+static void can_tcp__forward_message(struct mloop_socket* socket)
 {
-	struct can_network__context* context = mloop_socket_get_context(socket);
+	struct can_tcp__context* context = mloop_socket_get_context(socket);
 	assert(context);
 
 	int fd = mloop_socket_get_fd(socket);
@@ -42,9 +42,9 @@ static void can_network__forward_message(struct mloop_socket* socket)
 }
 
 static struct mloop_socket*
-can_network__setup_forward(int from, int to, int is_from_can)
+can_tcp__setup_forward(int from, int to, int is_from_can)
 {
-	struct can_network__context* context;
+	struct can_tcp__context* context;
 
 	context = malloc(sizeof(*context));
 	if (!context)
@@ -58,7 +58,7 @@ can_network__setup_forward(int from, int to, int is_from_can)
 		goto failure;
 
 	mloop_socket_set_context(s, context, free);
-	mloop_socket_set_callback(s, can_network__forward_message);
+	mloop_socket_set_callback(s, can_tcp__forward_message);
 	mloop_socket_set_fd(s, from);
 
 	int rc = mloop_start_socket(mloop_default(), s);
@@ -135,9 +135,9 @@ failure:
 	return -1;
 }
 
-static void can_network__on_connection(struct mloop_socket* socket)
+static void can_tcp__on_connection(struct mloop_socket* socket)
 {
-	struct can_network__server_context* context;
+	struct can_tcp__server_context* context;
 	context = mloop_socket_get_context(socket);
 	assert(context);
 
@@ -156,13 +156,13 @@ static void can_network__on_connection(struct mloop_socket* socket)
 		goto can_failure;
 	}
 
-	struct mloop_socket* s1 = can_network__setup_forward(connfd, cfd, 0);
+	struct mloop_socket* s1 = can_tcp__setup_forward(connfd, cfd, 0);
 	if (!s1) {
 		perror("Could not create mloop handler for connection");
 		goto s1_failure;
 	}
 
-	struct mloop_socket* s2 = can_network__setup_forward(cfd, connfd, 1);
+	struct mloop_socket* s2 = can_tcp__setup_forward(cfd, connfd, 1);
 	if (!s2) {
 		perror("Could not create mloop handler for CAN interface");
 		goto s2_failure;
@@ -179,7 +179,7 @@ can_failure:
 }
 
 __attribute__((visibility("default")))
-int can_network_bridge_server(const char* can, int port)
+int can_tcp_bridge_server(const char* can, int port)
 {
 	int sfd = open_tcp_server(port);
 	if (sfd < 0)
@@ -189,7 +189,7 @@ int can_network_bridge_server(const char* can, int port)
 	if (!s)
 		goto handler_failure;
 
-	struct can_network__server_context* context;
+	struct can_tcp__server_context* context;
 	context = malloc(sizeof(*context));
 	if (!context)
 		goto context_failure;
@@ -198,7 +198,7 @@ int can_network_bridge_server(const char* can, int port)
 
 	mloop_socket_set_context(s, context, free);
 	mloop_socket_set_fd(s, sfd);
-	mloop_socket_set_callback(s, can_network__on_connection);
+	mloop_socket_set_callback(s, can_tcp__on_connection);
 	int rc = mloop_start_socket(mloop_default(), s);
 	mloop_socket_unref(s);
 	return rc;
@@ -211,7 +211,7 @@ handler_failure:
 }
 
 __attribute__((visibility("default")))
-int can_network_bridge_client(const char* can, const char* address, int port)
+int can_tcp_bridge_client(const char* can, const char* address, int port)
 {
 	int cfd = open_can(can);
 	if (cfd < 0)
@@ -221,11 +221,11 @@ int can_network_bridge_client(const char* can, const char* address, int port)
 	if (connfd < 0)
 		goto client_failure;
 
-	struct mloop_socket* s1 = can_network__setup_forward(connfd, cfd, 0);
+	struct mloop_socket* s1 = can_tcp__setup_forward(connfd, cfd, 0);
 	if (!s1)
 		goto s1_failure;
 
-	struct mloop_socket* s2 = can_network__setup_forward(cfd, connfd, 1);
+	struct mloop_socket* s2 = can_tcp__setup_forward(cfd, connfd, 1);
 	if (!s2)
 		goto s2_failure;
 

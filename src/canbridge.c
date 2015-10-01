@@ -112,7 +112,7 @@ int main(int argc, char* argv[])
 
 	if (listen_) {
 		int port = atoi(listen_);
-		if (can_network_bridge_server(iface, port) < 0) {
+		if (can_tcp_bridge_server(iface, port) < 0) {
 			perror("Could not create interface bridge");
 			goto failure;
 		}
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
 			port = atoi(portptr);
 		}
 
-		if (can_network_bridge_client(iface, connect_, port) < 0) {
+		if (can_tcp_bridge_client(iface, connect_, port) < 0) {
 			perror("Could not create interface bridge");
 			goto failure;
 		}
