@@ -16,7 +16,7 @@
 
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
-int net__send_nmt(int fd, int cs, int nodeid)
+int co_net_send_nmt(int fd, int cs, int nodeid)
 {
 	struct can_frame cf = { 0 };
 	cf.can_id = 0;
@@ -26,7 +26,7 @@ int net__send_nmt(int fd, int cs, int nodeid)
 	return net_write_frame(fd, &cf, -1);
 }
 
-int net__request_heartbeat(int fd, int nodeid)
+int co_net__request_heartbeat(int fd, int nodeid)
 {
 	struct can_frame cf = { 0 };
 	cf.can_id = R_HEARTBEAT + nodeid;
@@ -34,8 +34,8 @@ int net__request_heartbeat(int fd, int nodeid)
 	return net_write_frame(fd, &cf, -1);
 }
 
-int net__wait_for_bootup(int fd, char* nodes_seen, int start, int end,
-			 int timeout)
+int co_net__wait_for_bootup(int fd, char* nodes_seen, int start, int end,
+			    int timeout)
 {
 	struct can_frame cf;
 	struct canopen_msg msg;
@@ -61,26 +61,26 @@ int net__wait_for_bootup(int fd, char* nodes_seen, int start, int end,
 	return 0;
 }
 
-int net_reset(int fd, char* nodes_seen, int timeout)
+int co_net_reset(int fd, char* nodes_seen, int timeout)
 {
-	net__send_nmt(fd, NMT_CS_RESET_COMMUNICATION, 0);
-	return net__wait_for_bootup(fd, nodes_seen, 0, 127, timeout);
+	co_net_send_nmt(fd, NMT_CS_RESET_COMMUNICATION, 0);
+	return co_net__wait_for_bootup(fd, nodes_seen, 0, 127, timeout);
 }
 
-int net_reset_range(int fd, char* nodes_seen, int start, int end, int timeout)
+int co_net_reset_range(int fd, char* nodes_seen, int start, int end, int timeout)
 {
 	for (int i = start; i <= end; ++i)
-		net__send_nmt(fd, NMT_CS_RESET_COMMUNICATION, i);
+		co_net_send_nmt(fd, NMT_CS_RESET_COMMUNICATION, i);
 
-	return net__wait_for_bootup(fd, nodes_seen, start, end, timeout);
+	return co_net__wait_for_bootup(fd, nodes_seen, start, end, timeout);
 }
 
-int net_probe(int fd, char* nodes_seen, int start, int end, int timeout)
+int co_net_probe(int fd, char* nodes_seen, int start, int end, int timeout)
 {
 	for (int i = start; i <= end; ++i)
 		if (!nodes_seen[i])
-			net__request_heartbeat(fd, i);
+			co_net__request_heartbeat(fd, i);
 
-	return net__wait_for_bootup(fd, nodes_seen, start, end, timeout);
+	return co_net__wait_for_bootup(fd, nodes_seen, start, end, timeout);
 }
 

@@ -172,7 +172,7 @@ static void unload_driver(int nodeid)
 	node->is_heartbeat_supported = 0;
 	node->driver_type = CO_MASTER_DRIVER_NONE;
 
-	net__send_nmt(socket_, NMT_CS_RESET_NODE, nodeid);
+	co_net_send_nmt(socket_, NMT_CS_RESET_NODE, nodeid);
 
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->is_active = 0;
@@ -380,8 +380,8 @@ static void run_net_probe(struct mloop_work* self)
 	(void)self;
 
 	profile("Probe network...\n");
-	net_reset(socket_, nodes_seen_, 100);
-	net_probe(socket_, nodes_seen_, 1, 127, 100);
+	co_net_reset(socket_, nodes_seen_, 100);
+	co_net_probe(socket_, nodes_seen_, 1, 127, 100);
 }
 
 static void run_load_driver(struct mloop_work* self)
@@ -405,7 +405,7 @@ static void on_load_driver_done(struct mloop_work* self)
 	start_nodeguarding(nodeid);
 
 	if (master_state_ > MASTER_STATE_STARTUP)
-		net__send_nmt(socket_, NMT_CS_START, nodeid);
+		co_net_send_nmt(socket_, NMT_CS_START, nodeid);
 }
 
 static int schedule_load_driver(int nodeid)
@@ -489,7 +489,7 @@ static int handle_heartbeat(struct co_master_node* node,
 
 	/* Make sure the node is in operational state */
 	if (heartbeat_get_state(frame) != NMT_STATE_OPERATIONAL)
-		net__send_nmt(socket_, NMT_CS_START, nodeid);
+		co_net_send_nmt(socket_, NMT_CS_START, nodeid);
 
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->last_seen = gettime_us() / 1000000ULL;
@@ -668,7 +668,7 @@ static void on_bootup_done(struct mloop_work* self)
 	profile("Start nodes...\n");
 	for_each_node_reverse(i)
 		if (co_master_get_node(i)->driver)
-			net__send_nmt(socket_, NMT_CS_START, i);
+			co_net_send_nmt(socket_, NMT_CS_START, i);
 
 	profile("Start node guarding...\n");
 	for_each_node(i)
