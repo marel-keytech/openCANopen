@@ -10,7 +10,7 @@
 
 static inline uint64_t timespec_to_ns(struct timespec* ts)
 {
-	return ts->tv_sec * nSEC_IN_SEC + ts->tv_nsec;
+	return (uint64_t)ts->tv_sec * nSEC_IN_SEC + (uint64_t)ts->tv_nsec;
 }
 
 static inline struct timespec ns_to_timespec(uint64_t ns)
@@ -28,7 +28,7 @@ static inline void add_to_timespec(struct timespec* ts, uint64_t addition)
 
 static inline uint64_t gettime_ns(void)
 {
-	struct timespec ts;
+	struct timespec ts = { 0 };
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return timespec_to_ns(&ts);
 }
