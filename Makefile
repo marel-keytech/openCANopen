@@ -34,7 +34,7 @@ SRC := \
 	sdo_sync.c \
 	sdo_srv.c \
 	driver.c \
-	network-bridge.c
+	can-tcp.c
 
 TEST_SRC := \
 	unit_arc.c \

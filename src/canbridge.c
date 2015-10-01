@@ -4,7 +4,7 @@
 #include <getopt.h>
 #include <mloop.h>
 
-#include "network-bridge.h"
+#include "can-tcp.h"
 
 const char usage_[] =
 "Usage: canbridge [options] <interface>\n"
