@@ -36,6 +36,7 @@ SRC := \
 	driver.c \
 	net-util.c \
 	sock.c \
+	stream.c \
 	can-tcp.c
 
 TEST_SRC := \
