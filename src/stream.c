@@ -7,12 +7,18 @@
 
 static ssize_t stream__write(void* cookie, const char* buf, size_t size)
 {
-	ssize_t wsize = 0;
+	ssize_t wsize = -1;
+	size_t total = 0;
 
-	while (wsize < size)
-		wsize += net_write((int)cookie, buf + wsize, size - wsize, -1);
+	while (total < size) {
+		wsize = net_write((int)cookie, buf + total, size - total, -1);
+		if (wsize < 0)
+			break;
 
-	return wsize;
+		total += wsize;
+	}
+
+	return total > 0 || wsize >= 0 ? total : -1;
 }
 
 static ssize_t stream__read(void* cookie, char* buf, size_t size)
