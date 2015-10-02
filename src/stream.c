@@ -5,23 +5,28 @@
 #include "stream.h"
 #include "net-util.h"
 
-ssize_t stream__write(void* cookie, const char* buf, size_t size)
+static ssize_t stream__write(void* cookie, const char* buf, size_t size)
 {
-	return net_write((int)cookie, buf, size, -1);
+	ssize_t wsize = 0;
+
+	while (wsize < size)
+		wsize += net_write((int)cookie, buf + wsize, size - wsize, -1);
+
+	return wsize;
 }
 
-ssize_t stream__read(void* cookie, char* buf, size_t size)
+static ssize_t stream__read(void* cookie, char* buf, size_t size)
 {
 	return net_read((int)cookie, buf, size, -1);
 }
 
-int stream__seek(void* cookie, off64_t* offset, int whence)
+static int stream__seek(void* cookie, off64_t* offset, int whence)
 {
 	*offset = lseek64((int)cookie, *offset, whence);
 	return (int)*offset;
 }
 
-int stream__close(void* cookie)
+static int stream__close(void* cookie)
 {
 	return close((int)cookie);
 }
