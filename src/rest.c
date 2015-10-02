@@ -14,6 +14,7 @@
 #include "http.h"
 #include "vector.h"
 #include "rest.h"
+#include "stream.h"
 
 #define REST_BACKLOG 16
 
@@ -436,7 +437,7 @@ static void rest__on_connection(struct mloop_socket* socket)
 	if (nfd < 0)
 		goto nfd_failure;
 
-	state->output = fdopen(nfd, "w");
+	state->output = stream_open(nfd, "w");
 	if (!state->output)
 		goto fdopen_failure;
 
