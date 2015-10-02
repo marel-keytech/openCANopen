@@ -176,16 +176,33 @@ static inline void rest__print_allow_methods(FILE* output)
 	fprintf(output, "Access-Control-Allow-Methods: GET, PUT\r\n");
 }
 
-void rest_reply(FILE* output, struct rest_reply_data* data)
+static inline void rest__print_chunked_transfer_encoding(FILE* output)
+{
+	fprintf(output, "Transfer-Encoding: chunked\r\n");
+}
+
+void rest_reply_header(FILE* output, struct rest_reply_data* data)
 {
 	rest__print_status_code(output, data->status_code);
+
 	rest__print_server(output);
 	rest__print_connection_type(output);
 	rest__print_content_type(output, data->content_type);
-	rest__print_content_length(output, data->content_length);
+
+	if (data->content_length >= 0)
+		rest__print_content_length(output, data->content_length);
+	else
+		rest__print_chunked_transfer_encoding(output);
+
 	rest__print_allow_origin(output);
 	rest__print_allow_methods(output);
 	fprintf(output, "\r\n");
+	fflush(output);
+}
+
+void rest_reply(FILE* output, struct rest_reply_data* data)
+{
+	rest_reply_header(output, data);
 	fwrite(data->content, 1, data->content_length, output);
 	fflush(output);
 }
