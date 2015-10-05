@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <ctype.h>
 #include <appcbase.h>
+#include <errno.h>
 
 #include <mloop.h>
 #include "socketcan.h"
@@ -291,8 +292,9 @@ static int load_driver(int nodeid)
 	if (node->driver)
 		unload_driver(nodeid);
 
+	errno = 0;
 	node->device_type = get_device_type(nodeid);
-	if (node->device_type == 0)
+	if (node->device_type == 0 && errno != 0)
 		return -1;
 
 	const char* name = get_name(nodeid);
