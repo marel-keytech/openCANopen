@@ -12,6 +12,8 @@
 #include "conversions.h"
 #include "string-utils.h"
 
+size_t strlcpy(char*, const char*, size_t);
+
 #define is_in_range(x, min, max) ((min) <= (x) && (x) <= (max))
 
 struct sdo_rest_path {
@@ -330,6 +332,13 @@ nomem:
 	return fprintf(out, "null");
 }
 
+char* sdo_rest__clean_string(const char* str)
+{
+	static __thread char buffer[256];
+	strlcpy(buffer, str, sizeof(buffer));
+	return string_keep_if(isprint, buffer);
+}
+
 void sdo_rest__eds_job(struct mloop_work* work)
 {
 	char* buffer = NULL;
@@ -388,7 +397,8 @@ first_object:
 		}
 
 		if (obj->name)
-			fprintf(out, ",\n  \"name\": \"%s\"", obj->name);
+			fprintf(out, ",\n  \"name\": \"%s\"",
+				sdo_rest__clean_string(obj->name));
 
 		if (obj->default_value)
 			fprintf(out, ",\n  \"default-value\": \"%s\"",
