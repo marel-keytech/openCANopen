@@ -16,6 +16,9 @@ struct eds_obj {
 	uint32_t key;
 	enum canopen_type type;
 	enum eds_obj_access access;
+	const char* default_value;
+	const char* low_limit;
+	const char* high_limit;
 };
 
 int eds_db_load(void);

@@ -19,6 +19,8 @@ struct eds_obj_node {
 	struct eds_obj obj;
 
 	RB_ENTRY(eds_obj_node) rb_entry;
+
+	char buffer[0];
 };
 
 RB_HEAD(eds_obj_tree, eds_obj_node);
@@ -85,13 +87,16 @@ const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 	return NULL;
 }
 
-struct eds_obj_node* eds__obj_new()
+struct eds_obj_node* eds__obj_new(size_t buffer_size)
 {
-	struct eds_obj_node* obj = malloc(sizeof(*obj));
+	struct eds_obj_node* obj;
+	size_t size = sizeof(*obj) + buffer_size;
+
+	obj = malloc(size);
 	if (!obj)
 		return 0;
 
-	memset(obj, 0, sizeof(*obj));
+	memset(obj, 0, size);
 
 	return obj;
 }
@@ -164,6 +169,19 @@ static void eds__insert(struct canopen_eds* eds, struct eds_obj_node* node)
 	RB_INSERT(eds_obj_tree, &eds->obj_tree, node);
 }
 
+static const char*
+eds__append_buffer_value(struct eds_obj_node* node, const char* value,
+			 size_t* index)
+{
+	if (!value)
+		return NULL;
+
+	size_t i = *index;
+	*index += strlen(value) + 1;
+	return strcpy(&node->buffer[i], value);
+
+}
+
 static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
 {
 	for (size_t i = 0; i < ini_get_length(ini); ++i) {
@@ -185,13 +203,30 @@ static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
 		if (!access)
 			access = "ro";
 
-		struct eds_obj_node* obj = eds__obj_new();
+		const char* default_val = ini_find_key(section, "defaultvalue");
+		const char* low_limit	= ini_find_key(section, "lowlimit");
+		const char* high_limit	= ini_find_key(section, "highlimit");
+
+		size_t buffer_size = (default_val ? strlen(default_val) + 1 : 0)
+				   + (low_limit ? strlen(low_limit) + 1 : 0)
+				   + (high_limit ? strlen(high_limit) + 1 : 0);
+
+		struct eds_obj_node* obj = eds__obj_new(buffer_size);
 		if (!obj)
 			return -1;
 
 		obj->obj.type = strtoul(type, NULL, 0);
 		obj->obj.access = eds__get_access_type(access);
 		obj->obj.key = (index << 8) | subindex;
+
+		size_t idx = 0;
+		obj->obj.default_value
+			= eds__append_buffer_value(obj, default_val, &idx);
+		obj->obj.low_limit
+			= eds__append_buffer_value(obj, low_limit, &idx);
+		obj->obj.high_limit
+			= eds__append_buffer_value(obj, high_limit, &idx);
+
 		eds__insert(eds, obj);
 	}
 
