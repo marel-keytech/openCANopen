@@ -203,11 +203,13 @@ static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
 		if (!access)
 			access = "ro";
 
+		const char* name = ini_find_key(section, "parametername");
 		const char* default_val = ini_find_key(section, "defaultvalue");
 		const char* low_limit	= ini_find_key(section, "lowlimit");
 		const char* high_limit	= ini_find_key(section, "highlimit");
 
-		size_t buffer_size = (default_val ? strlen(default_val) + 1 : 0)
+		size_t buffer_size = (name ? strlen(name) + 1 : 0)
+				   + (default_val ? strlen(default_val) + 1 : 0)
 				   + (low_limit ? strlen(low_limit) + 1 : 0)
 				   + (high_limit ? strlen(high_limit) + 1 : 0);
 
@@ -220,6 +222,7 @@ static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
 		obj->obj.key = (index << 8) | subindex;
 
 		size_t idx = 0;
+		obj->obj.name = eds__append_buffer_value(obj, name, &idx);
 		obj->obj.default_value
 			= eds__append_buffer_value(obj, default_val, &idx);
 		obj->obj.low_limit
