@@ -387,6 +387,9 @@ first_object:
 						    subindex, obj->type);
 		}
 
+		if (obj->name)
+			fprintf(out, ",\n  \"name\": \"%s\"", obj->name);
+
 		if (obj->default_value)
 			fprintf(out, ",\n  \"default-value\": \"%s\"",
 				obj->default_value);
