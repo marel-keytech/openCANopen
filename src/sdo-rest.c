@@ -332,7 +332,31 @@ nomem:
 	return fprintf(out, "null");
 }
 
-char* sdo_rest__clean_string(const char* str)
+static char* sdo_rest__escape_string(const char* str)
+{
+	static __thread char buffer[256];
+	char* ptr = buffer;
+
+	while (ptr - buffer < sizeof(buffer) - 1)
+		switch (*str) {
+		case '\\':
+			*ptr++ = '\\';
+			*ptr++ = *str++;
+			break;
+		case '"':
+			*ptr++ = '\\';
+			*ptr++ = *str++;
+			break;
+		default:
+			*ptr++ = *str++;
+			break;
+		}
+
+	*ptr = '\0';
+	return buffer;
+}
+
+static char* sdo_rest__clean_string(const char* str)
 {
 	static __thread char buffer[256];
 	strlcpy(buffer, str, sizeof(buffer));
@@ -396,9 +420,14 @@ first_object:
 						    subindex, obj->type);
 		}
 
-		if (obj->name)
-			fprintf(out, ",\n  \"name\": \"%s\"",
-				sdo_rest__clean_string(obj->name));
+		if (obj->name) {
+			const char* clean_name;
+			const char* escaped_name;
+			clean_name = sdo_rest__clean_string(obj->name);
+			escaped_name = sdo_rest__escape_string(clean_name);
+
+			fprintf(out, ",\n  \"name\": \"%s\"", escaped_name);
+		}
 
 		if (obj->default_value)
 			fprintf(out, ",\n  \"default-value\": \"%s\"",
