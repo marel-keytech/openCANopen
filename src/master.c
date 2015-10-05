@@ -51,7 +51,8 @@ static char nodes_seen_[CANOPEN_NODEID_MAX + 1];
 
 enum master_state {
 	MASTER_STATE_STARTUP = 0,
-	MASTER_STATE_RUNNING
+	MASTER_STATE_RUNNING,
+	MASTER_STATE_STOPPING,
 };
 
 static enum master_state master_state_ = MASTER_STATE_STARTUP;
@@ -174,7 +175,10 @@ static void unload_driver(int nodeid)
 	node->is_heartbeat_supported = 0;
 	node->driver_type = CO_MASTER_DRIVER_NONE;
 
-	co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
+	if (master_state_ == MASTER_STATE_STOPPING)
+		co_net_send_nmt(&socket_, NMT_CS_STOP, nodeid);
+	else
+		co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->is_active = 0;
@@ -1012,6 +1016,8 @@ int co_master_run(const struct co_master_options* opt)
 	}
 
 	rc = run_appbase();
+
+	master_state_ = MASTER_STATE_STOPPING;
 
 	unload_all_drivers();
 
