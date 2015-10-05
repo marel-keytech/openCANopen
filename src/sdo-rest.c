@@ -387,6 +387,18 @@ first_object:
 						    subindex, obj->type);
 		}
 
+		if (obj->default_value)
+			fprintf(out, ",\n  \"default-value\": \"%s\"",
+				obj->default_value);
+
+		if (obj->low_limit)
+			fprintf(out, ",\n  \"low-limit\": \"%s\"",
+				obj->low_limit);
+
+		if (obj->high_limit)
+			fprintf(out, ",\n  \"high-limit\": \"%s\"",
+				obj->high_limit);
+
 		fprintf(out, "\n }");
 		obj = eds_obj_next(eds, obj);
 	} while (obj);
