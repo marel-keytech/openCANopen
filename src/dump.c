@@ -324,6 +324,7 @@ static void run_dumper(int fd)
 		multiplex(&cf);
 }
 
+__attribute__((visibility("default")))
 int co_dump(const char* addr, enum co_dump_options options)
 {
 	struct sock sock;
