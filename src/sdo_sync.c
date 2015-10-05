@@ -1,3 +1,4 @@
+#include <errno.h>
 #include "canopen/byteorder.h"
 #include "canopen/sdo_sync.h"
 
@@ -18,8 +19,10 @@ struct sdo_req* sdo_sync_read(int nodeid, int index, int subindex)
 
 	sdo_req_wait(req);
 
-	if (req->status != SDO_REQ_OK)
+	if (req->status != SDO_REQ_OK) {
+		errno = ENOENT;
 		goto done;
+	}
 
 	return req;
 
@@ -35,8 +38,10 @@ type sdo_sync_read_ ## name(int nodeid, int index, int subindex) \
 	struct sdo_req* req = sdo_sync_read(nodeid, index, subindex); \
 	if (!req) \
 		return 0; \
-	if (req->data.index > sizeof(value)) \
+	if (req->data.index > sizeof(value)) { \
+		errno = ERANGE; \
 		goto done; \
+	} \
 	byteorder2(&value, req->data.data, sizeof(value), req->data.index); \
 done: \
 	sdo_req_unref(req); \
