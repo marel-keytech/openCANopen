@@ -8,7 +8,9 @@
 #include "canopen/network.h"
 #include "canopen/heartbeat.h"
 #include "canopen/emcy.h"
+#include "canopen/dump.h"
 #include "net-util.h"
+#include "sock.h"
 
 static const char* nmt_cs_str(enum nmt_cs cs)
 {
@@ -322,21 +324,23 @@ static void run_dumper(int fd)
 		multiplex(&cf);
 }
 
-int main(int argc, char* argv[])
+int co_dump(const char* addr, enum co_dump_options options)
 {
-	const char* iface = argv[1];
-
-	int fd = socketcan_open(iface);
-	if (fd < 0) {
-		perror("Could not open interface");
+	struct sock sock;
+	enum sock_type type = options & CO_DUMP_TCP ? SOCK_TYPE_TCP
+						    : SOCK_TYPE_CAN;
+	if (sock_open(&sock, type, addr) < 0) {
+		perror("Could not open CAN bus");
 		return 1;
 	}
 
-	net_dont_block(fd);
-	net_fix_sndbuf(fd);
+	net_dont_block(sock.fd);
 
-	run_dumper(fd);
+	if (type == SOCK_TYPE_CAN)
+		net_fix_sndbuf(sock.fd);
 
-	close(fd);
+	run_dumper(sock.fd);
+
+	sock_close(&sock);
 	return 0;
 }
