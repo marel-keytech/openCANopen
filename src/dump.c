@@ -317,10 +317,10 @@ static int multiplex(struct can_frame* cf)
 	return -1;
 }
 
-static void run_dumper(int fd)
+static void run_dumper(struct sock* sock)
 {
 	struct can_frame cf;
-	while (net_read_frame(fd, &cf, -1) > 0)
+	while (sock_recv(sock, &cf, -1) > 0)
 		multiplex(&cf);
 }
 
@@ -340,7 +340,7 @@ int co_dump(const char* addr, enum co_dump_options options)
 	if (type == SOCK_TYPE_CAN)
 		net_fix_sndbuf(sock.fd);
 
-	run_dumper(sock.fd);
+	run_dumper(&sock);
 
 	sock_close(&sock);
 	return 0;
