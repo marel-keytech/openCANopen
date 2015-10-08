@@ -9,6 +9,10 @@
 			  help="Unix time stamp indicating when the node last sent a heartbeat message"/>
 		<variable type="string" bytesize="64" name="name"
 			  help="Name according to object dictionary entry 1008:0"/>
+		<variable type="string" bytesize="64" name="hw_version"
+			  help="Software version according to object dictionary entry 1009:0"/>
+		<variable type="string" bytesize="64" name="sw_version"
+			  help="Hardware version according to object dictionary entry 100A:0"/>
 	</struct>
 
 	<array type="canopen_node_info" name="nodes" count="127"/>

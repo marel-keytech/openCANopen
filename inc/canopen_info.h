@@ -9,6 +9,8 @@ struct canopen_info {
 	uint32_t device_type;
 	uint32_t last_seen;
 	char name[64];
+	char hw_version[64];
+	char sw_version[64];
 };
 
 extern struct canopen_info* canopen_info_;

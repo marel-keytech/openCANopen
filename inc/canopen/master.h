@@ -61,6 +61,8 @@ struct co_master_node {
 	struct mloop_timer* ping_timer;
 
 	char name[64];
+	char hw_version[64];
+	char sw_version[64];
 
 	int is_loading;
 };

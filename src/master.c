@@ -105,20 +105,19 @@ static inline int set_heartbeat_period(int nodeid, uint16_t period)
 	return sdo_sync_write_u16(nodeid, &info, period);
 }
 
-const char* get_name(int nodeid)
+static char* get_string(int nodeid, int index, int subindex)
 {
-	static __thread char name[256];
+	static __thread char buffer[256];
 
-	struct sdo_req* req = sdo_sync_read(nodeid, 0x1008, 0);
+	struct sdo_req* req = sdo_sync_read(nodeid, index, subindex);
 	if (!req)
 		return NULL;
 
-	memcpy(name, req->data.data, MIN(req->data.index, sizeof(name)));
-	name[MIN(req->data.index, sizeof(name) - 1)] = '\0';
-	string_keep_if(isalnum, name);
+	memcpy(buffer, req->data.data, MIN(req->data.index, sizeof(buffer)));
+	buffer[MIN(req->data.index, sizeof(buffer) - 1)] = '\0';
 
 	sdo_req_unref(req);
-	return name;
+	return buffer;
 }
 
 static void stop_heartbeat_timer(int nodeid)
@@ -301,10 +300,11 @@ static int load_driver(int nodeid)
 	if (node->device_type == 0 && errno != 0)
 		return -1;
 
-	const char* name = get_name(nodeid);
+	char* name = get_string(nodeid, 0x1008, 0);
 	if (!name)
 		return -1;
 
+	string_keep_if(isalnum, name);
 	strlcpy(node->name, name, sizeof(node->name));
 
 	if (node_has_identity(nodeid)) {
@@ -320,6 +320,20 @@ static int load_driver(int nodeid)
 	node->is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
 
+	char* hw_version = get_string(nodeid, 0x1009, 0);
+	if (!hw_version)
+		hw_version = "";
+
+	char* sw_version = get_string(nodeid, 0x100A, 0);
+	if (!sw_version)
+		sw_version = "";
+
+	strlcpy(node->hw_version, string_trim(hw_version),
+		sizeof(node->hw_version));
+
+	strlcpy(node->sw_version, string_trim(sw_version),
+		sizeof(node->sw_version));
+
 	return 0;
 }
 
@@ -332,6 +346,8 @@ static void initialize_info_structure(int nodeid)
 	info->device_type = node->device_type;
 	info->last_seen = gettime_us() / 1000000ULL;
 	strlcpy(info->name, node->name, sizeof(info->name));
+	strlcpy(info->hw_version, node->hw_version, sizeof(info->hw_version));
+	strlcpy(info->sw_version, node->sw_version, sizeof(info->sw_version));
 }
 
 static void initialize_legacy_driver(int nodeid)
@@ -532,6 +548,8 @@ static int handle_with_legacy(struct co_master_node* node,
 			      const struct can_frame* cf)
 {
 	void* driver = node->driver;
+	if (!driver)
+		return -1;
 
 	switch (msg->object)
 	{
