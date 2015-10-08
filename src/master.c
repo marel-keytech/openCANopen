@@ -324,12 +324,12 @@ static int load_driver(int nodeid)
 	if (!hw_version)
 		hw_version = "";
 
+	strlcpy(node->hw_version, string_trim(hw_version),
+		sizeof(node->hw_version));
+
 	char* sw_version = get_string(nodeid, 0x100A, 0);
 	if (!sw_version)
 		sw_version = "";
-
-	strlcpy(node->hw_version, string_trim(hw_version),
-		sizeof(node->hw_version));
 
 	strlcpy(node->sw_version, string_trim(sw_version),
 		sizeof(node->sw_version));
