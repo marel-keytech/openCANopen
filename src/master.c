@@ -8,6 +8,7 @@
 #include <errno.h>
 
 #include <mloop.h>
+#include <eloop.h>
 #include "socketcan.h"
 #include "canopen.h"
 #include "canopen/sdo.h"
@@ -918,7 +919,7 @@ static int init_node_structure(int nodeid)
 	return 0;
 
 ping_timer_failure:
-	mloop_timer_free(node->heartbeat_timer);
+	mloop_timer_unref(node->heartbeat_timer);
 	return -1;
 }
 
@@ -926,8 +927,8 @@ static void destroy_node_structure(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 
-	mloop_timer_free(node->ping_timer);
-	mloop_timer_free(node->heartbeat_timer);
+	mloop_timer_unref(node->ping_timer);
+	mloop_timer_unref(node->heartbeat_timer);
 }
 
 static int init_all_node_structures()
@@ -1041,7 +1042,7 @@ int co_master_run(const struct co_master_options* opt)
 
 	if (mux_handler_) {
 		mloop_socket_set_fd(mux_handler_, -1);
-		mloop_socket_free(mux_handler_);
+		mloop_socket_unref(mux_handler_);
 	}
 
 	mloop_stop_workers();
