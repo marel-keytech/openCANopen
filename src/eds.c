@@ -4,6 +4,7 @@
 #include <sys/resource.h>
 #include <errno.h>
 #include <stddef.h>
+#include <limits.h>
 
 #include "vector.h"
 #include "sys/tree.h"
@@ -13,6 +14,10 @@
 
 #ifndef __unused
 #define __unused __attribute__((unused))
+#endif
+
+#ifndef ABS
+#define ABS(a) ((a) > 0 ? (a) : -(a))
 #endif
 
 struct eds_obj_node {
@@ -76,16 +81,36 @@ static inline struct canopen_eds* eds__db_get(int index)
 	return &((struct canopen_eds*)eds__db.data)[index];
 }
 
+static inline size_t eds__db_length(void)
+{
+	return eds__db.index / sizeof(struct canopen_eds);
+}
+
 const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 {
-	for (size_t i = 0; i < eds__db.index / sizeof(struct canopen_eds); ++i)
+	ssize_t best_match = -1;
+	uint32_t diff = ULONG_MAX;
+
+	for (size_t i = 0; i < eds__db_length(); ++i)
 	{
 		const struct canopen_eds* eds = eds__db_get(i);
 		if (vendor   > 0 && vendor   != (int)eds->vendor)   continue;
 		if (product  > 0 && product  != (int)eds->product)  continue;
-		if (revision > 0 && revision != (int)eds->revision) continue;
+
+		if (revision > 0 && revision != (int)eds->revision) {
+			uint32_t d = ABS(revision - (int)eds->revision);
+			if (d < diff) {
+				diff = d;
+				best_match = i;
+			}
+			continue;
+		}
+
 		return eds;
 	}
+
+	if (best_match >= 0)
+		return eds__db_get(best_match);
 
 	return NULL;
 }
