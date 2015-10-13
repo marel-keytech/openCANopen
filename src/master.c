@@ -63,6 +63,7 @@ pthread_mutex_t driver_manager_lock_ = PTHREAD_MUTEX_INITIALIZER;
 
 static struct mloop* mloop_ = NULL;
 static struct mloop_socket* mux_handler_ = NULL;
+static struct co_master_options options_;
 
 static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
@@ -215,6 +216,39 @@ static void on_ping_timeout(struct mloop_timer* timer)
 	heartbeat_set_state(&cf, 1);
 
 	sock_send(&socket_, &cf, -1);
+}
+
+static void on_sdo_ping_done(struct sdo_req* req)
+{
+	struct co_master_node* node = req->context;
+	int nodeid = co_master_get_node_id(node);
+	struct canopen_info* info = canopen_info_get(nodeid);
+
+	restart_heartbeat_timer(nodeid);
+	info->last_seen = gettime_us() / 1000000ULL;
+}
+
+static void on_sdo_ping_timeout(struct mloop_timer* timer)
+{
+	struct co_master_node* node = mloop_timer_get_context(timer);
+	int nodeid = co_master_get_node_id(node);
+
+	struct sdo_req_info info = {
+		.type = SDO_REQ_UPLOAD,
+		.index = 0x1000,
+		.subindex = 0,
+		.context = node,
+		.on_done = on_sdo_ping_done
+	};
+
+	struct sdo_req* req = sdo_req_new(&info);
+	if (!req) {
+		restart_heartbeat_timer(nodeid);
+		return;
+	}
+
+	sdo_req_start(req, sdo_req_queue_get(nodeid));
+	sdo_req_unref(req);
 }
 
 static int start_ping_timer(int nodeid)
@@ -400,7 +434,11 @@ static void run_net_probe(struct mloop_work* self)
 
 	profile("Probe network...\n");
 	co_net_reset(&socket_, nodes_seen_, 100);
-	co_net_probe(&socket_, nodes_seen_, 1, 127, 100);
+
+	if (options_.flags & CO_MASTER_OPTION_WITH_QUIRKS)
+		co_net_probe_sdo(&socket_, nodes_seen_, 1, 127, 100);
+	else
+		co_net_probe(&socket_, nodes_seen_, 1, 127, 100);
 }
 
 static void run_load_driver(struct mloop_work* self)
@@ -898,7 +936,10 @@ static int init_ping_timer(struct co_master_node* node)
 	mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
 	mloop_timer_set_context(timer, node, NULL);
 	mloop_timer_set_time(timer, HEARTBEAT_PERIOD * 1000000LL);
-	mloop_timer_set_callback(timer, on_ping_timeout);
+	if (options_.flags & CO_MASTER_OPTION_WITH_QUIRKS)
+		mloop_timer_set_callback(timer, on_sdo_ping_timeout);
+	else
+		mloop_timer_set_callback(timer, on_ping_timeout);
 	node->ping_timer = timer;
 
 	return 0;
@@ -966,6 +1007,8 @@ __attribute__((visibility("default")))
 int co_master_run(const struct co_master_options* opt)
 {
 	int rc = 0;
+
+	memcpy(&options_, opt, sizeof(options_));
 
 	profiling_reset();
 	profile("Starting up canopen-master...\n");
