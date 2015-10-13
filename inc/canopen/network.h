@@ -31,6 +31,9 @@ int co_net_reset_range(const struct sock* sock, char* nodes_seen, int start,
 int co_net_probe(const struct sock* sock, char* nodes_seen, int start, int end,
 		 int timeout);
 
+int co_net_probe_sdo(const struct sock* sock, char* nodes_seen, int start,
+		     int end, int timeout);
+
 int co_net_send_nmt(const struct sock* sock, int cs, int nodeid);
 int co_net__request_device_type(const struct sock* sock, int nodeid);
 
