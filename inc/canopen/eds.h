@@ -20,6 +20,8 @@ struct eds_obj {
 	const char* default_value;
 	const char* low_limit;
 	const char* high_limit;
+	const char* unit;
+	const char* scaling;
 };
 
 int eds_db_load(void);

@@ -207,11 +207,15 @@ static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
 		const char* default_val = ini_find_key(section, "defaultvalue");
 		const char* low_limit	= ini_find_key(section, "lowlimit");
 		const char* high_limit	= ini_find_key(section, "highlimit");
+		const char* unit	= ini_find_key(section, "x-unit");
+		const char* scaling	= ini_find_key(section, "x-scaling");
 
 		size_t buffer_size = (name ? strlen(name) + 1 : 0)
 				   + (default_val ? strlen(default_val) + 1 : 0)
 				   + (low_limit ? strlen(low_limit) + 1 : 0)
-				   + (high_limit ? strlen(high_limit) + 1 : 0);
+				   + (high_limit ? strlen(high_limit) + 1 : 0)
+				   + (unit ? strlen(unit) + 1 : 0)
+				   + (scaling ? strlen(scaling) + 1 : 0);
 
 		struct eds_obj_node* obj = eds__obj_new(buffer_size);
 		if (!obj)
@@ -229,6 +233,8 @@ static int eds__convert_obj_tree(struct canopen_eds* eds, struct ini_file* ini)
 			= eds__append_buffer_value(obj, low_limit, &idx);
 		obj->obj.high_limit
 			= eds__append_buffer_value(obj, high_limit, &idx);
+		obj->obj.unit = eds__append_buffer_value(obj, unit, &idx);
+		obj->obj.scaling = eds__append_buffer_value(obj, scaling, &idx);
 
 		eds__insert(eds, obj);
 	}
