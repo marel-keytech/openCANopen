@@ -441,6 +441,12 @@ first_object:
 			fprintf(out, ",\n  \"high-limit\": \"%s\"",
 				obj->high_limit);
 
+		if (obj->unit)
+			fprintf(out, ",\n  \"unit\": \"%s\"", obj->unit);
+
+		if (obj->scaling)
+			fprintf(out, ",\n  \"scaling\": \"%s\"", obj->scaling);
+
 		fprintf(out, "\n }");
 		obj = eds_obj_next(eds, obj);
 	} while (obj);
