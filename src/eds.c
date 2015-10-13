@@ -40,9 +40,12 @@ struct canopen_eds {
 	uint32_t vendor;
 	uint32_t product;
 	uint32_t revision;
+	char name[256];
 
 	struct eds_obj_tree obj_tree;
 };
+
+size_t strlcpy(char*, const char*, size_t);
 
 static inline int eds__get_index(const struct eds_obj_node* node)
 {
@@ -256,6 +259,10 @@ static int eds__convert_ini(struct ini_file* ini)
 	if (!revision)
 		return -1;
 
+	const char* name = ini_find(ini, "deviceinfo", "productname");
+	if (!name)
+		return -1;
+
 	struct canopen_eds eds;
 	memset(&eds, 0, sizeof(eds));
 
@@ -264,6 +271,7 @@ static int eds__convert_ini(struct ini_file* ini)
 	eds.vendor = strtoul(vendor, NULL, 0);
 	eds.product = strtoul(product, NULL, 0);
 	eds.revision = strtoul(revision, NULL, 0);
+	strlcpy(eds.name, name, sizeof(eds.name));
 
 	if (eds__convert_obj_tree(&eds, ini) < 0)
 		goto failure;
