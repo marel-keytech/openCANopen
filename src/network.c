@@ -40,7 +40,7 @@ int co_net__request_sdo(const struct sock* sock, int nodeid)
 	struct can_frame cf;
 	sdo_clear_frame(&cf);
 	cf.can_id = R_RSDO + nodeid;
-	cf.can_dlc = 0;
+	cf.can_dlc = 4;
 	sdo_set_index(&cf, 0x1000);
 	sdo_set_subindex(&cf, 0);
 	sdo_set_cs(&cf, SDO_CCS_UL_INIT_REQ);
