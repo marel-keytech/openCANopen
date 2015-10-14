@@ -15,8 +15,13 @@ int canopen_info_init(const char* iface)
 
 	canopen_info_ = s_malloc(sizeof(struct canopen_info) * 127, buffer,
 				 canopen_info_description);
+	if (!canopen_info_)
+		return -1;
 
-	return canopen_info_? 0 : -1;
+	for (size_t i = 0; i < 127; ++i)
+		canopen_info_[i].is_active = 0;
+
+	return 0;
 }
 
 void canopen_info_cleanup(void)
