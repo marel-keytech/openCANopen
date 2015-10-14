@@ -224,8 +224,10 @@ static void on_sdo_ping_done(struct sdo_req* req)
 	int nodeid = co_master_get_node_id(node);
 	struct canopen_info* info = canopen_info_get(nodeid);
 
-	restart_heartbeat_timer(nodeid);
-	info->last_seen = gettime_us() / 1000000ULL;
+	if (req->status == SDO_REQ_OK) {
+		restart_heartbeat_timer(nodeid);
+		info->last_seen = gettime_us() / 1000000ULL;
+	}
 }
 
 static void on_sdo_ping_timeout(struct mloop_timer* timer)
