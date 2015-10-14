@@ -326,6 +326,11 @@ failure:
 	return -1;
 }
 
+static int is_nodename_char(int c)
+{
+	return isalnum(c) || c == '-' || c == '_';
+}
+
 static int load_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -341,7 +346,7 @@ static int load_driver(int nodeid)
 	if (!name)
 		return -1;
 
-	string_keep_if(isalnum, name);
+	string_keep_if(is_nodename_char, name);
 	strlcpy(node->name, name, sizeof(node->name));
 
 	if (node_has_identity(nodeid)) {
