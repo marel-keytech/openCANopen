@@ -440,12 +440,22 @@ static void run_net_probe(struct mloop_work* self)
 	(void)self;
 
 	profile("Probe network...\n");
-	co_net_reset(&socket_, nodes_seen_, 100);
+
+	int start = CANOPEN_NODEID_MIN, stop = CANOPEN_NODEID_MAX;
+
+	if (options_.range.start == 0 && options_.range.stop == 0) {
+		co_net_reset(&socket_, nodes_seen_, 100);
+	} else  {
+		start = options_.range.start;
+		stop = options_.range.stop;
+		co_net_reset_range(&socket_, nodes_seen_, start, stop,
+				   100 * (start - stop + 1));
+	}
 
 	if (options_.flags & CO_MASTER_OPTION_WITH_QUIRKS)
-		co_net_probe_sdo(&socket_, nodes_seen_, 1, 127, 100);
+		co_net_probe_sdo(&socket_, nodes_seen_, start, stop, 100);
 	else
-		co_net_probe(&socket_, nodes_seen_, 1, 127, 100);
+		co_net_probe(&socket_, nodes_seen_, start, stop, 100);
 }
 
 static void run_load_driver(struct mloop_work* self)
