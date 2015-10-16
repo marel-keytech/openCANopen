@@ -24,6 +24,7 @@ struct co_master_options {
 	size_t sdo_queue_length;
 	int rest_port;
 	size_t flags;
+	struct { int start, stop; } range;
 };
 
 typedef int (*co_drv_init_fn)(struct co_drv*);

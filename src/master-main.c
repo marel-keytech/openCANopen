@@ -10,6 +10,8 @@
 #define SDO_FIFO_MAX_LENGTH 1024
 #define REST_DEFAULT_PORT 9191
 
+#define is_in_range(x, min, max) ((min) <= (x) && (x) <= (max))
+
 const char usage_[] =
 "Usage: canopen-master [options] <interface>\n"
 "\n"
@@ -22,6 +24,7 @@ const char usage_[] =
 "    -R, --rest-port           Set TCP port of the rest service (default 9191).\n"
 "    -Q, --with-quirks         Try to work with buggy old hardware.\n"
 "    -T, --use-tcp             Interface argument is a TCP service address.\n"
+"    -n, --range               Set node id range (inclusive) to be managed.\n"
 "\n"
 "Appbase Options:\n"
 "    -v, --version             Get version info.\n"
@@ -36,6 +39,7 @@ const char usage_[] =
 "Examples:\n"
 "    $ canopen-master can0 -i0\n"
 "    $ canopen-master can1 -i1 -R9192\n"
+"    $ canopen-master can0 -n65-127\n"
 "\n";
 
 static inline int print_usage(FILE* output, int status)
@@ -50,6 +54,28 @@ static inline int have_help_argument(int argc, char* argv[])
 		if (strcmp(argv[i], "-h") == 0
 		 || strcmp(argv[i], "--help") == 0)
 			return 1;
+
+	return 0;
+}
+
+static int parse_range(struct co_master_options* opt, char* range)
+{
+	char* start = range;
+	char* stop = strchr(range, '-');
+	if (!stop)
+		return -1;
+
+	*stop++ = '\0';
+
+	if (!*stop)
+		return -1;
+
+	opt->range.start = strtoul(start, NULL, 0);
+	opt->range.stop = strtoul(stop, NULL, 0);
+
+	if (!is_in_range(opt->range.start, 1, 127)
+	 || !is_in_range(opt->range.stop, 1, 127))
+		return -1;
 
 	return 0;
 }
@@ -82,11 +108,12 @@ int main(int argc, char* argv[])
 		{ "rest-port",         required_argument, 0, 'R' },
 		{ "with-quirks",       no_argument,       0, 'Q' },
 		{ "use-tcp",           no_argument,       0, 'T' },
+		{ "range",             required_argument, 0, 'n' },
 		{ 0, 0, 0, 0 }
 	};
 
 	while (1) {
-		int c = getopt_long(argc, argv, "W:s:j:S:R:QT", long_options,
+		int c = getopt_long(argc, argv, "W:s:j:S:R:QTn:", long_options,
 				    NULL);
 		if (c < 0)
 			break;
@@ -102,6 +129,9 @@ int main(int argc, char* argv[])
 		case 'R': mopt.rest_port = atoi(optarg); break;
 		case 'Q': mopt.flags |= CO_MASTER_OPTION_WITH_QUIRKS; break;
 		case 'T': mopt.flags |= CO_MASTER_OPTION_USE_TCP; break;
+		case 'n': if (parse_range(&mopt, optarg) < 0)
+				  return print_usage(stderr, 1);
+			  break;
 		case 'h': return print_usage(stdout, 0);
 		case '?': break;
 		default:  return print_usage(stderr, 1);
