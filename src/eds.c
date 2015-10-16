@@ -28,8 +28,6 @@ struct eds_obj_node {
 	char buffer[0];
 };
 
-RB_HEAD(eds_obj_tree, eds_obj_node);
-
 static inline int eds_obj_cmp(const struct eds_obj_node* o1,
 			      const struct eds_obj_node* o2)
 {
@@ -40,15 +38,6 @@ static inline int eds_obj_cmp(const struct eds_obj_node* o1,
 }
 
 RB_GENERATE_STATIC(eds_obj_tree, eds_obj_node, rb_entry, eds_obj_cmp);
-
-struct canopen_eds {
-	uint32_t vendor;
-	uint32_t product;
-	uint32_t revision;
-	char name[256];
-
-	struct eds_obj_tree obj_tree;
-};
 
 size_t strlcpy(char*, const char*, size_t);
 
@@ -76,12 +65,12 @@ static inline void eds__set_subindex(struct eds_obj_node* node, int subindex)
 
 static struct vector eds__db;
 
-static inline struct canopen_eds* eds__db_get(int index)
+struct canopen_eds* eds_db_get(int index)
 {
 	return &((struct canopen_eds*)eds__db.data)[index];
 }
 
-static inline size_t eds__db_length(void)
+size_t eds_db_length(void)
 {
 	return eds__db.index / sizeof(struct canopen_eds);
 }
@@ -91,9 +80,9 @@ const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 	ssize_t best_match = -1;
 	uint32_t diff = ULONG_MAX;
 
-	for (size_t i = 0; i < eds__db_length(); ++i)
+	for (size_t i = 0; i < eds_db_length(); ++i)
 	{
-		const struct canopen_eds* eds = eds__db_get(i);
+		const struct canopen_eds* eds = eds_db_get(i);
 		if (vendor   > 0 && vendor   != (int)eds->vendor)   continue;
 		if (product  > 0 && product  != (int)eds->product)  continue;
 
@@ -110,7 +99,7 @@ const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 	}
 
 	if (best_match >= 0)
-		return eds__db_get(best_match);
+		return eds_db_get(best_match);
 
 	return NULL;
 }
@@ -386,7 +375,7 @@ failure:
 static void eds__db_clear(void)
 {
 	for (size_t i = 0; i < eds__db.index / sizeof(struct canopen_eds); ++i)
-		eds__clear(eds__db_get(i));
+		eds__clear(eds_db_get(i));
 }
 
 void eds_db_unload(void)

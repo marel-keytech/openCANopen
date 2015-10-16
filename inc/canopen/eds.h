@@ -2,8 +2,7 @@
 #define CANOPEN_EDS_H_
 
 #include "canopen/types.h"
-
-struct canopen_eds;
+#include "sys/tree.h"
 
 enum eds_obj_access {
 	EDS_OBJ_R = 1,
@@ -24,6 +23,19 @@ struct eds_obj {
 	const char* scaling;
 };
 
+struct eds_obj_node;
+
+RB_HEAD(eds_obj_tree, eds_obj_node);
+
+struct canopen_eds {
+	uint32_t vendor;
+	uint32_t product;
+	uint32_t revision;
+	char name[256];
+
+	struct eds_obj_tree obj_tree;
+};
+
 int eds_db_load(void);
 void eds_db_unload(void);
 
@@ -41,6 +53,9 @@ static inline int eds_obj_subindex(const struct eds_obj* obj)
 {
 	return obj->key & 0xff;
 }
+
+struct canopen_eds* eds_db_get(int index);
+size_t eds_db_length(void);
 
 const struct eds_obj* eds_obj_first(const struct canopen_eds* eds);
 const struct eds_obj* eds_obj_next(const struct canopen_eds* eds,
