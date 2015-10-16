@@ -39,10 +39,10 @@
 #define HEARTBEAT_TIMEOUT 11000 /* ms */
 
 #define for_each_node(index) \
-	for(index = CANOPEN_NODEID_MIN; index <= CANOPEN_NODEID_MAX; ++index)
+	for(index = nodeid_min(); index <= nodeid_max(); ++index)
 
 #define for_each_node_reverse(index) \
-	for(index = CANOPEN_NODEID_MAX; index >= CANOPEN_NODEID_MIN; --index)
+	for(index = nodeid_max(); index >= nodeid_min(); --index)
 
 size_t strlcpy(char* dst, const char* src, size_t dsize);
 
@@ -75,6 +75,18 @@ static void unload_legacy_module(int device_type, void* driver);
 
 struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unused */
+
+static inline int nodeid_min(void)
+{
+	return options_.range.start == 0 ? CANOPEN_NODEID_MIN
+					 : options_.range.start;
+}
+
+static inline int nodeid_max(void)
+{
+	return options_.range.stop == 0 ? CANOPEN_NODEID_MAX
+					: options_.range.stop;
+}
 
 static inline uint32_t get_device_type(int nodeid)
 {
@@ -687,7 +699,7 @@ static void mux_handler_fn(struct mloop_socket* self)
 	if (canopen_get_object_type(&msg, &cf) < 0)
 		return;
 
-	if (!(CANOPEN_NODEID_MIN <= msg.id && msg.id <= CANOPEN_NODEID_MAX))
+	if (!(nodeid_min() <= msg.id && msg.id <= nodeid_max()))
 		return;
 
 	struct co_master_node* node = co_master_get_node(msg.id);
