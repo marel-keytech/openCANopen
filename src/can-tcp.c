@@ -58,6 +58,13 @@ static void can_tcp__unref(struct can_tcp* self)
 		can_tcp__free(self);
 }
 
+void my_sock_send(struct sock* sock, const struct can_frame* cf)
+{
+	struct can_frame cp;
+	memcpy(&cp, cf, sizeof(cp));
+	sock_send(sock, &cp, -1);
+}
+
 static void can_tcp__send_to_others(struct can_tcp_entry* entry,
 				    struct can_frame* cf)
 {
@@ -66,7 +73,7 @@ static void can_tcp__send_to_others(struct can_tcp_entry* entry,
 
 	LIST_FOREACH(elem, &parent->list, links)
 		if (elem != entry)
-			sock_send(&elem->sock, cf, 0);
+			my_sock_send(&elem->sock, cf);
 }
 
 static void can_tcp__forward_message(struct mloop_socket* socket)
