@@ -25,9 +25,15 @@ struct can_tcp_entry {
 
 LIST_HEAD(can_tcp_list, can_tcp_entry);
 
+enum can_tcp_state {
+	CAN_TCP_NEW = 0,
+	CAN_TCP_READY
+};
+
 struct can_tcp {
 	struct can_tcp_list list;
 	size_t ref;
+	enum can_tcp_state state;
 };
 
 static struct can_tcp* can_tcp__new(void)
@@ -36,8 +42,11 @@ static struct can_tcp* can_tcp__new(void)
 	if (!self)
 		return NULL;
 
+	memset(&self, 0, sizeof(*self));
+
 	LIST_INIT(&self->list);
 	self->ref = 1;
+	self->state = CAN_TCP_NEW;
 
 	return self;
 }
