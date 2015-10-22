@@ -6,6 +6,7 @@ Description: CANopen master version 2.
 Destination: target
 BuildDepends: marel-env-host, libmloop-crossdevelopment, appbase-crossdevelopment
 Depends: libmloop, appbase
+Conflicts: libeloop (<< 1.8.0), libplog (<< 0.5.0)
 
 Type: release
 Install: ##BUILDRELEASE##lib/libcanopen2.so usr/lib
