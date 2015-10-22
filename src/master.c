@@ -404,12 +404,13 @@ static int load_driver(int nodeid)
 	return 0;
 }
 
-static void initialize_legacy_driver(int nodeid)
+static int initialize_legacy_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct canopen_info* info = canopen_info_get(nodeid);
 
-	if (legacy_driver_iface_initialize(node->driver) >= 0) {
+	int rc = legacy_driver_iface_initialize(node->driver);
+	if (rc >= 0) {
 		legacy_driver_iface_process_node_state(node->driver, 1);
 		info->is_active = 1;
 		info->last_seen = gettime_us() / 1000000ULL;
@@ -418,34 +419,40 @@ static void initialize_legacy_driver(int nodeid)
 		legacy_master_iface_delete(node->master_iface);
 		node->driver = NULL;
 		node->master_iface = NULL;
+		node->driver_type = CO_MASTER_DRIVER_NONE;
 	}
+
+	return rc;
 }
 
-static void initialize_new_driver(int nodeid)
+static int initialize_new_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct canopen_info* info = canopen_info_get(nodeid);
 
-	if (co_drv_init(&node->ndrv) >= 0) {
+	int rc = co_drv_init(&node->ndrv);
+	if (rc >= 0) {
 		info->is_active = 1;
 		info->last_seen = gettime_us() / 1000000ULL;
 	} else {
 		co_drv_unload(&node->ndrv);
+		node->driver_type = CO_MASTER_DRIVER_NONE;
 	}
+
+	return rc;
 }
 
-static void initialize_driver(int nodeid)
+static int initialize_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 
 	switch (node->driver_type) {
 	case CO_MASTER_DRIVER_NEW:
-		initialize_new_driver(nodeid);
-		break;
+		return initialize_new_driver(nodeid);
 	case CO_MASTER_DRIVER_LEGACY:
-		initialize_legacy_driver(nodeid);
-		break;
+		return initialize_legacy_driver(nodeid);
 	case CO_MASTER_DRIVER_NONE:
+		return -1;
 	default:
 		abort();
 		break;
@@ -491,7 +498,8 @@ static void on_load_driver_done(struct mloop_work* self)
 	if (node->driver_type == CO_MASTER_DRIVER_NONE)
 		return;
 
-	initialize_driver(nodeid);
+	if (initialize_driver(nodeid) < 0)
+		return;
 
 	start_nodeguarding(nodeid);
 
