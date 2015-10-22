@@ -343,6 +343,17 @@ static int is_nodename_char(int c)
 	return isalnum(c) || c == '-' || c == '_';
 }
 
+static void initialize_info_structure(int nodeid)
+{
+	struct canopen_info* info = canopen_info_get(nodeid);
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	info->device_type = node->device_type;
+	strlcpy(info->name, node->name, sizeof(info->name));
+	strlcpy(info->hw_version, node->hw_version, sizeof(info->hw_version));
+	strlcpy(info->sw_version, node->sw_version, sizeof(info->sw_version));
+}
+
 static int load_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -367,10 +378,6 @@ static int load_driver(int nodeid)
 		node->revision_number = get_revision_number(nodeid);
 	}
 
-	if (load_new_driver(nodeid) < 0)
-		if (load_legacy_driver(nodeid) < 0)
-			return -1;
-
 	node->is_heartbeat_supported =
 		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
 
@@ -388,29 +395,24 @@ static int load_driver(int nodeid)
 	strlcpy(node->sw_version, string_trim(sw_version),
 		sizeof(node->sw_version));
 
+	initialize_info_structure(nodeid);
+
+	if (load_new_driver(nodeid) < 0)
+		if (load_legacy_driver(nodeid) < 0)
+			return -1;
+
 	return 0;
-}
-
-static void initialize_info_structure(int nodeid)
-{
-	struct canopen_info* info = canopen_info_get(nodeid);
-	struct co_master_node* node = co_master_get_node(nodeid);
-
-	info->is_active = 1;
-	info->device_type = node->device_type;
-	info->last_seen = gettime_us() / 1000000ULL;
-	strlcpy(info->name, node->name, sizeof(info->name));
-	strlcpy(info->hw_version, node->hw_version, sizeof(info->hw_version));
-	strlcpy(info->sw_version, node->sw_version, sizeof(info->sw_version));
 }
 
 static void initialize_legacy_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
+	struct canopen_info* info = canopen_info_get(nodeid);
 
 	if (legacy_driver_iface_initialize(node->driver) >= 0) {
 		legacy_driver_iface_process_node_state(node->driver, 1);
-		initialize_info_structure(nodeid);
+		info->is_active = 1;
+		info->last_seen = gettime_us() / 1000000ULL;
 	} else {
 		unload_legacy_module(node->device_type, node->driver);
 		legacy_master_iface_delete(node->master_iface);
@@ -422,11 +424,14 @@ static void initialize_legacy_driver(int nodeid)
 static void initialize_new_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
+	struct canopen_info* info = canopen_info_get(nodeid);
 
-	if (co_drv_init(&node->ndrv) >= 0)
-		initialize_info_structure(nodeid);
-	else
+	if (co_drv_init(&node->ndrv) >= 0) {
+		info->is_active = 1;
+		info->last_seen = gettime_us() / 1000000ULL;
+	} else {
 		co_drv_unload(&node->ndrv);
+	}
 }
 
 static void initialize_driver(int nodeid)
@@ -483,7 +488,7 @@ static void on_load_driver_done(struct mloop_work* self)
 	struct co_master_node* node = mloop_work_get_context(self);
 	int nodeid = co_master_get_node_id(node);
 
-	if (!node->driver)
+	if (node->driver_type == CO_MASTER_DRIVER_NONE)
 		return;
 
 	initialize_driver(nodeid);
