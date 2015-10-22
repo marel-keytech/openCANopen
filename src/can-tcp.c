@@ -42,7 +42,7 @@ static struct can_tcp* can_tcp__new(void)
 	if (!self)
 		return NULL;
 
-	memset(&self, 0, sizeof(*self));
+	memset(self, 0, sizeof(*self));
 
 	LIST_INIT(&self->list);
 	self->ref = 1;
@@ -272,9 +272,12 @@ int can_tcp_bridge_server(const char* can, int port)
 {
 	struct sock cansock;
 
-	if (sock_open(&cansock, SOCK_TYPE_CAN, can) < 0) {
-		perror("Could not open CAN interface");
-		return -1;
+	if (can) {
+		if (sock_open(&cansock, SOCK_TYPE_CAN, can) < 0) {
+			perror("Could not open CAN interface");
+			return -1;
+		}
+		net_fix_sndbuf(cansock.fd);
 	}
 
 	struct mloop_socket* s = can_tcp__setup_server(port);
@@ -283,9 +286,11 @@ int can_tcp_bridge_server(const char* can, int port)
 
 	struct can_tcp* can_tcp = mloop_socket_get_context(s);
 
-	if (can_tcp__add_entry(can_tcp, &cansock) == NULL) {
-		perror("Could not create mloop handler for connection");
-		goto entry_failure;
+	if (can) {
+		if (can_tcp__add_entry(can_tcp, &cansock) == NULL) {
+			perror("Could not create mloop handler for connection");
+			goto entry_failure;
+		}
 	}
 
 	return 0;
@@ -293,7 +298,8 @@ int can_tcp_bridge_server(const char* can, int port)
 entry_failure:
 	mloop_socket_stop(s);
 server_failure:
-	sock_close(&cansock);
+	if (can)
+		sock_close(&cansock);
 	return -1;
 }
 
@@ -306,8 +312,11 @@ int can_tcp_bridge_client(const char* can, const char* address, int port)
 	if (!can_tcp)
 		return -1;
 
-	if (sock_open(&cansock, SOCK_TYPE_CAN, can) < 0)
-		goto cansock_failure;
+	if (can) {
+		if (sock_open(&cansock, SOCK_TYPE_CAN, can) < 0)
+			goto cansock_failure;
+		net_fix_sndbuf(cansock.fd);
+	}
 
 	int connfd = can_tcp_open(address, port);
 	if (connfd < 0)
@@ -315,9 +324,12 @@ int can_tcp_bridge_client(const char* can, const char* address, int port)
 
 	struct sock connsock = { .fd = connfd, .type = SOCK_TYPE_TCP };
 
-	struct mloop_socket* s1 = can_tcp__add_entry(can_tcp, &cansock);
-	if (!s1)
-		goto s1_failure;
+	struct mloop_socket* s1;
+	if (can)  {
+		s1 = can_tcp__add_entry(can_tcp, &cansock);
+		if (!s1)
+			goto s1_failure;
+	}
 
 	struct mloop_socket* s2 = can_tcp__add_entry(can_tcp, &connsock);
 	if (!s2)
@@ -328,11 +340,13 @@ int can_tcp_bridge_client(const char* can, const char* address, int port)
 	return 0;
 
 s2_failure:
-	mloop_socket_stop(s1);
+	if (can)
+		mloop_socket_stop(s1);
 s1_failure:
 	sock_close(&connsock);
 tcpsock_failure:
-	sock_close(&cansock);
+	if (can)
+		sock_close(&cansock);
 cansock_failure:
 	can_tcp__free(can_tcp);
 	return -1;

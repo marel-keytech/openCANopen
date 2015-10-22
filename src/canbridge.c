@@ -7,7 +7,7 @@
 #include "can-tcp.h"
 
 const char usage_[] =
-"Usage: canbridge [options] <interface>\n"
+"Usage: canbridge [options] [interface]\n"
 "\n"
 "Options:\n"
 "    -h, --help                 Get help.\n"
@@ -80,9 +80,6 @@ int main(int argc, char* argv[])
 	int nargs = argc - optind;
 	char** args = &argv[optind];
 
-	if (nargs < 1)
-		return print_usage(stderr, 1);
-
 	const char* iface = args[0];
 
 	if (listen_ && connect_) {
@@ -96,6 +93,11 @@ int main(int argc, char* argv[])
 	}
 
 	if (create) {
+		if (!iface) {
+			perror("Cannot create an interface unless you name it\n");
+			return 1;
+		}
+
 		if (try_create(iface) < 0) {
 			perror("Could not create interface");
 			return 1;
