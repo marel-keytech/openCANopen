@@ -1,6 +1,7 @@
 #ifndef CANOPEN_MASTER_H_
 #define CANOPEN_MASTER_H_
 
+#include <stddef.h>
 #include <assert.h>
 #include "canopen.h"
 #include "canopen-driver.h"
