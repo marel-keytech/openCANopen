@@ -35,9 +35,6 @@
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
-#define HEARTBEAT_PERIOD 10000 /* ms */
-#define HEARTBEAT_TIMEOUT 11000 /* ms */
-
 #define for_each_node(index) \
 	for(index = nodeid_min(); index <= nodeid_max(); ++index)
 
@@ -379,7 +376,7 @@ static int load_driver(int nodeid)
 	}
 
 	node->is_heartbeat_supported =
-		set_heartbeat_period(nodeid, HEARTBEAT_PERIOD) >= 0;
+		set_heartbeat_period(nodeid, options_.heartbeat_period) >= 0;
 
 	char* hw_version = get_string(nodeid, 0x1009, 0);
 	if (!hw_version)
@@ -961,8 +958,11 @@ static int init_heartbeat_timer(struct co_master_node* node)
 	if (!timer)
 		return -1;
 
+	uint64_t period = options_.heartbeat_period
+			+ options_.heartbeat_timeout;
+
 	mloop_timer_set_context(timer, node, NULL);
-	mloop_timer_set_time(timer, HEARTBEAT_TIMEOUT * 1000000LL);
+	mloop_timer_set_time(timer, period * 1000000LL);
 	mloop_timer_set_callback(timer, on_heartbeat_timeout);
 	node->heartbeat_timer = timer;
 
@@ -977,7 +977,7 @@ static int init_ping_timer(struct co_master_node* node)
 
 	mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
 	mloop_timer_set_context(timer, node, NULL);
-	mloop_timer_set_time(timer, HEARTBEAT_PERIOD * 1000000LL);
+	mloop_timer_set_time(timer, options_.heartbeat_period * 1000000LL);
 	if (options_.flags & CO_MASTER_OPTION_WITH_QUIRKS)
 		mloop_timer_set_callback(timer, on_sdo_ping_timeout);
 	else

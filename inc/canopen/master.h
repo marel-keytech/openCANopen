@@ -25,6 +25,8 @@ struct co_master_options {
 	size_t sdo_queue_length;
 	int rest_port;
 	size_t flags;
+	uint32_t heartbeat_period;
+	uint32_t heartbeat_timeout;
 	struct { int start, stop; } range;
 };
 

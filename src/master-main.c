@@ -9,6 +9,8 @@
 
 #define SDO_FIFO_MAX_LENGTH 1024
 #define REST_DEFAULT_PORT 9191
+#define HEARTBEAT_PERIOD 10000 /* ms */
+#define HEARTBEAT_TIMEOUT 1000 /* ms */
 
 #define is_in_range(x, min, max) ((min) <= (x) && (x) <= (max))
 
@@ -25,6 +27,8 @@ const char usage_[] =
 "    -Q, --with-quirks         Try to work with buggy old hardware.\n"
 "    -T, --use-tcp             Interface argument is a TCP service address.\n"
 "    -n, --range               Set node id range (inclusive) to be managed.\n"
+"    -p, --heartbeat-period    Set heartbeat period (default 10000ms).\n"
+"    -P, --heartbeat-timeout   Set heartbeat timeout (default 1000ms).\n"
 "\n"
 "Appbase Options:\n"
 "    -v, --version             Get version info.\n"
@@ -97,6 +101,8 @@ int main(int argc, char* argv[])
 		.job_queue_length = 64,
 		.sdo_queue_length = SDO_FIFO_MAX_LENGTH,
 		.rest_port = REST_DEFAULT_PORT,
+		.heartbeat_period = HEARTBEAT_PERIOD,
+		.heartbeat_timeout = HEARTBEAT_TIMEOUT,
 		.flags = 0
 	};
 
@@ -109,11 +115,13 @@ int main(int argc, char* argv[])
 		{ "with-quirks",       no_argument,       0, 'Q' },
 		{ "use-tcp",           no_argument,       0, 'T' },
 		{ "range",             required_argument, 0, 'n' },
+		{ "heartbeat-period",  required_argument, 0, 'p' },
+		{ "heartbeat-timeout", required_argument, 0, 'P' },
 		{ 0, 0, 0, 0 }
 	};
 
 	while (1) {
-		int c = getopt_long(argc, argv, "W:s:j:S:R:QTn:", long_options,
+		int c = getopt_long(argc, argv, "W:s:j:S:R:QTn:p:P:", long_options,
 				    NULL);
 		if (c < 0)
 			break;
@@ -125,6 +133,10 @@ int main(int argc, char* argv[])
 		case 'j': mopt.job_queue_length = strtoul(optarg, NULL, 0);
 			  break;
 		case 'S': mopt.sdo_queue_length = strtoul(optarg, NULL, 0);
+			  break;
+		case 'p': mopt.heartbeat_period = strtoul(optarg, NULL, 0);
+			  break;
+		case 'P': mopt.heartbeat_timeout = strtoul(optarg, NULL, 0);
 			  break;
 		case 'R': mopt.rest_port = atoi(optarg); break;
 		case 'Q': mopt.flags |= CO_MASTER_OPTION_WITH_QUIRKS; break;
