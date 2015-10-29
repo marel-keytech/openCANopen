@@ -140,7 +140,7 @@ int main(int argc, char* argv[])
 
 	pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-	struct mloop_signal* sig = mloop_signal_new();
+	struct mloop_signal* sig = mloop_signal_new(mloop_default());
 	if (!sig) {
 		perror("Could not allocate signal handler");
 		return 1;
@@ -148,7 +148,7 @@ int main(int argc, char* argv[])
 
 	mloop_signal_set_signals(sig, &sigset);
 	mloop_signal_set_callback(sig, on_signal_event);
-	mloop_start_signal(mloop, sig);
+	mloop_signal_start(sig);
 	mloop_signal_unref(sig);
 
 	mloop_run(mloop);

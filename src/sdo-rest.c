@@ -518,7 +518,7 @@ int sdo_rest__send_eds(struct rest_client* client)
 	context->eds = eds;
 	context->nodeid = nodeid;
 
-	struct mloop_work* work = mloop_work_new();
+	struct mloop_work* work = mloop_work_new(mloop_default());
 	if (!work) {
 		sdo_rest_server_error(client, "Out of memory\r\n");
 		goto failure;
@@ -527,7 +527,7 @@ int sdo_rest__send_eds(struct rest_client* client)
 	mloop_work_set_context(work, context, sdo_rest__eds_job_free);
 	mloop_work_set_work_fn(work, sdo_rest__eds_job);
 	mloop_work_set_done_fn(work, sdo_rest__eds_job_done);
-	if (mloop_start_work(mloop_default(), work) < 0)
+	if (mloop_work_start(work) < 0)
 		sdo_rest_server_error(client, "Failed to schedule response\r\n");
 
 	rest_client_ref(client);

@@ -7,8 +7,8 @@ DEFINE_FFF_GLOBALS;
 
 FAKE_VOID_FUNC(mloop_iterate, struct mloop*);
 FAKE_VALUE_FUNC(struct mloop*, mloop_default);
-FAKE_VALUE_FUNC(struct mloop_idle*, mloop_idle_new);
-FAKE_VALUE_FUNC(int, mloop_start_idle, struct mloop*, struct mloop_idle*);
+FAKE_VALUE_FUNC(struct mloop_idle*, mloop_idle_new, struct mloop*);
+FAKE_VALUE_FUNC(int, mloop_idle_start, struct mloop_idle*);
 FAKE_VALUE_FUNC(int, mloop_idle_unref, struct mloop_idle*);
 FAKE_VOID_FUNC(mloop_idle_set_context, struct mloop_idle*, void*,
 	       mloop_free_fn);

@@ -17,10 +17,9 @@ struct mloop_timer {
 };
 
 FAKE_VALUE_FUNC(struct mloop*, mloop_default);
-FAKE_VALUE_FUNC(struct mloop_timer*, mloop_timer_new);
+FAKE_VALUE_FUNC(struct mloop_timer*, mloop_timer_new, struct mloop*);
 FAKE_VALUE_FUNC(int, mloop_timer_start, struct mloop_timer*);
 FAKE_VALUE_FUNC(int, mloop_timer_stop, struct mloop_timer*);
-FAKE_VALUE_FUNC(int, mloop_start_timer, struct mloop*, struct mloop_timer*);
 FAKE_VALUE_FUNC(int, mloop_timer_unref, struct mloop_timer*);
 FAKE_VOID_FUNC(mloop_timer_set_time, struct mloop_timer*, uint64_t);
 FAKE_VOID_FUNC(mloop_timer_set_context, struct mloop_timer*, void*,

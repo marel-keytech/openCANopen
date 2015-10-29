@@ -84,7 +84,7 @@ static int vnode__start_heartbeat_timer(void)
 
 	struct mloop_timer* timer = vnode__heartbeat_timer;
 	mloop_timer_set_time(timer, (uint64_t)vnode__heartbeat_period * 1000000ULL);
-	return mloop_start_timer(mloop_default(), timer);
+	return mloop_timer_start(timer);
 }
 
 static int vnode__restart_heartbeat_timer(void)
@@ -179,7 +179,7 @@ static int vnode__on_sdo_init(struct sdo_srv* srv)
 
 static int vnode__setup_heartbeat_timer(void)
 {
-	struct mloop_timer* timer = mloop_timer_new();
+	struct mloop_timer* timer = mloop_timer_new(mloop_default());
 	if (!timer)
 		return -1;
 
@@ -279,7 +279,7 @@ static void vnode__mux(struct mloop_socket* socket)
 
 static int vnode__setup_mloop(void)
 {
-	struct mloop_socket* socket = mloop_socket_new();
+	struct mloop_socket* socket = mloop_socket_new(mloop_default());
 	if (!socket)
 		return -1;
 
@@ -288,7 +288,7 @@ static int vnode__setup_mloop(void)
 				 (mloop_free_fn)sock_close);
 	mloop_socket_set_callback(socket, vnode__mux);
 
-	int rc = mloop_start_socket(mloop_default(), socket);
+	int rc = mloop_socket_start(socket);
 	mloop_socket_unref(socket);
 
 	return rc;

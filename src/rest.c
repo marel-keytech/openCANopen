@@ -425,7 +425,7 @@ static void rest__on_connection(struct mloop_socket* socket)
 	net_dont_block(cfd);
 	net_dont_delay(cfd);
 
-	struct mloop_socket* client = mloop_socket_new();
+	struct mloop_socket* client = mloop_socket_new(mloop_default());
 	if (!client)
 		goto socket_failure;
 
@@ -444,7 +444,7 @@ static void rest__on_connection(struct mloop_socket* socket)
 	mloop_socket_set_fd(client, cfd);
 	mloop_socket_set_callback(client, rest__on_client_data);
 	mloop_socket_set_context(client, state, rest__on_socket_free);
-	mloop_start_socket(mloop_default(), client);
+	mloop_socket_start(client);
 
 	mloop_socket_unref(client);
 	return;
@@ -484,13 +484,13 @@ int rest_init(int port)
 	if (lfd < 0)
 		return -1;
 
-	struct mloop_socket* socket = mloop_socket_new();
+	struct mloop_socket* socket = mloop_socket_new(mloop);
 	if (!socket)
 		goto socket_failure;
 
 	mloop_socket_set_fd(socket, lfd);
 	mloop_socket_set_callback(socket, rest__on_connection);
-	if (mloop_start_socket(mloop, socket) < 0)
+	if (mloop_socket_start(socket) < 0)
 		goto start_failure;
 
 	mloop_socket_unref(socket);

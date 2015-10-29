@@ -113,7 +113,7 @@ can_tcp__add_entry(struct can_tcp* self, const struct sock* sock)
 	if (!entry)
 		return NULL;
 
-	struct mloop_socket* s = mloop_socket_new();
+	struct mloop_socket* s = mloop_socket_new(mloop_default());
 	if (!s)
 		goto failure;
 
@@ -125,7 +125,7 @@ can_tcp__add_entry(struct can_tcp* self, const struct sock* sock)
 	mloop_socket_set_callback(s, can_tcp__forward_message);
 	mloop_socket_set_fd(s, sock->fd);
 
-	int rc = mloop_start_socket(mloop_default(), s);
+	int rc = mloop_socket_start(s);
 	mloop_socket_unref(s);
 
 	if (rc >= 0)
@@ -242,7 +242,7 @@ struct mloop_socket* can_tcp__setup_server(int port)
 		goto server_failure;
 	}
 
-	struct mloop_socket* s = mloop_socket_new();
+	struct mloop_socket* s = mloop_socket_new(mloop_default());
 	if (!s) {
 		perror("Could not create server socket handler");
 		goto handler_failure;
@@ -252,7 +252,7 @@ struct mloop_socket* can_tcp__setup_server(int port)
 	mloop_socket_set_fd(s, sfd);
 	mloop_socket_set_callback(s, can_tcp__on_connection);
 
-	int rc = mloop_start_socket(mloop_default(), s);
+	int rc = mloop_socket_start(s);
 	if (rc < 0)
 		perror("Could not start server socket handler");
 

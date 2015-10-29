@@ -207,7 +207,7 @@ static int start_heartbeat_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->heartbeat_timer;
-	return mloop_start_timer(mloop_, timer);
+	return mloop_timer_start(timer);
 }
 
 static int restart_heartbeat_timer(int nodeid)
@@ -269,7 +269,7 @@ static int start_ping_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->ping_timer;
-	return mloop_start_timer(mloop_, timer);
+	return mloop_timer_start(timer);
 }
 
 static void start_nodeguarding(int nodeid)
@@ -513,7 +513,7 @@ static int schedule_load_driver(int nodeid)
 	if (node->is_loading)
 		return 0;
 
-	struct mloop_work* work = mloop_work_new();
+	struct mloop_work* work = mloop_work_new(mloop_default());
 	if (!work)
 		return -1;
 
@@ -521,7 +521,7 @@ static int schedule_load_driver(int nodeid)
 	mloop_work_set_work_fn(work, run_load_driver);
 	mloop_work_set_done_fn(work, on_load_driver_done);
 
-	int rc = mloop_start_work(mloop_, work);
+	int rc = mloop_work_start(work);
 
 	mloop_work_unref(work);
 
@@ -732,14 +732,14 @@ static void mux_handler_fn(struct mloop_socket* self)
 
 static int init_multiplexer()
 {
-	mux_handler_ = mloop_socket_new();
+	mux_handler_ = mloop_socket_new(mloop_default());
 	if (!mux_handler_)
 		return -1;
 
 	mloop_socket_set_fd(mux_handler_, socket_.fd);
 	mloop_socket_set_callback(mux_handler_, mux_handler_fn);
 
-	return mloop_start_socket(mloop_, mux_handler_);
+	return mloop_socket_start(mux_handler_);
 }
 
 static void run_bootup(struct mloop_work* self)
@@ -787,12 +787,12 @@ static void on_net_probe_done(struct mloop_work* self)
 	int __unused rc = init_multiplexer();
 	assert(rc == 0);
 
-	struct mloop_work* work = mloop_work_new();
+	struct mloop_work* work = mloop_work_new(mloop_default());
 	assert(work);
 	mloop_work_set_work_fn(work, run_bootup);
 	mloop_work_set_done_fn(work, on_bootup_done);
 
-	rc = mloop_start_work(mloop_, work);
+	rc = mloop_work_start(work);
 	assert(rc == 0);
 
 	mloop_work_unref(work);
@@ -805,14 +805,14 @@ static int appbase_dummy()
 
 static int on_tickermaster_alive()
 {
-	struct mloop_work* work = mloop_work_new();
+	struct mloop_work* work = mloop_work_new(mloop_default());
 	if (!work)
 		return -1;
 
 	mloop_work_set_work_fn(work, run_net_probe);
 	mloop_work_set_done_fn(work, on_net_probe_done);
 
-	int rc = mloop_start_work(mloop_, work);
+	int rc = mloop_work_start(work);
 	mloop_work_unref(work);
 
 	return rc;
@@ -957,7 +957,7 @@ static void* master_iface_init(int nodeid)
 
 static int init_heartbeat_timer(struct co_master_node* node)
 {
-	struct mloop_timer* timer = mloop_timer_new();
+	struct mloop_timer* timer = mloop_timer_new(mloop_default());
 	if (!timer)
 		return -1;
 
@@ -971,7 +971,7 @@ static int init_heartbeat_timer(struct co_master_node* node)
 
 static int init_ping_timer(struct co_master_node* node)
 {
-	struct mloop_timer* timer = mloop_timer_new();
+	struct mloop_timer* timer = mloop_timer_new(mloop_default());
 	if (!timer)
 		return -1;
 

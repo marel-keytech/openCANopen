@@ -70,14 +70,14 @@ int sdo_req__queue_init(struct sdo_req_queue* self, const struct sock* sock,
 	if (sdo_async_init(&self->sdo_client, sock, nodeid) < 0)
 		return -1;
 
-	self->idle = mloop_idle_new();
+	self->idle = mloop_idle_new(mloop_default());
 	if (!self->idle)
 		goto failure;
 
 	mloop_idle_set_idle_fn(self->idle, sdo_req__process_queue);
 	mloop_idle_set_cond_fn(self->idle, sdo_req__have_req);
 	mloop_idle_set_context(self->idle, self, NULL);
-	mloop_start_idle(mloop_default(), self->idle);
+	mloop_idle_start(self->idle);
 
 	self->sdo_client.quirks = quirks;
 
