@@ -5,12 +5,15 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
+#include <plog.h>
+#include <errno.h>
+#include <string.h>
 
 #include "socketcan.h"
 #include "net-util.h"
 #include "time-utils.h"
 
-ssize_t net_write(int fd, const void* src, size_t size, int timeout)
+static ssize_t net__write(int fd, const void* src, size_t size, int timeout)
 {
 	struct pollfd pollfd = { .fd = fd, .events = POLLOUT, .revents = 0 };
 	if (poll(&pollfd, 1, timeout) == 1)
@@ -18,17 +21,35 @@ ssize_t net_write(int fd, const void* src, size_t size, int timeout)
 	return -1;
 }
 
+ssize_t net_write(int fd, const void* src, size_t size, int timeout)
+{
+	ssize_t rc = net__write(fd, src, size, timeout);
+	if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+		plog(LOG_ERROR, "Failed to write to CAN bus: %s",
+		     strerror(errno));
+	return rc;
+}
+
 ssize_t net_write_frame(int fd, const struct can_frame* cf, int timeout)
 {
 	return net_write(fd, cf, sizeof(*cf), timeout);
 }
 
-ssize_t net_read(int fd, void* dst, size_t size, int timeout)
+static ssize_t net__read(int fd, void* dst, size_t size, int timeout)
 {
 	struct pollfd pollfd = { .fd = fd, .events = POLLIN, .revents = 0 };
 	if (poll(&pollfd, 1, timeout) == 1)
 		return read(fd, dst, size);
 	return -1;
+}
+
+ssize_t net_read(int fd, void* dst, size_t size, int timeout)
+{
+	ssize_t rc = net__read(fd, dst, size, timeout);
+	if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+		plog(LOG_ERROR, "Failed to read from CAN bus: %s",
+		     strerror(errno));
+	return rc;
 }
 
 ssize_t net_read_frame(int fd, struct can_frame* cf, int timeout)
