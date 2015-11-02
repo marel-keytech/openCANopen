@@ -4,7 +4,7 @@ PRJ_TYPE := SOLIB
 ADD_CFLAGS := -std=gnu99 -std=gnu++0x -D_GNU_SOURCE -Wextra -fexceptions \
 	      -fvisibility=hidden -pthread
 
-ADD_LIBS := mloop appbase dl sharedmalloc
+ADD_LIBS := mloop appbase dl sharedmalloc plog
 ADD_LFLAGS := -pthread
 
 MAIN_SRC := canopen-master.c canbridge.c canopen-dump.c
