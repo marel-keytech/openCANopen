@@ -221,6 +221,7 @@ static void on_ping_timeout(struct mloop_timer* timer)
 	struct can_frame cf = { 0 };
 
 	cf.can_id = R_HEARTBEAT + nodeid;
+	cf.can_id |= CAN_RTR_FLAG;
 	cf.can_dlc = 1;
 	heartbeat_set_state(&cf, 1);
 
