@@ -1,13 +1,15 @@
 #include <sys/socket.h>
 #include <linux/can.h>
 #include <assert.h>
+#include <stdint.h>
 
 #include "canopen.h"
 
 int canopen_get_object_type(struct canopen_msg* msg,
 			    const struct can_frame* frame)
 {
-	enum canopen_range id = (enum canopen_range)frame->can_id;
+	uint32_t cob = frame->can_id & CAN_SFF_MASK;
+	enum canopen_range id = (enum canopen_range)cob;
 
 	switch (id) {
 	case R_NMT:
