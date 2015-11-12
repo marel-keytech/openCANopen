@@ -200,6 +200,14 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 	struct co_master_node* node = mloop_timer_get_context(timer);
 	int nodeid = co_master_get_node_id(node);
 
+	node->ntimeouts++;
+
+	plog(LOG_DEBUG, "Node \"%s\" with id %d has missed %u heartbeats",
+	     node->name, nodeid, node->ntimeouts);
+
+	if (node->ntimeouts <= options_.ntimeouts_max)
+		return;
+
 	plog(LOG_NOTICE, "Node \"%s\" with id %d has timed out; unloading...",
 	     node->name, nodeid);
 
@@ -210,6 +218,7 @@ static int start_heartbeat_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->heartbeat_timer;
+	node->ntimeouts = 0;
 	return mloop_timer_start(timer);
 }
 
@@ -427,7 +436,7 @@ static int load_driver(int nodeid)
 	}
 
 	plog(LOG_DEBUG, "load_driver: Successfully loaded %s for \"%s\" at id %d",
-	     driver_type_str(node->driver_type), name, nodeid);
+	     driver_type_str(node->driver_type), node->name, nodeid);
 
 	return 0;
 
@@ -1001,6 +1010,9 @@ static int init_heartbeat_timer(struct co_master_node* node)
 
 	uint64_t period = options_.heartbeat_period
 			+ options_.heartbeat_timeout;
+
+	if (options_.ntimeouts_max > 0)
+		mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
 
 	mloop_timer_set_context(timer, node, NULL);
 	mloop_timer_set_time(timer, period * 1000000LL);

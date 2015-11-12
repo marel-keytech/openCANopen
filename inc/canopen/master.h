@@ -27,6 +27,7 @@ struct co_master_options {
 	size_t flags;
 	uint32_t heartbeat_period;
 	uint32_t heartbeat_timeout;
+	uint32_t ntimeouts_max;
 	struct { int start, stop; } range;
 };
 
@@ -69,6 +70,8 @@ struct co_master_node {
 	char sw_version[64];
 
 	int is_loading;
+
+	uint32_t ntimeouts;
 };
 
 extern struct co_master_node co_master_node_[];

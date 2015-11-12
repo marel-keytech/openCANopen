@@ -29,6 +29,7 @@ const char usage_[] =
 "    -n, --range               Set node id range (inclusive) to be managed.\n"
 "    -p, --heartbeat-period    Set heartbeat period (default 10000ms).\n"
 "    -P, --heartbeat-timeout   Set heartbeat timeout (default 1000ms).\n"
+"    -x, --ntimeouts-max       Set maximum number of timeouts (default 0).\n"
 "\n"
 "Appbase Options:\n"
 "    -v, --version             Get version info.\n"
@@ -117,12 +118,13 @@ int main(int argc, char* argv[])
 		{ "range",             required_argument, 0, 'n' },
 		{ "heartbeat-period",  required_argument, 0, 'p' },
 		{ "heartbeat-timeout", required_argument, 0, 'P' },
+		{ "ntimeouts-max",     required_argument, 0, 'x' },
 		{ 0, 0, 0, 0 }
 	};
 
 	while (1) {
-		int c = getopt_long(argc, argv, "W:s:j:S:R:QTn:p:P:", long_options,
-				    NULL);
+		int c = getopt_long(argc, argv, "W:s:j:S:R:QTn:p:P:x:",
+				    long_options, NULL);
 		if (c < 0)
 			break;
 
@@ -138,6 +140,7 @@ int main(int argc, char* argv[])
 			  break;
 		case 'P': mopt.heartbeat_timeout = strtoul(optarg, NULL, 0);
 			  break;
+		case 'x': mopt.ntimeouts_max = strtoul(optarg, NULL, 0); break;
 		case 'R': mopt.rest_port = atoi(optarg); break;
 		case 'Q': mopt.flags |= CO_MASTER_OPTION_WITH_QUIRKS; break;
 		case 'T': mopt.flags |= CO_MASTER_OPTION_USE_TCP; break;
