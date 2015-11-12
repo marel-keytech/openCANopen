@@ -23,8 +23,9 @@ static ssize_t net__write(int fd, const void* src, size_t size, int timeout)
 
 ssize_t net_write(int fd, const void* src, size_t size, int timeout)
 {
+	errno = 0;
 	ssize_t rc = net__write(fd, src, size, timeout);
-	if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+	if (rc < 0 && errno && errno != EAGAIN && errno != EWOULDBLOCK)
 		plog(LOG_ERROR, "Failed to write to CAN bus: %s",
 		     strerror(errno));
 	return rc;
@@ -45,8 +46,9 @@ static ssize_t net__read(int fd, void* dst, size_t size, int timeout)
 
 ssize_t net_read(int fd, void* dst, size_t size, int timeout)
 {
+	errno = 0;
 	ssize_t rc = net__read(fd, dst, size, timeout);
-	if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+	if (rc < 0 && errno && errno != EAGAIN && errno != EWOULDBLOCK)
 		plog(LOG_ERROR, "Failed to read from CAN bus: %s",
 		     strerror(errno));
 	return rc;
