@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <appcbase.h>
 #include <errno.h>
+#include <plog.h>
 
 #include <mloop.h>
 #include <eloop.h>
@@ -352,6 +353,17 @@ static void initialize_info_structure(int nodeid)
 	strlcpy(info->sw_version, node->sw_version, sizeof(info->sw_version));
 }
 
+static const char* driver_type_str(enum co_master_driver_type type)
+{
+	switch (type) {
+	case CO_MASTER_DRIVER_NONE: return "none";
+	case CO_MASTER_DRIVER_NEW: return "driver";
+	case CO_MASTER_DRIVER_LEGACY: return "legacy driver";
+	}
+
+	return "UNKNOWN";
+}
+
 static int load_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -360,12 +372,18 @@ static int load_driver(int nodeid)
 
 	errno = 0;
 	node->device_type = get_device_type(nodeid);
-	if (node->device_type == 0 && errno != 0)
+	if (node->device_type == 0 && errno != 0) {
+		plog(LOG_WARNING, "load_driver: Could not get/convert device type for node %d",
+		     nodeid);
 		return -1;
+	}
 
 	char* name = get_string(nodeid, 0x1008, 0);
-	if (!name)
+	if (!name) {
+		plog(LOG_WARNING, "load_driver: Could not get name of node %d",
+		     nodeid);
 		return -1;
+	}
 
 	string_keep_if(is_nodename_char, name);
 	strlcpy(node->name, name, sizeof(node->name));
@@ -395,11 +413,19 @@ static int load_driver(int nodeid)
 
 	initialize_info_structure(nodeid);
 
-	if (load_new_driver(nodeid) < 0)
-		if (load_legacy_driver(nodeid) < 0)
+	if (load_new_driver(nodeid) < 0) {
+		if (load_legacy_driver(nodeid) < 0) {
+			plog(LOG_NOTICE, "load_driver: There is no driver available for \"%s\" at id %d",
+			     node->name, nodeid);
 			return -1;
+		}
+	}
+
+	plog(LOG_DEBUG, "load_driver: Successfully loaded %s for \"%s\" at id %d",
+	     driver_type_str(node->driver_type), name, nodeid);
 
 	return 0;
+
 }
 
 static int initialize_legacy_driver(int nodeid)
