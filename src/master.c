@@ -640,7 +640,8 @@ static int handle_not_loaded(struct co_master_node* node,
 	switch (msg->object)
 	{
 	case CANOPEN_NMT:
-		return 0; /* TODO: this is illegal */
+		plog(LOG_ALERT, "Received NMT! Another CANopen master is not allowed on the bus!");
+		return 0;
 	case CANOPEN_EMCY:
 		return handle_emcy(node, frame);
 	case CANOPEN_HEARTBEAT:
@@ -665,7 +666,8 @@ static int handle_with_legacy(struct co_master_node* node,
 	switch (msg->object)
 	{
 	case CANOPEN_NMT:
-		return 0; /* TODO: this is illegal */
+		plog(LOG_ALERT, "Received NMT! Another CANopen master is not allowed on the bus!");
+		return 0;
 	case CANOPEN_TPDO1:
 		return legacy_driver_iface_process_pdo(driver, 1, cf->data,
 						       cf->can_dlc);
@@ -700,7 +702,8 @@ static int handle_with_new_driver(struct co_master_node* node,
 	switch (msg->object)
 	{
 	case CANOPEN_NMT:
-		return 0; /* TODO: this is illegal */
+		plog(LOG_ALERT, "Received NMT! Another CANopen master is not allowed on the bus!");
+		return 0;
 	case CANOPEN_TPDO1:
 		if (drv->pdo1_fn)
 			drv->pdo1_fn(drv, cf->data, cf->can_dlc);
