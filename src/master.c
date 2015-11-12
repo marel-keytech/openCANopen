@@ -439,6 +439,9 @@ static int initialize_legacy_driver(int nodeid)
 		info->is_active = 1;
 		info->last_seen = gettime_us() / 1000000ULL;
 	} else {
+		plog(LOG_ERROR, "initialize_legacy_driver: Failed to initialize \"%s\" with id %d",
+		     node->name, nodeid);
+
 		unload_legacy_module(node->device_type, node->driver);
 		legacy_master_iface_delete(node->master_iface);
 		node->driver = NULL;
@@ -459,6 +462,9 @@ static int initialize_new_driver(int nodeid)
 		info->is_active = 1;
 		info->last_seen = gettime_us() / 1000000ULL;
 	} else {
+		plog(LOG_ERROR, "initialize_new_driver: Failed to initialize \"%s\" with id %d",
+		     node->name, nodeid);
+
 		co_drv_unload(&node->ndrv);
 		node->driver_type = CO_MASTER_DRIVER_NONE;
 	}
