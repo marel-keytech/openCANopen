@@ -198,6 +198,11 @@ static void unload_driver(int nodeid)
 static void on_heartbeat_timeout(struct mloop_timer* timer)
 {
 	struct co_master_node* node = mloop_timer_get_context(timer);
+	int nodeid = co_master_get_node_id(node);
+
+	plog(LOG_NOTICE, "Node \"%s\" with id %d has timed out; unloading...",
+	     node->name, nodeid);
+
 	unload_driver(co_master_get_node_id(node));
 }
 
