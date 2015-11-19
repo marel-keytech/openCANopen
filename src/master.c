@@ -1176,9 +1176,11 @@ int co_master_run(const struct co_master_options* opt)
 		goto driver_manager_failure;
 	}
 
+	mloop_set_job_queue_size(opt->job_queue_length);
+	mloop_set_worker_stack_size(opt->job_queue_length);
+
 	profile("Start worker threads...\n");
-	if (mloop_start_workers(opt->nworkers, opt->job_queue_length,
-				opt->worker_stack_size) != 0) {
+	if (mloop_require_workers(opt->nworkers) != 0) {
 		rc = 1;
 		goto worker_failure;
 	}
@@ -1193,8 +1195,6 @@ int co_master_run(const struct co_master_options* opt)
 		mloop_socket_set_fd(mux_handler_, -1);
 		mloop_socket_unref(mux_handler_);
 	}
-
-	mloop_stop_workers();
 
 worker_failure:
 	legacy_driver_manager_delete(driver_manager_);
