@@ -18,25 +18,24 @@
 
 #define REST_BACKLOG 16
 
-struct rest_service {
-	SLIST_ENTRY(rest_service) links;
-	enum http_method method;
-	const char* path;
-	rest_fn fn;
-};
-
 SLIST_HEAD(rest_service_list, rest_service);
 
 static struct rest_service_list rest_service_list_;
+
+int rest__service_is_match(const struct rest_service* service,
+			   const struct http_req* req)
+{
+	return req->method & service->method
+	    && req->url_index > 0
+	    && strcasecmp(req->url[0], service->path) == 0;
+}
 
 struct rest_service* rest__find_service(const struct http_req* req)
 {
 	struct rest_service* service;
 
 	SLIST_FOREACH(service, &rest_service_list_, links)
-		if (req->method & service->method
-		 && req->url_index > 0
-		 && strcasecmp(req->url[0], service->path) == 0)
+		if (rest__service_is_match(service, req))
 			return service;
 
 	return NULL;
@@ -474,11 +473,16 @@ int rest_register_service(enum http_method method, const char* path, rest_fn fn)
 	return 0;
 }
 
+void rest__init_service_list(void)
+{
+	SLIST_INIT(&rest_service_list_);
+}
+
 int rest_init(int port)
 {
 	struct mloop* mloop = mloop_default();
 
-	SLIST_INIT(&rest_service_list_);
+	rest__init_service_list();
 
 	int lfd = rest__open_server(port);
 	if (lfd < 0)

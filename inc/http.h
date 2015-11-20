@@ -8,8 +8,8 @@
 
 enum http_method {
 	HTTP_GET = 1,
-	HTTP_PUT,
-	HTTP_OPTIONS
+	HTTP_PUT = 2,
+	HTTP_OPTIONS = 4,
 };
 
 struct http_url_query {
