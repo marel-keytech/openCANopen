@@ -1,7 +1,8 @@
 #ifndef NET_UTIL_H_
 #define NET_UTIL_H_
 
-#include <fcntl.h>
+#include <unistd.h>
+#include <stdint.h>
 
 struct can_frame;
 
@@ -20,11 +21,7 @@ ssize_t net_filtered_read_frame(int fd, struct can_frame* cf, int timeout,
 
 /* Make socket non-blocking
  */
-static inline int net_dont_block(int fd)
-{
-	return fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
-}
-
+int net_dont_block(int fd);
 int net_fix_sndbuf(int fd);
 int net_reuse_addr(int fd);
 int net_dont_delay(int fd);

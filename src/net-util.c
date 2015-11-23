@@ -8,6 +8,7 @@
 #include <plog.h>
 #include <errno.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include "socketcan.h"
 #include "net-util.h"
@@ -78,6 +79,11 @@ ssize_t net_filtered_read_frame(int fd, struct can_frame* cf, int timeout,
 	}
 
 	return -1;
+}
+
+int net_dont_block(int fd)
+{
+	return fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
 }
 
 int net_fix_sndbuf(int fd)
