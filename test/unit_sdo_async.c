@@ -198,13 +198,13 @@ static int upload(const char* str)
 static int test_download()
 {
 	return download("")
-	    && download("f")
-	    && download("fo")
-	    && download("foo")
-	    && download("foob")
-	    && download("fooba")
-	    && download("foobar")
-	    && download("foobarx");
+	    || download("f")
+	    || download("fo")
+	    || download("foo")
+	    || download("foob")
+	    || download("fooba")
+	    || download("foobar")
+	    || download("foobarx");
 }
 
 static int test_download_big()
@@ -215,13 +215,13 @@ static int test_download_big()
 static int test_upload()
 {
 	return upload("")
-	    && upload("f")
-	    && upload("fo")
-	    && upload("foo")
-	    && upload("foob")
-	    && upload("fooba")
-	    && upload("foobar")
-	    && upload("foobarx");
+	    || upload("f")
+	    || upload("fo")
+	    || upload("foo")
+	    || upload("foob")
+	    || upload("fooba")
+	    || upload("foobar")
+	    || upload("foobarx");
 }
 
 static int test_upload_big()
