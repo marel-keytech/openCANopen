@@ -55,5 +55,6 @@ struct rest_service* rest__find_service(const struct http_req* req);
 void rest__init_service_list(void);
 
 int rest__open_server(int port);
+int rest__read(struct vector* buffer, int fd);
 
 #endif /* CANOPEN_REST_H_ */

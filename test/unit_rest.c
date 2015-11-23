@@ -1,8 +1,10 @@
 #include <string.h>
+#include <unistd.h>
 
 #include "tst.h"
 #include "fff.h"
 #include "rest.h"
+#include "vector.h"
 
 DEFINE_FFF_GLOBALS;
 
@@ -12,6 +14,7 @@ FAKE_VALUE_FUNC(int, listen, int, int);
 FAKE_VALUE_FUNC(int, close, int);
 FAKE_VALUE_FUNC(int, net_dont_block, int);
 FAKE_VALUE_FUNC(int, net_reuse_addr, int);
+FAKE_VALUE_FUNC(ssize_t, read, int, void*, size_t);
 
 static void reset_fakes(void)
 {
@@ -21,6 +24,7 @@ static void reset_fakes(void)
 	RESET_FAKE(close);
 	RESET_FAKE(net_dont_block);
 	RESET_FAKE(net_reuse_addr);
+	RESET_FAKE(read);
 }
 
 static struct rest_service*
@@ -212,6 +216,46 @@ static int test_open_server__success(void)
 	return 0;
 }
 
+static int test_read__empty(void)
+{
+	reset_fakes();
+	read_fake.return_val = -1;
+	struct vector vec;
+	ASSERT_INT_LT(0, rest__read(&vec, 42));
+	return 0;
+}
+
+static int test_read__closed(void)
+{
+	reset_fakes();
+	read_fake.return_val = 0;
+	struct vector vec;
+	ASSERT_INT_EQ(0, rest__read(&vec, 42));
+	return 0;
+}
+
+static ssize_t read_test_custom(int fd, void* buf, size_t count)
+{
+	switch (read_fake.call_count) {
+	case 1: strcpy(buf, "foo"); return 3;
+	case 2: strcpy(buf, "bar"); return 4;
+	default: return -1;
+	}
+}
+
+static int test_read__twice(void)
+{
+	reset_fakes();
+	read_fake.custom_fake = read_test_custom;
+	struct vector vec;
+	vector_init(&vec, 16);
+	ASSERT_INT_EQ(-1, rest__read(&vec, 42));
+	ASSERT_INT_EQ(3, read_fake.call_count);
+	ASSERT_UINT_EQ(7, vec.index);
+	ASSERT_STR_EQ("foobar", vec.data);
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -222,5 +266,8 @@ int main()
 	RUN_TEST(test_open_server__bind_failure);
 	RUN_TEST(test_open_server__listen_failure);
 	RUN_TEST(test_open_server__success);
+	RUN_TEST(test_read__empty);
+	RUN_TEST(test_read__closed);
+	RUN_TEST(test_read__twice);
 	return r;
 }
