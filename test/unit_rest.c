@@ -1,7 +1,27 @@
 #include <string.h>
 
 #include "tst.h"
+#include "fff.h"
 #include "rest.h"
+
+DEFINE_FFF_GLOBALS;
+
+FAKE_VALUE_FUNC(int, socket, int, int, int);
+FAKE_VALUE_FUNC(int, bind, int, const struct sockaddr*, size_t);
+FAKE_VALUE_FUNC(int, listen, int, int);
+FAKE_VALUE_FUNC(int, close, int);
+FAKE_VALUE_FUNC(int, net_dont_block, int);
+FAKE_VALUE_FUNC(int, net_reuse_addr, int);
+
+static void reset_fakes(void)
+{
+	RESET_FAKE(socket);
+	RESET_FAKE(bind);
+	RESET_FAKE(listen);
+	RESET_FAKE(close);
+	RESET_FAKE(net_dont_block);
+	RESET_FAKE(net_reuse_addr);
+}
 
 static struct rest_service*
 make_service(enum http_method method, const char* path)
@@ -107,11 +127,100 @@ static int test_find_service_one(void)
 	return r;
 }
 
+static int test_open_server__socket_failure(void)
+{
+	reset_fakes();
+	socket_fake.return_val = -1;
+	ASSERT_INT_LT(0, rest__open_server(1337));
+	ASSERT_INT_EQ(1, socket_fake.call_count);
+	ASSERT_INT_EQ(0, net_reuse_addr_fake.call_count);
+	ASSERT_INT_EQ(0, bind_fake.call_count);
+	ASSERT_INT_EQ(0, listen_fake.call_count);
+	ASSERT_INT_EQ(0, net_dont_block_fake.call_count);
+	ASSERT_INT_EQ(0, close_fake.call_count);
+	return 0;
+}
+
+static int test_open_server__bind_failure(void)
+{
+	reset_fakes();
+	socket_fake.return_val = 42;
+	bind_fake.return_val = -1;
+
+	ASSERT_INT_LT(0, rest__open_server(1337));
+	ASSERT_INT_EQ(1, socket_fake.call_count);
+
+	ASSERT_INT_EQ(1, net_reuse_addr_fake.call_count);
+	ASSERT_INT_EQ(42, net_reuse_addr_fake.arg0_val);
+
+	ASSERT_INT_EQ(1, bind_fake.call_count);
+	ASSERT_INT_EQ(42, bind_fake.arg0_val);
+
+	ASSERT_INT_EQ(0, listen_fake.call_count);
+	ASSERT_INT_EQ(0, net_dont_block_fake.call_count);
+	ASSERT_INT_EQ(1, close_fake.call_count);
+
+	return 0;
+}
+
+static int test_open_server__listen_failure(void)
+{
+	reset_fakes();
+	socket_fake.return_val = 42;
+	listen_fake.return_val = -1;
+
+	ASSERT_INT_LT(0, rest__open_server(1337));
+	ASSERT_INT_EQ(1, socket_fake.call_count);
+
+	ASSERT_INT_EQ(1, net_reuse_addr_fake.call_count);
+	ASSERT_INT_EQ(42, net_reuse_addr_fake.arg0_val);
+
+	ASSERT_INT_EQ(1, bind_fake.call_count);
+	ASSERT_INT_EQ(42, bind_fake.arg0_val);
+
+	ASSERT_INT_EQ(1, listen_fake.call_count);
+	ASSERT_INT_EQ(42, listen_fake.arg0_val);
+
+	ASSERT_INT_EQ(0, net_dont_block_fake.call_count);
+	ASSERT_INT_EQ(1, close_fake.call_count);
+
+	return 0;
+}
+
+static int test_open_server__success(void)
+{
+	reset_fakes();
+	socket_fake.return_val = 42;
+
+	ASSERT_INT_EQ(42, rest__open_server(1337));
+	ASSERT_INT_EQ(1, socket_fake.call_count);
+
+	ASSERT_INT_EQ(1, net_reuse_addr_fake.call_count);
+	ASSERT_INT_EQ(42, net_reuse_addr_fake.arg0_val);
+
+	ASSERT_INT_EQ(1, bind_fake.call_count);
+	ASSERT_INT_EQ(42, bind_fake.arg0_val);
+
+	ASSERT_INT_EQ(1, listen_fake.call_count);
+	ASSERT_INT_EQ(42, listen_fake.arg0_val);
+
+	ASSERT_INT_EQ(1, net_dont_block_fake.call_count);
+	ASSERT_INT_EQ(42, net_dont_block_fake.arg0_val);
+
+	ASSERT_INT_EQ(0, close_fake.call_count);
+
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
 	RUN_TEST(test_find_service_empty);
 	RUN_TEST(test_service_is_match);
 	RUN_TEST(test_find_service_one);
+	RUN_TEST(test_open_server__socket_failure);
+	RUN_TEST(test_open_server__bind_failure);
+	RUN_TEST(test_open_server__listen_failure);
+	RUN_TEST(test_open_server__success);
 	return r;
 }

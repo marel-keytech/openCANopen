@@ -54,4 +54,6 @@ int rest__service_is_match(const struct rest_service* service,
 struct rest_service* rest__find_service(const struct http_req* req);
 void rest__init_service_list(void);
 
+int rest__open_server(int port);
+
 #endif /* CANOPEN_REST_H_ */
