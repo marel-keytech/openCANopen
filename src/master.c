@@ -166,8 +166,8 @@ static void unload_driver(int nodeid)
 
 	if (!node->is_heartbeat_supported)
 		stop_ping_timer(nodeid);
-	else
-		set_heartbeat_period(nodeid, 0);
+
+	/* TODO: somehow turn off heartbeat in a way that doesn't hang */
 
 	sdo_req_queue_flush(sdo_req_queue_get(nodeid));
 
