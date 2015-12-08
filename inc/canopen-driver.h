@@ -1,6 +1,7 @@
 #ifndef _CANOPEN_DRIVER_H
 #define _CANOPEN_DRIVER_H
 
+#include <unistd.h>
 #include <stdint.h>
 
 struct co_drv;
@@ -9,6 +10,14 @@ struct co_sdo_req;
 enum co_sdo_type {
 	CO_SDO_DOWNLOAD = 1,
 	CO_SDO_UPLOAD
+};
+
+enum co_sdo_status {
+	CO_SDO_REQ_PENDING = 0,
+	CO_SDO_REQ_OK,
+	CO_SDO_REQ_LOCAL_ABORT,
+	CO_SDO_REQ_REMOTE_ABORT,
+	CO_SDO_REQ_CANCELLED,
 };
 
 struct co_emcy {
@@ -24,6 +33,7 @@ typedef void (*co_emcy_fn)(struct co_drv*, struct co_emcy*);
 
 const char* co_get_network_name(const struct co_drv* self);
 int co_get_nodeid(const struct co_drv* self);
+uint32_t co_get_device_type(const struct co_drv* self);
 uint32_t co_get_vendor_id(const struct co_drv* self);
 uint32_t co_get_product_code(const struct co_drv* self);
 uint32_t co_get_revision_number(const struct co_drv* self);
@@ -38,6 +48,11 @@ void co_set_pdo3_fn(struct co_drv* self, co_pdo_fn fn);
 void co_set_pdo4_fn(struct co_drv* self, co_pdo_fn fn);
 void co_set_emcy_fn(struct co_drv* self, co_emcy_fn fn);
 
+int co_rpdo1(struct co_drv* self, const void* data, size_t size);
+int co_rpdo2(struct co_drv* self, const void* data, size_t size);
+int co_rpdo3(struct co_drv* self, const void* data, size_t size);
+int co_rpdo4(struct co_drv* self, const void* data, size_t size);
+
 struct co_sdo_req* co_sdo_req_new(struct co_drv* drv);
 void co_sdo_req_ref(struct co_sdo_req* self);
 int co_sdo_req_unref(struct co_sdo_req* self);
@@ -45,6 +60,14 @@ void co_sdo_req_set_indices(struct co_sdo_req* self, int index, int subindex);
 void co_sdo_req_set_type(struct co_sdo_req* self, enum co_sdo_type type);
 void co_sdo_req_set_data(struct co_sdo_req* self, const void* data, size_t sz);
 void co_sdo_req_set_done_fn(struct co_sdo_req* self, co_sdo_done_fn fn);
+void co_sdo_req_set_context(struct co_sdo_req* self, void* context,
+			    co_free_fn free_fn);
+void* co_sdo_req_get_context(const struct co_sdo_req* self);
 int co_sdo_req_start(struct co_sdo_req* self);
+const void* co_sdo_req_get_data(const struct co_sdo_req* self);
+size_t co_sdo_req_get_size(const struct co_sdo_req* self);
+int co_sdo_req_get_index(const struct co_sdo_req* self);
+int co_sdo_req_get_subindex(const struct co_sdo_req* self);
+enum co_sdo_status co_sdo_req_get_status(const struct co_sdo_req* self);
 
 #endif /* _CANOPEN_DRIVER_H */

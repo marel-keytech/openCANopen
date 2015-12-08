@@ -15,6 +15,8 @@ struct co_sdo_req {
 	struct sdo_req req;
 	struct co_drv* drv;
 	co_sdo_done_fn on_done;
+	void* context;
+	co_free_fn context_free_fn;
 };
 
 const char* co__drv_find_dso(const char* name)
@@ -79,6 +81,11 @@ int co_get_nodeid(const struct co_drv* self)
 	return co_master_get_node_id(self->node);
 }
 
+uint32_t co_get_device_type(const struct co_drv* self)
+{
+	return self->node->device_type;
+}
+
 uint32_t co_get_vendor_id(const struct co_drv* self)
 {
 	return self->node->vendor_id;
@@ -130,6 +137,26 @@ void co_set_pdo4_fn(struct co_drv* self, co_pdo_fn fn)
 	self->pdo4_fn = fn;
 }
 
+int co_rpdo1(struct co_drv* self, const void* data, size_t size)
+{
+	return co__rpdox(co_get_nodeid(self), R_RPDO1, data, size);
+}
+
+int co_rpdo2(struct co_drv* self, const void* data, size_t size)
+{
+	return co__rpdox(co_get_nodeid(self), R_RPDO2, data, size);
+}
+
+int co_rpdo3(struct co_drv* self, const void* data, size_t size)
+{
+	return co__rpdox(co_get_nodeid(self), R_RPDO3, data, size);
+}
+
+int co_rpdo4(struct co_drv* self, const void* data, size_t size)
+{
+	return co__rpdox(co_get_nodeid(self), R_RPDO4, data, size);
+}
+
 void co_set_emcy_fn(struct co_drv* self, co_emcy_fn fn)
 {
 	self->emcy_fn = fn;
@@ -147,7 +174,10 @@ void co_sdo_req_ref(struct co_sdo_req* self)
 
 int co_sdo_req_unref(struct co_sdo_req* self)
 {
-	return sdo_req_unref(&self->req);
+	int rc = sdo_req_unref(&self->req);
+	if (rc == 0 && self->context && self->context_free_fn)
+		self->context_free_fn(self->context);
+	return rc;
 }
 
 static void co__sdo_req_on_done(struct sdo_req* req)
@@ -208,10 +238,56 @@ void co_sdo_req_set_done_fn(struct co_sdo_req* self, co_sdo_done_fn fn)
 	self->on_done = fn;
 }
 
+void co_sdo_req_set_context(struct co_sdo_req* self, void* context,
+			    co_free_fn free_fn)
+{
+	self->context = context;
+	self->context_free_fn = free_fn;
+}
+
+void* co_sdo_req_get_context(const struct co_sdo_req* self)
+{
+	return self->context;
+}
+
 int co_sdo_req_start(struct co_sdo_req* self)
 {
 	int nodeid = co_get_nodeid(self->drv);
 	return sdo_req_start(&self->req, sdo_req_queue_get(nodeid));
+}
+
+const void* co_sdo_req_get_data(const struct co_sdo_req* self)
+{
+	return self->req.data.data;
+}
+
+size_t co_sdo_req_get_size(const struct co_sdo_req* self)
+{
+	return self->req.data.index;
+}
+
+int co_sdo_req_get_index(const struct co_sdo_req* self)
+{
+	return self->req.index;
+}
+
+int co_sdo_req_get_subindex(const struct co_sdo_req* self)
+{
+	return self->req.subindex;
+}
+
+enum co_sdo_status co_sdo_req_get_status(const struct co_sdo_req* self)
+{
+	switch (self->req.status) {
+	case SDO_REQ_PENDING: return CO_SDO_REQ_PENDING;
+	case SDO_REQ_OK: return CO_SDO_REQ_OK;
+	case SDO_REQ_LOCAL_ABORT: return CO_SDO_REQ_LOCAL_ABORT;
+	case SDO_REQ_REMOTE_ABORT: return CO_SDO_REQ_REMOTE_ABORT;
+	case SDO_REQ_CANCELLED: return CO_SDO_REQ_CANCELLED;
+	}
+
+	abort();
+	return -1;
 }
 
 #pragma GCC visibility pop
