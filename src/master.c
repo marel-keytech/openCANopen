@@ -67,7 +67,6 @@ static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
 static int master_send_sdo(int nodeid, int index, int subindex,
 			   unsigned char* data, size_t size);
-static int send_pdo(int nodeid, int type, unsigned char* data, size_t size);
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size);
 static void unload_legacy_module(int device_type, void* driver);
 
@@ -974,15 +973,17 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 	return rc;
 }
 
-static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)
+int co__rpdox(int nodeid, int type, const void* data, size_t size)
 {
-	struct can_frame cf = { 0 };
+	if (!data || size > CAN_MAX_DLEN)
+		return -1;
 
-	cf.can_id = type + nodeid;
-	cf.can_dlc = size;
+	struct can_frame cf = {
+		.can_id = type + nodeid,
+		.can_dlc = size
+	};
 
-	if (data)
-		memcpy(cf.data, data, size);
+	memcpy(cf.data, data, size);
 
 	return sock_send(&socket_, &cf, -1);
 
@@ -991,10 +992,10 @@ static int send_pdo(int nodeid, int type, unsigned char* data, size_t size)
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size)
 {
 	switch (n) {
-	case 1: return send_pdo(nodeid, R_RPDO1, data, size);
-	case 2: return send_pdo(nodeid, R_RPDO2, data, size);
-	case 3: return send_pdo(nodeid, R_RPDO3, data, size);
-	case 4: return send_pdo(nodeid, R_RPDO4, data, size);
+	case 1: return co__rpdox(nodeid, R_RPDO1, data, size);
+	case 2: return co__rpdox(nodeid, R_RPDO2, data, size);
+	case 3: return co__rpdox(nodeid, R_RPDO3, data, size);
+	case 4: return co__rpdox(nodeid, R_RPDO4, data, size);
 	}
 
 	abort();

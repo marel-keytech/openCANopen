@@ -94,4 +94,6 @@ int co_drv_load(struct co_drv* drv, const char* name);
 int co_drv_init(struct co_drv* drv);
 void co_drv_unload(struct co_drv* drv);
 
+int co__rpdox(int nodeid, int type, const void* data, size_t size);
+
 #endif /* CANOPEN_MASTER_H_ */
