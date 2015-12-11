@@ -32,6 +32,10 @@
 
 #include "legacy-driver.h"
 
+#ifndef CAN_MAX_DLEN
+#define CAN_MAX_DLEN 8
+#endif
+
 #define __unused __attribute__((unused))
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -812,7 +816,7 @@ static void run_bootup(struct mloop_work* self)
 
 	profile("Initialize drivers...\n");
 	for_each_node(i)
-		if (co_master_get_node(i)->driver)
+		if (co_master_get_node(i)->driver_type != CO_MASTER_DRIVER_NONE)
 			initialize_driver(i);
 }
 
@@ -825,12 +829,12 @@ static void on_bootup_done(struct mloop_work* self)
 	 */
 	profile("Start nodes...\n");
 	for_each_node_reverse(i)
-		if (co_master_get_node(i)->driver)
+		if (co_master_get_node(i)->driver_type != CO_MASTER_DRIVER_NONE)
 			co_net_send_nmt(&socket_, NMT_CS_START, i);
 
 	profile("Start node guarding...\n");
 	for_each_node(i)
-		if (co_master_get_node(i)->driver)
+		if (co_master_get_node(i)->driver_type != CO_MASTER_DRIVER_NONE)
 			start_nodeguarding(i);
 
 	profile("Boot-up finished!\n");
@@ -1058,6 +1062,8 @@ static int init_node_structure(int nodeid)
 
 	memset(node, 0, sizeof(*node));
 
+	node->ndrv.node = node;
+
 	if (init_heartbeat_timer(node) < 0)
 		return -1;;
 
@@ -1106,7 +1112,7 @@ static void unload_all_drivers()
 {
 	int i;
 	for_each_node(i)
-		if(co_master_get_node(i)->driver)
+		if (co_master_get_node(i)->driver_type != CO_MASTER_DRIVER_NONE)
 			unload_driver(i);
 }
 
