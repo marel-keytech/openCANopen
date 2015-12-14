@@ -879,6 +879,12 @@ static int on_tickermaster_alive()
 	return rc;
 }
 
+static void set_priority(void)
+{
+	struct sched_param prio = { .sched_priority = 25 };
+	sched_setscheduler(getpid(), SCHED_FIFO, &prio);
+}
+
 static int run_appbase()
 {
 	appcbase_t cb = { 0 };
@@ -890,6 +896,8 @@ static int run_appbase()
 
 	if (appbase_initialize("canopen", appbase_get_instance(), &cb) != 0)
 		return 1;
+
+	set_priority();
 
 	mloop_run(mloop_);
 
