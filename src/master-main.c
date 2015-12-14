@@ -38,7 +38,6 @@ const char usage_[] =
 "    -r, --num-of-response     Set maximum skipped heartbeats (default 3).\n"
 "    -q, --queue-length        Set mqs queue length.\n"
 "    -m, --queue-msg-size      Set mqs queue message size.\n"
-"    -e, --realtime-priority   Set the realtime priority of the main process.\n"
 "    -c, --nice-level          Set the nice level.\n"
 "\n"
 "Examples:\n"
