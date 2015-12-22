@@ -1,7 +1,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include "canopen/sdo_async.h"
-#include "canopen/sdo_srv2.h"
+#include "canopen/sdo_srv.h"
 #include "net-util.h"
 #include "canopen.h"
 #include "tst.h"

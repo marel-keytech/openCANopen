@@ -32,7 +32,7 @@ SRC := \
 	canopen_info.c \
 	profiling.c \
 	sdo_sync.c \
-	sdo_srv2.c \
+	sdo_srv.c \
 	driver.c \
 	net-util.c \
 	sock.c \

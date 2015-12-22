@@ -5,7 +5,7 @@
 
 #include "socketcan.h"
 #include "canopen.h"
-#include "canopen/sdo_srv2.h"
+#include "canopen/sdo_srv.h"
 #include "canopen/nmt.h"
 #include "canopen/heartbeat.h"
 #include "canopen/byteorder.h"

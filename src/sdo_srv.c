@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <string.h>
 #include "canopen/sdo.h"
-#include "canopen/sdo_srv2.h"
+#include "canopen/sdo_srv.h"
 #include "canopen.h"
 #include "net-util.h"
 #include "sock.h"
