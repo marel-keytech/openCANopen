@@ -4,9 +4,8 @@ ExtraVersion: beta
 Description: CANopen master version 2.
 
 Destination: target
-BuildDepends: marel-env-host, libmloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment
-Depends: libmloop, appbase, libplog
-Conflicts: libeloop (<< 1.8.0), libplog (<< 0.5.0)
+BuildDepends: marel-env-host, libmloop-crossdevelopment, libmloop-eloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment
+Depends: libmloop, libmloop-eloop, libappbase, libplog (>= 0.5.0)
 
 Type: release
 Install: ##BUILDRELEASE##lib/libcanopen2.so usr/lib
@@ -23,7 +22,7 @@ Install: ##BUILDDEBUG##bin/canopen-dump usr/bin/debug
 
 Destination: host
 BuildDepends: marel-env-host, libmloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment
-Depends: libmloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment
+Depends: libmloop-crossdevelopment, libmloop-eloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment (>= 0.5.0)
 Type: development
 
 Install: ##BUILDRELEASE##lib/libcanopen2.so usr/lib
@@ -47,3 +46,5 @@ InstallTarget: ##BUILDRELEASE##bin/canopen-dump usr/bin
 InstallTarget: ##BUILDDEBUG##bin/canopen-dump usr/bin/debug
 InstallTarget: inc/canopen-driver.h usr/include
 InstallTarget: canopen2.xml /var/marel/sharedmalloc/keys
+
+# vi: tw=0
