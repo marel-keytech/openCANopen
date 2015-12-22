@@ -7,7 +7,11 @@ ADD_CFLAGS := -std=gnu99 -std=gnu++0x -D_GNU_SOURCE -Wextra -fexceptions \
 ADD_LIBS := mloop appbase dl sharedmalloc plog
 ADD_LFLAGS := -pthread -Wl,-rpath=/usr/lib/mloop
 
-MAIN_SRC := canopen-master.c canbridge.c canopen-dump.c
+MAIN_SRC := \
+	canopen-master.c \
+	canbridge.c \
+	canopen-dump.c \
+	canopen-vnode.c
 
 SRC := \
 	master.c \
@@ -38,6 +42,7 @@ SRC := \
 	sock.c \
 	stream.c \
 	dump.c \
+	vnode.c \
 	can-tcp.c
 
 TEST_SRC := \
