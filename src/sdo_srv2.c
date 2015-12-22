@@ -6,6 +6,10 @@
 #include "net-util.h"
 #include "sock.h"
 
+#ifndef CAN_MAX_DLC
+#define CAN_MAX_DLC 8
+#endif
+
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 int sdo_srv_init(struct sdo_srv* self, const struct sock* sock, int nodeid,

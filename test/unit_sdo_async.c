@@ -1,7 +1,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include "canopen/sdo_async.h"
-#include "canopen/sdo_srv.h"
+#include "canopen/sdo_srv2.h"
 #include "net-util.h"
 #include "canopen.h"
 #include "tst.h"
@@ -36,7 +36,7 @@ struct mloop_timer timer;
 static struct sdo_srv server;
 static struct sdo_async client;
 
-static int rfd, wfd;
+static int crfd, cwfd, srfd, swfd;
 
 static char srv_data[4096];
 static size_t srv_size;
@@ -72,40 +72,73 @@ static void set_srv_data(const char* str)
 	srv_size = strlen(str) + 1;
 }
 
-static int srv_get_obj(struct sdo_obj* obj, int index, int subindex)
+static int on_srv_init(struct sdo_srv* srv)
 {
-	obj->addr = srv_data;
-	obj->size = srv_size;
-	obj->flags = SDO_OBJ_RW | SDO_OBJ_LT;
-	srv_index = index;
-	srv_subindex = subindex;
+	if (srv->req_type == SDO_REQ_DOWNLOAD)
+		return 0;
+
+	srv_index = srv->index;
+	srv_subindex = srv->subindex;
+	vector_assign(&srv->buffer, srv_data, srv_size);
 	return 0;
+}
+
+static int on_srv_done(struct sdo_srv* srv)
+{
+	if (srv->req_type == SDO_REQ_UPLOAD)
+		return 0;
+
+	srv_index = srv->index;
+	srv_subindex = srv->subindex;
+	memcpy(srv_data, srv->buffer.data, srv->buffer.index);
+	srv_size = srv->buffer.index;
+	return 0;
+}
+
+static void initialize_client()
+{
+	int fds[2];
+	pipe(fds);
+	crfd = fds[0];
+	cwfd = fds[1];
+	static struct sock sock = { .type = SOCK_TYPE_CAN };
+	sock.fd = cwfd;
+
+	net_dont_block(crfd);
+
+	sdo_async_init(&client, &sock, 42);
+}
+
+static void initialize_server()
+{
+	int fds[2];
+	pipe(fds);
+	srfd = fds[0];
+	swfd = fds[1];
+	static struct sock sock = { .type = SOCK_TYPE_CAN };
+	sock.fd = swfd;
+
+	net_dont_block(crfd);
+
+	sdo_srv_init(&server, &sock, 42, on_srv_init, on_srv_done);
 }
 
 static void initialize()
 {
-	int fds[2];
-	pipe(fds);
-	rfd = fds[0];
-	wfd = fds[1];
-	static struct sock sock = { .type = SOCK_TYPE_CAN };
-	sock.fd = wfd;
-
-	net_dont_block(rfd);
-
-	sdo_get_obj = srv_get_obj;
-
-	sdo_srv_init(&server);
-
 	mloop_timer_new_fake.return_val = &timer;
-	sdo_async_init(&client, &sock, 42);
+
+	initialize_client();
+	initialize_server();
 }
 
 static void cleanup()
 {
 	sdo_async_destroy(&client);
-	close(wfd);
-	close(rfd);
+	sdo_srv_destroy(&server);
+	close(cwfd);
+	close(crfd);
+	close(swfd);
+	close(srfd);
 }
 
 static int feed_server(struct can_frame* cf);
@@ -113,7 +146,7 @@ static int feed_server(struct can_frame* cf);
 static int push_to_server()
 {
 	struct can_frame out;
-	ssize_t size = read(rfd, &out, sizeof(out));
+	ssize_t size = read(crfd, &out, sizeof(out));
 	if (size != sizeof(out))
 		return 0;
 
@@ -128,19 +161,22 @@ static int feed_client(struct can_frame* cf)
 	return push_to_server();
 }
 
+static int push_to_client()
+{
+	struct can_frame out;
+	ssize_t size = read(srfd, &out, sizeof(out));
+	if (size != sizeof(out))
+		return 0;
+
+	return feed_client(&out);
+}
+
 static int feed_server(struct can_frame* cf)
 {
 	if (sdo_srv_feed(&server, cf) < 0)
 		return -1;
 
-	struct can_frame* out = sdo_srv_next(&server);
-	if (!out)
-		return 0;
-
-	out->can_dlc = CAN_MAX_DLC; /* TODO: fix */
-	out->can_id = R_TSDO + 42;
-
-	return feed_client(out);
+	return push_to_client();
 }
 
 static int download(const char* str)

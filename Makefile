@@ -32,7 +32,7 @@ SRC := \
 	canopen_info.c \
 	profiling.c \
 	sdo_sync.c \
-	sdo_srv.c \
+	sdo_srv2.c \
 	driver.c \
 	net-util.c \
 	sock.c \
@@ -50,7 +50,6 @@ TEST_SRC := \
 	unit_sdo_req.c \
 	unit_string-utils.c \
 	unit_vector.c \
-	unit_sdo_srv.c \
 	unit_sdo_async.c \
 	unit_rest.c \
 	sdo_async_fuzz_test.c
