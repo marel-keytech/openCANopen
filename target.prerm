@@ -1,0 +1,19 @@
+#!/bin/bash
+
+TYPE=$1
+
+remove()
+{
+	pluto_init_remove canopen-master-can0
+	pluto_init_remove canopen-master-can1
+}
+
+case $TYPE in
+	remove)
+		remove
+		;;
+	*)
+		;;
+esac
+
+exit 0

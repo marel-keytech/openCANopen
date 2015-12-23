@@ -14,6 +14,8 @@ Install: ##BUILDRELEASE##bin/canbridge usr/bin
 Install: ##BUILDRELEASE##bin/canopen-dump usr/bin
 Install: ##BUILDRELEASE##bin/canopen-vnode usr/bin
 Install: canopen2.xml /var/marel/sharedmalloc/keys
+PostInst: target.postinst
+PreRm: target.prerm
 
 Type: debug
 Install: ##BUILDDEBUG##lib/libcanopen2.so usr/lib/debug
