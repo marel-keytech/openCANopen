@@ -57,6 +57,7 @@ TEST_SRC := \
 	unit_vector.c \
 	unit_sdo_async.c \
 	unit_rest.c \
+	unit_types.c \
 	sdo_async_fuzz_test.c
 
 include $(MDEV)/make/make.main

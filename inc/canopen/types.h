@@ -5,39 +5,42 @@
 #include <stdint.h>
 #include "canopen/byteorder.h"
 
+#define CANOPEN_TYPES \
+	X(UNKNOWN, 0x00, 0) \
+	X(BOOLEAN, 0x01, 1) \
+	X(INTEGER8, 0x02, 1) \
+	X(INTEGER16, 0x03, 2) \
+	X(INTEGER32, 0x04, 4) \
+	X(UNSIGNED8, 0x05, 1) \
+	X(UNSIGNED16, 0x06, 2) \
+	X(UNSIGNED32, 0x07, 4) \
+	X(REAL32, 0x08, 4) \
+	X(VISIBLE_STRING, 0x09, 0) \
+	X(OCTET_STRING, 0x0A, 0) \
+	X(UNICODE_STRING, 0x0B, 0) \
+	X(TIME_OF_DAY, 0x0C, 6) \
+	X(TIME_DIFFERENCE, 0x0D, 6) \
+	X(DOMAIN, 0x0F, 0) \
+	X(INTEGER24, 0x10, 3) \
+	X(REAL64, 0x11, 8) \
+	X(INTEGER40, 0x12, 5) \
+	X(INTEGER48, 0x13, 6) \
+	X(INTEGER56, 0x14, 7) \
+	X(INTEGER64, 0x15, 8) \
+	X(UNSIGNED24, 0x16, 3) \
+	X(UNSIGNED40, 0x18, 5) \
+	X(UNSIGNED48, 0x19, 6) \
+	X(UNSIGNED56, 0x1A, 7) \
+	X(UNSIGNED64, 0x1B, 8) \
+	X(PDO_COMMUNICATION_PARAMETER, 0x20, 0) \
+	X(PDO_MAPPING, 0x21, 0) \
+	X(SDO_PARAMETER, 0x22, 0) \
+	X(IDENTITY, 0x23, 0)
+
 enum canopen_type {
-	CANOPEN_BOOLEAN          = 0x01,
-	CANOPEN_INTEGER8         = 0x02,
-	CANOPEN_INTEGER16        = 0x03,
-	CANOPEN_INTEGER32        = 0x04,
-	CANOPEN_UNSIGNED8        = 0x05,
-	CANOPEN_UNSIGNED16       = 0x06,
-	CANOPEN_UNSIGNED32       = 0x07,
-	CANOPEN_REAL32           = 0x08,
-	CANOPEN_VISIBLE_STRING   = 0x09,
-	CANOPEN_OCTET_STRING     = 0x0A,
-	CANOPEN_UNICODE_STRING   = 0x0B,
-	CANOPEN_TIME_OF_DAY      = 0x0C,
-	CANOPEN_TIME_DIFFERENCE  = 0x0D,
-/*	RESERVED                 = 0x0E, */
-	CANOPEN_DOMAIN           = 0x0F,
-	CANOPEN_INTEGER24        = 0x10,
-	CANOPEN_REAL64           = 0x11,
-	CANOPEN_INTEGER40        = 0x12,
-	CANOPEN_INTEGER48        = 0x13,
-	CANOPEN_INTEGER56        = 0x14,
-	CANOPEN_INTEGER64        = 0x15,
-	CANOPEN_UNSIGNED24       = 0x16,
-/*	RESERVED                 = 0x17, */
-	CANOPEN_UNSIGNED40       = 0x18,
-	CANOPEN_UNSIGNED48       = 0x19,
-	CANOPEN_UNSIGNED56       = 0x1A,
-	CANOPEN_UNSIGNED64       = 0x1B,
-/*	RESERVED                 = 0x1C -- 0x001F, */
-	CANOPEN_PDO_COMMUNICATION_PARAMETER = 0x20,
-	CANOPEN_PDO_MAPPING      = 0x21,
-	CANOPEN_SDO_PARAMETER    = 0x22,
-	CANOPEN_IDENTITY         = 0x23,
+#define X(name, number, ...) CANOPEN_ ## name = number,
+CANOPEN_TYPES
+#undef X
 };
 
 size_t canopen_type_size(enum canopen_type type);
@@ -68,5 +71,8 @@ static inline int canopen_type_is_string(enum canopen_type type)
 	    || type == CANOPEN_OCTET_STRING
 	    || type == CANOPEN_UNICODE_STRING;
 }
+
+const char* canopen_type_to_string(enum canopen_type type);
+enum canopen_type canopen_type_from_string(const char* str);
 
 #endif /* _CANOPEN_TYPES_H */
