@@ -275,8 +275,8 @@ const char* ini_find_key(const struct ini_section* section, const char* key)
 	return kv->value;
 }
 
-const char* ini_find(const struct ini_file* file, const char* section,
-		     const char* key)
+const struct ini_section* ini_find_section(const struct ini_file* file,
+					   const char* section)
 {
 	struct ini_section** sp;
 	char sbuf[sizeof(struct ini_section) + strlen(section) + 1];
@@ -285,8 +285,12 @@ const char* ini_find(const struct ini_file* file, const char* section,
 	sp = bsearch(&section_key, file->section.data,
 		     file->section.index / sizeof(void*), sizeof(void*),
 		     ini__section_cmp);
-	if (!sp)
-		return NULL;
+	return sp ? *sp : NULL;
+}
 
-	return ini_find_key(*sp, key);
+const char* ini_find(const struct ini_file* file, const char* section,
+		     const char* key)
+{
+	const struct ini_section* s = ini_find_section(file, section);
+	return s ? ini_find_key(s, key) : NULL;
 }

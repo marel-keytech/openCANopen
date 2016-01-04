@@ -25,6 +25,9 @@ const char* ini_find(const struct ini_file* file, const char* section,
 		     const char* key);
 const char* ini_find_key(const struct ini_section* file, const char* key);
 
+const struct ini_section* ini_find_section(const struct ini_file* file,
+					   const char* section);
+
 static inline size_t ini_get_length(const struct ini_file* ini)
 {
 	return ini->section.index / sizeof(void*);
