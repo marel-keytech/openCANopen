@@ -13,6 +13,6 @@ struct canopen_data {
 
 char* canopen_data_tostring(char* dst, size_t size, struct canopen_data* src);
 int canopen_data_fromstring(struct canopen_data* dst,
-			    enum canopen_type expected_type, char* str);
+			    enum canopen_type expected_type, const char* str);
 
 #endif /* CONVERSIONS_H_ */

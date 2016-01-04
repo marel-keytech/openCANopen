@@ -93,7 +93,7 @@ char* canopen_data_tostring(char* dst, size_t dst_size,
 	return NULL;
 }
 
-int canopen_bool_fromstring(struct canopen_data* dst, char* str)
+int canopen_bool_fromstring(struct canopen_data* dst, const char* str)
 {
 	dst->data = &dst->value;
 	dst->size = 1;
@@ -119,7 +119,7 @@ int canopen_bool_fromstring(struct canopen_data* dst, char* str)
 #define MAKE_FROMSTRING(name, type_, reject) \
 int canopen_ ## name ## _fromstring(struct canopen_data* dst, \
 				    enum canopen_type type, \
-				    char* str) \
+				    const char* str) \
 { \
 	if (reject) \
 		return -1; \
@@ -140,15 +140,15 @@ MAKE_FROMSTRING(int, int64_t, *str == ' ')
 MAKE_FROMSTRING(float, float, *str == ' ')
 MAKE_FROMSTRING(double, double, *str == ' ')
 
-int canopen_string_fromstring(struct canopen_data* dst, char* str)
+int canopen_string_fromstring(struct canopen_data* dst, const char* str)
 {
-	dst->data = str;
+	dst->data = (char*)str;
 	dst->size = strlen(str);
 	return 0;
 }
 
 int canopen_data_fromstring(struct canopen_data* dst, enum canopen_type type,
-			    char* str)
+			    const char* str)
 {
 	dst->type = type;
 
