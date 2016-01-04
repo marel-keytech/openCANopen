@@ -26,6 +26,26 @@ static struct sdo_srv vnode__sdo_srv;
 static uint16_t vnode__heartbeat_period = 0;
 static struct mloop_timer* vnode__heartbeat_timer = 0;
 
+static int vnode__have_heartbeat = 0;
+static int vnode__have_node_guarding = 0;
+
+static int vnode__config_is_true(const struct ini_section* s, const char* key)
+{
+	const char* value = ini_find_key(s, key);
+	return value ? strcasecmp(value, "yes") == 0 : 0;
+}
+
+static void vnode__load_device_info(void)
+{
+	const struct ini_section* s;
+	s = ini_find_section(&vnode__config, "device");
+	if (!s)
+		return;
+
+	vnode__have_heartbeat = vnode__config_is_true(s, "heartbeat");
+	vnode__have_node_guarding = vnode__config_is_true(s, "node_guarding");
+}
+
 static int vnode__load_config(const char* path)
 {
 	FILE* stream = fopen(path, "r");
@@ -39,6 +59,8 @@ static int vnode__load_config(const char* path)
 		perror("Could not parse config");
 
 	fclose(stream);
+
+	vnode__load_device_info();
 
 	return rc;
 }
@@ -71,11 +93,16 @@ static void vnode__on_heartbeat(struct mloop_timer* timer)
 static void vnode__heartbeat(const struct can_frame* cf)
 {
 	(void)cf;
-	vnode__send_state();
+
+	if (vnode__have_node_guarding)
+		vnode__send_state();
 }
 
 static int vnode__start_heartbeat_timer(void)
 {
+	if (!vnode__have_heartbeat)
+		return 0;
+
 	if (vnode__state != NMT_STATE_OPERATIONAL
 	 || vnode__heartbeat_period == 0)
 		return 0;
@@ -87,6 +114,9 @@ static int vnode__start_heartbeat_timer(void)
 
 static int vnode__restart_heartbeat_timer(void)
 {
+	if (!vnode__have_heartbeat)
+		return 0;
+
 	mloop_timer_stop(vnode__heartbeat_timer);
 	return vnode__start_heartbeat_timer();
 }
@@ -105,14 +135,16 @@ static void vnode__nmt(const struct can_frame* cf)
 		break;
 	case NMT_CS_STOP:
 		vnode__state = NMT_STATE_STOPPED;
-		mloop_timer_stop(vnode__heartbeat_timer);
+		if (vnode__have_heartbeat)
+			mloop_timer_stop(vnode__heartbeat_timer);
 		break;
 	case NMT_CS_ENTER_PREOPERATIONAL:
 		vnode__state = NMT_STATE_PREOPERATIONAL;
 		break;
 	case NMT_CS_RESET_NODE:
 	case NMT_CS_RESET_COMMUNICATION:
-		mloop_timer_stop(vnode__heartbeat_timer);
+		if (vnode__have_heartbeat)
+			mloop_timer_stop(vnode__heartbeat_timer);
 		vnode__reset_communication();
 		break;
 	}
@@ -120,6 +152,9 @@ static void vnode__nmt(const struct can_frame* cf)
 
 static int vnode__sdo_get_heartbeat(struct sdo_srv* srv)
 {
+	if (!vnode__have_heartbeat)
+		return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
+
 	uint16_t netorder = 0;
 	byteorder(&netorder, &vnode__heartbeat_period, sizeof(netorder));
 	vector_assign(&srv->buffer, &netorder, sizeof(netorder));
@@ -204,6 +239,9 @@ static int vnode__setup_heartbeat_timer(void)
 
 static int vnode__sdo_set_heartbeat(struct sdo_srv* srv)
 {
+	if (!vnode__have_heartbeat)
+		return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
+
 	uint16_t period = 0;
 	if (srv->buffer.index > sizeof(period))
 		return sdo_srv_abort(srv, SDO_ABORT_TOO_LONG);
@@ -328,8 +366,9 @@ int co_vnode_init(enum sock_type type, const char* iface,
 	if (vnode__setup_mloop() < 0)
 		goto mloop_failure;
 
-	if (vnode__setup_heartbeat_timer() < 0)
-		goto mloop_failure;
+	if (vnode__have_heartbeat)
+		if (vnode__setup_heartbeat_timer() < 0)
+			goto mloop_failure;
 
 	vnode__reset_communication();
 
@@ -348,7 +387,9 @@ failure:
 __attribute__((visibility("default")))
 void co_vnode_destroy(void)
 {
-	mloop_timer_unref(vnode__heartbeat_timer);
+	if (vnode__have_heartbeat)
+		mloop_timer_unref(vnode__heartbeat_timer);
+
 	sdo_srv_destroy(&vnode__sdo_srv);
 	ini_destroy(&vnode__config);
 	sock_close(&vnode__sock);
