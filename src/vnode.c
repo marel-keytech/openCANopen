@@ -9,16 +9,14 @@
 #include "canopen/nmt.h"
 #include "canopen/heartbeat.h"
 #include "canopen/byteorder.h"
+#include "canopen/types.h"
 #include "net-util.h"
 #include "sock.h"
 #include "ini_parser.h"
+#include "conversions.h"
 
 #define SDO_MUX(index, subindex) ((index << 16) | subindex)
 #define HEARTBEAT_PERIOD SDO_MUX(0x1017, 0)
-#define DEVICE_TYPE SDO_MUX(0x1000, 0)
-#define DEVICE_NAME SDO_MUX(0x1008, 0)
-#define HW_VERSION SDO_MUX(0x1009, 0)
-#define SW_VERSION SDO_MUX(0x100A, 0)
 
 static struct sock vnode__sock;
 static struct ini_file vnode__config;
@@ -128,26 +126,47 @@ static int vnode__sdo_get_heartbeat(struct sdo_srv* srv)
 	return 0;
 }
 
-static int vnode__sdo_get_device_type(struct sdo_srv* srv)
+static const char* vnode__make_section_string(int index, int subindex)
 {
-	uint32_t type = 0x401;
-	uint32_t netorder = 0;
-	byteorder(&netorder, &type, sizeof(netorder));
-	vector_assign(&srv->buffer, &netorder, sizeof(netorder));
-	return 0;
+	static char buffer[256];
+	snprintf(buffer, sizeof(buffer), "%xsub%x", index, subindex);
+	return buffer;
 }
 
-static int vnode__sdo_get_string(struct sdo_srv* srv, const char* str)
+static enum canopen_type vnode__get_section_type(const struct ini_section* s)
 {
-	if (vector_assign(&srv->buffer, str, strlen(str)) < 0)
-		return sdo_srv_abort(srv, SDO_ABORT_NOMEM);
+	const char* type_str = ini_find_key(s, "type");
+	if (!type_str)
+		return CANOPEN_UNKNOWN;
 
-	return 0;
+	return canopen_type_from_string(type_str);
 }
 
 static int vnode__sdo_get_config(struct sdo_srv* srv)
 {
-	return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
+	const char* section;
+	section = vnode__make_section_string(srv->index, srv->subindex);
+
+	const struct ini_section* s = ini_find_section(&vnode__config, section);
+	if (!s)
+		return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
+
+	enum canopen_type type = vnode__get_section_type(s);
+	if (type == CANOPEN_UNKNOWN)
+		return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
+
+	const char* value = ini_find_key(s, "value");
+	if (!value)
+		return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
+
+	struct canopen_data data;
+	if (canopen_data_fromstring(&data, type, value) < 0)
+		return sdo_srv_abort(srv, SDO_ABORT_NOMEM);
+
+	if (vector_assign(&srv->buffer, data.data, data.size) < 0)
+		return sdo_srv_abort(srv, SDO_ABORT_NOMEM);
+
+	return 0;
 }
 
 static int vnode__on_sdo_init(struct sdo_srv* srv)
@@ -161,14 +180,6 @@ static int vnode__on_sdo_init(struct sdo_srv* srv)
 	switch (SDO_MUX(index, subindex)) {
 	case HEARTBEAT_PERIOD:
 		return vnode__sdo_get_heartbeat(srv);
-	case DEVICE_TYPE:
-		return vnode__sdo_get_device_type(srv);
-	case DEVICE_NAME:
-		return vnode__sdo_get_string(srv, "MCV14");
-	case HW_VERSION:
-		return vnode__sdo_get_string(srv, "canopen-vnode");
-	case SW_VERSION:
-		return vnode__sdo_get_string(srv, "0.1");
 	default:
 		return vnode__sdo_get_config(srv);
 	}

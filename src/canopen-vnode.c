@@ -12,6 +12,7 @@ const char usage_[] =
 "Options:\n"
 "    -h, --help                 Get help.\n"
 "    -T, --tcp                  Connect via TCP.\n"
+"    -c, --config               Set path to config file.\n"
 "\n"
 "Examples:\n"
 "    $ canopen-vnode can0\n"
@@ -27,21 +28,24 @@ static inline int print_usage(FILE* output, int status)
 int main(int argc, char* argv[])
 {
 	static const struct option long_options[] = {
-		{ "help", no_argument, 0, 'h' },
-		{ "tcp",  no_argument, 0, 'T' },
+		{ "help",   no_argument,       0, 'h' },
+		{ "tcp",    no_argument,       0, 'T' },
+		{ "config", required_argument, 0, 'c' },
 		{ 0, 0, 0, 0 }
 	};
 
 	int use_tcp = 0;
+	const char* config = NULL;
 
 	while (1) {
-		int c = getopt_long(argc, argv, "hT", long_options, NULL);
+		int c = getopt_long(argc, argv, "hTc", long_options, NULL);
 		if (c < 0)
 			break;
 
 		switch (c) {
 		case 'h': return print_usage(stdout, 0);
 		case 'T': use_tcp = 1; break;
+		case 'c': config = optarg; break;
 		}
 	}
 
@@ -61,7 +65,7 @@ int main(int argc, char* argv[])
 	struct mloop* mloop = mloop_default();
 	mloop_ref(mloop);
 
-	if (co_vnode_init(type, iface, NULL, nodeid) < 0)
+	if (co_vnode_init(type, iface, config, nodeid) < 0)
 		return 1;
 
 	mloop_run(mloop);
