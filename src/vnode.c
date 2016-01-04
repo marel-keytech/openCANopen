@@ -26,8 +26,30 @@ static struct sdo_srv vnode__sdo_srv;
 static uint16_t vnode__heartbeat_period = 0;
 static struct mloop_timer* vnode__heartbeat_timer = 0;
 
+enum vnode__bootup_method {
+	VNODE_BOOT_UNSPEC = 0,
+	VNODE_BOOT_STANDARD = 1,
+	VNODE_BOOT_LEGACY = 2,
+	VNODE_BOOT_BOTH = VNODE_BOOT_STANDARD | VNODE_BOOT_LEGACY,
+};
+
 static int vnode__have_heartbeat = 0;
 static int vnode__have_node_guarding = 0;
+static enum vnode__bootup_method vnode__bootup_method = VNODE_BOOT_UNSPEC;
+
+static enum vnode__bootup_method
+vnode__get_bootup_method(const struct ini_section* s)
+{
+	const char* value = ini_find_key(s, "bootup");
+	if (!value)
+		return 0;
+
+	if (0 == strcasecmp(value, "standard")) return VNODE_BOOT_STANDARD;
+	if (0 == strcasecmp(value, "legacy"))   return VNODE_BOOT_LEGACY;
+	if (0 == strcasecmp(value, "both"))     return VNODE_BOOT_BOTH;
+
+	return VNODE_BOOT_UNSPEC;
+}
 
 static int vnode__config_is_true(const struct ini_section* s, const char* key)
 {
@@ -44,6 +66,7 @@ static void vnode__load_device_info(void)
 
 	vnode__have_heartbeat = vnode__config_is_true(s, "heartbeat");
 	vnode__have_node_guarding = vnode__config_is_true(s, "node_guarding");
+	vnode__bootup_method = vnode__get_bootup_method(s);
 }
 
 static int vnode__load_config(const char* path)
@@ -77,8 +100,21 @@ static void vnode__send_state(void)
 	sock_send(&vnode__sock, &cf, -1);
 }
 
+static void vnode__send_legacy_bootup(void)
+{
+	struct can_frame cf = {
+		.can_id = R_EMCY + vnode__nodeid,
+		.can_dlc = 0
+	};
+
+	sock_send(&vnode__sock, &cf, -1);
+}
+
 static void vnode__reset_communication(void)
 {
+	if (!(vnode__bootup_method & VNODE_BOOT_STANDARD))
+		return;
+
 	vnode__state = NMT_STATE_BOOTUP;
 	vnode__send_state();
 	vnode__state = NMT_STATE_PREOPERATIONAL;
@@ -369,6 +405,9 @@ int co_vnode_init(enum sock_type type, const char* iface,
 	if (vnode__have_heartbeat)
 		if (vnode__setup_heartbeat_timer() < 0)
 			goto mloop_failure;
+
+	if (vnode__bootup_method & VNODE_BOOT_LEGACY)
+		vnode__send_legacy_bootup();
 
 	vnode__reset_communication();
 
