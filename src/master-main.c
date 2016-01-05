@@ -24,7 +24,7 @@ const char usage_[] =
 "    -j, --job-queue-length    Set length of the job queue (default 64).\n"
 "    -S, --sdo-queue-length    Set length of the sdo queue (default 1024).\n"
 "    -R, --rest-port           Set TCP port of the rest service (default 9191).\n"
-"    -Q, --with-quirks         Try to work with buggy old hardware.\n"
+"    -f, --strict              Force strict communication patterns.\n"
 "    -T, --use-tcp             Interface argument is a TCP service address.\n"
 "    -n, --range               Set node id range (inclusive) to be managed.\n"
 "    -p, --heartbeat-period    Set heartbeat period (default 10000ms).\n"
@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
 		.rest_port = REST_DEFAULT_PORT,
 		.heartbeat_period = HEARTBEAT_PERIOD,
 		.heartbeat_timeout = HEARTBEAT_TIMEOUT,
-		.flags = 0
+		.flags = CO_MASTER_OPTION_WITH_QUIRKS
 	};
 
 	static const struct option long_options[] = {
@@ -112,7 +112,7 @@ int main(int argc, char* argv[])
 		{ "job-queue-length",  required_argument, 0, 'j' },
 		{ "sdo-queue-length",  required_argument, 0, 'S' },
 		{ "rest-port",         required_argument, 0, 'R' },
-		{ "with-quirks",       no_argument,       0, 'Q' },
+		{ "strict",            no_argument,       0, 'f' },
 		{ "use-tcp",           no_argument,       0, 'T' },
 		{ "range",             required_argument, 0, 'n' },
 		{ "heartbeat-period",  required_argument, 0, 'p' },
@@ -122,7 +122,7 @@ int main(int argc, char* argv[])
 	};
 
 	while (1) {
-		int c = getopt_long(argc, argv, "W:s:j:S:R:QTn:p:P:x:",
+		int c = getopt_long(argc, argv, "W:s:j:S:R:fTn:p:P:x:",
 				    long_options, NULL);
 		if (c < 0)
 			break;
@@ -141,7 +141,7 @@ int main(int argc, char* argv[])
 			  break;
 		case 'x': mopt.ntimeouts_max = strtoul(optarg, NULL, 0); break;
 		case 'R': mopt.rest_port = atoi(optarg); break;
-		case 'Q': mopt.flags |= CO_MASTER_OPTION_WITH_QUIRKS; break;
+		case 'f': mopt.flags &= ~CO_MASTER_OPTION_WITH_QUIRKS; break;
 		case 'T': mopt.flags |= CO_MASTER_OPTION_USE_TCP; break;
 		case 'n': if (parse_range(&mopt, optarg) < 0)
 				  return print_usage(stderr, 1);
