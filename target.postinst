@@ -6,7 +6,8 @@ configure()
 {
 	pluto_init_add -r -c canopen-master -a can0 -n canopen-master-can0 \
 		>/dev/null
-	pluto_init_add -r -c canopen-master -a can1 -n canopen-master-can1 \
+	pluto_init_add -r -c canopen-master -a "can1 -i1 -R9192" \
+		-n canopen-master-can1 \
 		>/dev/null
 }
 
