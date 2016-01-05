@@ -106,6 +106,26 @@ static void sdo_rest_server_error(struct rest_client* client,
 	client->state = REST_CLIENT_DONE;
 }
 
+static const struct eds_obj*
+sdo_rest__get_eds_obj(const struct sdo_rest_path* path,
+		      struct rest_client* client)
+{
+	const struct canopen_eds* eds = sdo_rest__find_eds(path->nodeid);
+	if (!eds) {
+		sdo_rest_server_error(client, "Could not find EDS for node\r\n");
+		return NULL;
+	}
+
+	const struct eds_obj* eds_obj = eds_obj_find(eds, path->index,
+						     path->subindex);
+	if (!eds_obj) {
+		sdo_rest_not_found(client, "Index/subindex not found in EDS\r\n");
+		return NULL;
+	}
+
+	return eds_obj;
+}
+
 static void sdo_rest_bad_request(struct rest_client* client,
 				  const char* message)
 {
@@ -557,18 +577,9 @@ void sdo_rest_service(struct rest_client* client, const void* content)
 		return;
 	}
 
-	const struct canopen_eds* eds = sdo_rest__find_eds(path.nodeid);
-	if (!eds) {
-		sdo_rest_server_error(client, "Could not find EDS for node\r\n");
+	const struct eds_obj* eds_obj = sdo_rest__get_eds_obj(&path, client);
+	if (!eds_obj)
 		return;
-	}
-
-	const struct eds_obj* eds_obj = eds_obj_find(eds, path.index,
-						     path.subindex);
-	if (!eds_obj) {
-		sdo_rest_not_found(client, "Index/subindex not found in EDS\r\n");
-		return;
-	}
 
 	struct sdo_rest_context* context;
 	context = sdo_rest_context_new(client, eds_obj, &path);
