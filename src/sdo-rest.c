@@ -61,7 +61,7 @@ static const struct canopen_eds* sdo_rest__find_eds(int nodeid)
 }
 
 static struct sdo_rest_context*
-sdo_rest_context_new(struct rest_client* client, const struct eds_obj* obj,
+sdo_rest_context_new(struct rest_client* client,
 		     const struct sdo_rest_path* path)
 {
 	struct sdo_rest_context* self = malloc(sizeof(*self));
@@ -71,7 +71,6 @@ sdo_rest_context_new(struct rest_client* client, const struct eds_obj* obj,
 	memset(self, 0, sizeof(*self));
 
 	self->client = client;
-	self->eds_obj = obj;
 	self->path = *path;
 
 	return self;
@@ -185,7 +184,12 @@ static int sdo_rest__get(struct sdo_rest_context* context)
 {
 	struct rest_client* client = context->client;
 	struct sdo_rest_path* path = &context->path;
-	const struct eds_obj* eds_obj = context->eds_obj;
+
+	const struct eds_obj* eds_obj = sdo_rest__get_eds_obj(path, client);
+	if (!eds_obj)
+		return -1;
+
+	context->eds_obj = eds_obj;
 
 	if (!(eds_obj->access & (EDS_OBJ_R | EDS_OBJ_CONST))) {
 		sdo_rest_bad_request(client, "Object is not readable\r\n");
@@ -244,7 +248,13 @@ static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
 {
 	struct rest_client* client = context->client;
 	struct sdo_rest_path* path = &context->path;
-	const struct eds_obj* eds_obj = context->eds_obj;
+
+	const struct eds_obj* eds_obj = sdo_rest__get_eds_obj(path, client);
+	if (!eds_obj)
+		return -1;
+
+	context->eds_obj = eds_obj;
+
 	size_t content_length = client->req.content_length;
 
 	if (!(eds_obj->access & EDS_OBJ_W)) {
@@ -577,12 +587,8 @@ void sdo_rest_service(struct rest_client* client, const void* content)
 		return;
 	}
 
-	const struct eds_obj* eds_obj = sdo_rest__get_eds_obj(&path, client);
-	if (!eds_obj)
-		return;
-
 	struct sdo_rest_context* context;
-	context = sdo_rest_context_new(client, eds_obj, &path);
+	context = sdo_rest_context_new(client, &path);
 	if (!context) {
 		sdo_rest_server_error(client, "Out of memory\r\n");
 		return;
