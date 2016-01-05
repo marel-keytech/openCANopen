@@ -261,18 +261,22 @@ static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
 {
 	struct rest_client* client = context->client;
 	struct sdo_rest_path* path = &context->path;
-
-	const struct eds_obj* eds_obj = sdo_rest__get_eds_obj(path, client);
-	if (!eds_obj)
-		return -1;
-
-	context->type = eds_obj->type;
-
 	size_t content_length = client->req.content_length;
 
-	if (!(eds_obj->access & EDS_OBJ_W)) {
-		sdo_rest_bad_request(client, "Object is not writable\r\n");
-		return -1;
+	enum canopen_type type = sdo_rest__get_type(client);
+	if (type == CANOPEN_UNKNOWN) {
+		const struct eds_obj* eds_obj;
+
+		eds_obj = sdo_rest__get_eds_obj(path, client);
+		if (!eds_obj)
+			return -1;
+
+		if (!(eds_obj->access & EDS_OBJ_W)) {
+			sdo_rest_bad_request(client, "Object is not writable\r\n");
+			return -1;
+		}
+
+		type = eds_obj->type;
 	}
 
 	struct canopen_data data = { 0 };
@@ -286,8 +290,7 @@ static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
 	memcpy(input, content, content_length);
 	input[content_length] = '\0';
 
-	int r = canopen_data_fromstring(&data, eds_obj->type,
-					string_trim(input));
+	int r = canopen_data_fromstring(&data, type, string_trim(input));
 	free(input);
 
 	if (r < 0) {
