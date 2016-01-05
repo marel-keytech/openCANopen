@@ -248,41 +248,6 @@ static void on_ping_timeout(struct mloop_timer* timer)
 	sock_send(&socket_, &cf, -1);
 }
 
-static void on_sdo_ping_done(struct sdo_req* req)
-{
-	struct co_master_node* node = req->context;
-	int nodeid = co_master_get_node_id(node);
-	struct canopen_info* info = canopen_info_get(nodeid);
-
-	if (req->status == SDO_REQ_OK) {
-		restart_heartbeat_timer(nodeid);
-		info->last_seen = gettime_us() / 1000000ULL;
-	}
-}
-
-static void on_sdo_ping_timeout(struct mloop_timer* timer)
-{
-	struct co_master_node* node = mloop_timer_get_context(timer);
-	int nodeid = co_master_get_node_id(node);
-
-	struct sdo_req_info info = {
-		.type = SDO_REQ_UPLOAD,
-		.index = 0x1000,
-		.subindex = 0,
-		.context = node,
-		.on_done = on_sdo_ping_done
-	};
-
-	struct sdo_req* req = sdo_req_new(&info);
-	if (!req) {
-		restart_heartbeat_timer(nodeid);
-		return;
-	}
-
-	sdo_req_start(req, sdo_req_queue_get(nodeid));
-	sdo_req_unref(req);
-}
-
 static int start_ping_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -531,10 +496,7 @@ static void run_net_probe(struct mloop_work* self)
 				   100 * (start - stop + 1));
 	}
 
-	if (options_.flags & CO_MASTER_OPTION_WITH_QUIRKS)
-		co_net_probe_sdo(&socket_, nodes_seen_, start, stop, 100);
-	else
-		co_net_probe(&socket_, nodes_seen_, start, stop, 100);
+	co_net_probe(&socket_, nodes_seen_, start, stop, 100);
 }
 
 static void run_load_driver(struct mloop_work* self)
@@ -1055,10 +1017,7 @@ static int init_ping_timer(struct co_master_node* node)
 	mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
 	mloop_timer_set_context(timer, node, NULL);
 	mloop_timer_set_time(timer, options_.heartbeat_period * 1000000LL);
-	if (options_.flags & CO_MASTER_OPTION_WITH_QUIRKS)
-		mloop_timer_set_callback(timer, on_sdo_ping_timeout);
-	else
-		mloop_timer_set_callback(timer, on_ping_timeout);
+	mloop_timer_set_callback(timer, on_ping_timeout);
 	node->ping_timer = timer;
 
 	return 0;
