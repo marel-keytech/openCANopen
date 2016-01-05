@@ -11,6 +11,7 @@
 #include "rest.h"
 #include "conversions.h"
 #include "string-utils.h"
+#include "canopen/types.h"
 
 size_t strlcpy(char*, const char*, size_t);
 
@@ -22,7 +23,7 @@ struct sdo_rest_path {
 
 struct sdo_rest_context {
 	struct rest_client* client;
-	const struct eds_obj* eds_obj;
+	enum canopen_type type;
 	struct sdo_rest_path path;
 };
 
@@ -145,7 +146,6 @@ static void on_sdo_rest_upload_done(struct sdo_req* req)
 	struct sdo_rest_context* context = req->context;
 	assert(context);
 	struct rest_client* client = context->client;
-	const struct eds_obj* eds_obj = context->eds_obj;
 
 	if (req->status != SDO_REQ_OK) {
 		sdo_rest_server_error(client, sdo_strerror(req->abort_code));
@@ -153,7 +153,7 @@ static void on_sdo_rest_upload_done(struct sdo_req* req)
 	}
 
 	struct canopen_data data = {
-		.type = eds_obj->type,
+		.type = context->type,
 		.data = req->data.data,
 		.size = req->data.index
 	};
@@ -180,20 +180,33 @@ done:
 	free(context);
 }
 
+static enum canopen_type sdo_rest__get_type(struct rest_client* client)
+{
+	const char* type = http_req_query(&client->req, "type");
+	return type ? canopen_type_from_string(type) : CANOPEN_UNKNOWN;
+}
+
 static int sdo_rest__get(struct sdo_rest_context* context)
 {
 	struct rest_client* client = context->client;
 	struct sdo_rest_path* path = &context->path;
 
-	const struct eds_obj* eds_obj = sdo_rest__get_eds_obj(path, client);
-	if (!eds_obj)
-		return -1;
+	enum canopen_type type = sdo_rest__get_type(client);
+	if (type != CANOPEN_UNKNOWN) {
+		context->type = type;
+	} else {
+		const struct eds_obj* eds_obj;
 
-	context->eds_obj = eds_obj;
+		eds_obj = sdo_rest__get_eds_obj(path, client);
+		if (!eds_obj)
+			return -1;
 
-	if (!(eds_obj->access & (EDS_OBJ_R | EDS_OBJ_CONST))) {
-		sdo_rest_bad_request(client, "Object is not readable\r\n");
-		return -1;
+		if (!(eds_obj->access & (EDS_OBJ_R | EDS_OBJ_CONST))) {
+			sdo_rest_bad_request(client, "Object is not readable\r\n");
+			return -1;
+		}
+
+		context->type = eds_obj->type;
 	}
 
 	struct sdo_req_info info = {
@@ -253,7 +266,7 @@ static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
 	if (!eds_obj)
 		return -1;
 
-	context->eds_obj = eds_obj;
+	context->type = eds_obj->type;
 
 	size_t content_length = client->req.content_length;
 
