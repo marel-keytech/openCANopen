@@ -348,6 +348,12 @@ static const char* driver_type_str(enum co_master_driver_type type)
 	return "UNKNOWN";
 }
 
+static void apply_quirks(struct co_master_node* node)
+{
+	if (string_begins_with("MWS2", node->name))
+		node->quirks |= CO_NODE_QUIRK_ZERO_GUARD_STATUS;
+}
+
 static int load_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -396,6 +402,8 @@ static int load_driver(int nodeid)
 		sizeof(node->sw_version));
 
 	initialize_info_structure(nodeid);
+
+	apply_quirks(node);
 
 	if (load_new_driver(nodeid) < 0) {
 		if (load_legacy_driver(nodeid) < 0) {
@@ -593,7 +601,8 @@ static int handle_heartbeat(struct co_master_node* node,
 	if (!heartbeat_is_valid(frame))
 		return -1;
 
-	if (heartbeat_is_bootup(frame))
+	if (heartbeat_is_bootup(frame)
+	 && !(node->quirks & CO_NODE_QUIRK_ZERO_GUARD_STATUS))
 		return handle_bootup(node);
 
 	if (master_state_ == MASTER_STATE_STARTUP)
