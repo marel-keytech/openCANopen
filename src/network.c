@@ -31,7 +31,7 @@ int co_net__request_heartbeat(const struct sock* sock, int nodeid)
 {
 	struct can_frame cf = { 0 };
 	cf.can_id = R_HEARTBEAT + nodeid;
-	cf.can_dlc = 0;
+	cf.can_id |= CAN_RTR_FLAG;
 	return sock_send(sock, &cf, -1);
 }
 
