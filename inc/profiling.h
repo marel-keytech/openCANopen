@@ -18,11 +18,11 @@ static inline int profiling_is_active(void)
 
 static inline void profiling_reset(void)
 {
-	profiling_start_time_ = gettime_us();
+	profiling_start_time_ = gettime_us(CLOCK_MONOTONIC);
 }
 
 #define tprintf(fmt, ...) \
-	printf("%07llu\t" fmt, gettime_us() - profiling_start_time_, \
+	printf("%07llu\t" fmt, gettime_us(CLOCK_MONOTONIC) - profiling_start_time_, \
 		## __VA_ARGS__)
 
 #define profile(fmt, ...) \

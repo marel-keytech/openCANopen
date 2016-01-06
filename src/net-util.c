@@ -63,7 +63,7 @@ ssize_t net_read_frame(int fd, struct can_frame* cf, int timeout)
 ssize_t net_filtered_read_frame(int fd, struct can_frame* cf, int timeout,
 				uint32_t can_id)
 {
-	int t = gettime_ms();
+	int t = gettime_ms(CLOCK_MONOTONIC);
 	int t_end = t + timeout;
 	ssize_t size;
 
@@ -75,7 +75,7 @@ ssize_t net_filtered_read_frame(int fd, struct can_frame* cf, int timeout,
 		if (cf->can_id == can_id)
 			return size;
 
-		t = gettime_ms();
+		t = gettime_ms(CLOCK_MONOTONIC);
 	}
 
 	return -1;
