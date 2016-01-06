@@ -21,6 +21,8 @@
 
 #define MIN(a, b) ((a) < (b)) ? (a) : (b);
 
+#define SDO_BUFFER_INITIAL_SIZE 8
+
 #ifndef CAN_MAX_DLC
 #define CAN_MAX_DLC 8
 #endif
@@ -90,9 +92,12 @@ int sdo_async_init(struct sdo_async* self, const struct sock* sock, int nodeid)
 {
 	memset(self, 0, sizeof(*self));
 
+	if (vector_init(&self->buffer, SDO_BUFFER_INITIAL_SIZE) < 0)
+		return -1;
+
 	self->timer = mloop_timer_new(mloop_default());
 	if (!self->timer)
-		return -1;
+		goto failure;
 
 	self->sock = *sock;
 	self->nodeid = nodeid;
@@ -100,6 +105,10 @@ int sdo_async_init(struct sdo_async* self, const struct sock* sock, int nodeid)
 	mloop_timer_set_callback(self->timer, sdo_async__on_timeout);
 
 	return 0;
+
+failure:
+	vector_destroy(&self->buffer);
+	return -1;
 }
 
 void sdo_async_destroy(struct sdo_async* self)
