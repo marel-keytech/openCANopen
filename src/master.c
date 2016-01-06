@@ -784,16 +784,16 @@ static void run_bootup(struct mloop_work* self)
 	for_each_node(i)
 		if (nodes_seen_[i])
 			load_driver(i);
-
-	profile("Initialize drivers...\n");
-	for_each_node(i)
-		if (co_master_get_node(i)->driver_type != CO_MASTER_DRIVER_NONE)
-			initialize_driver(i);
 }
 
 static void on_bootup_done(struct mloop_work* self)
 {
 	int i;
+
+	profile("Initialize drivers...\n");
+	for_each_node(i)
+		if (co_master_get_node(i)->driver_type != CO_MASTER_DRIVER_NONE)
+			initialize_driver(i);
 
 	/* We start each node individually because we don't want to start nodes
 	 * that were not properly registered.
