@@ -379,6 +379,13 @@ static int vnode__setup_mloop(void)
 	return rc;
 }
 
+void vnode__apply_filters(int fd, int nodeid)
+{
+	struct can_filter filters[CANOPEN_SLAVE_FILTER_LENGTH];
+	socketcan_make_slave_filters(filters, nodeid);
+	socketcan_apply_filters(fd, filters, CANOPEN_SLAVE_FILTER_LENGTH);
+}
+
 __attribute__((visibility("default")))
 int co_vnode_init(enum sock_type type, const char* iface,
 		  const char* config_path, int nodeid)
@@ -387,6 +394,9 @@ int co_vnode_init(enum sock_type type, const char* iface,
 		perror("Failed to open CAN interface");
 		return -1;
 	}
+
+	if (type == SOCK_TYPE_CAN)
+		vnode__apply_filters(vnode__sock.fd, nodeid);
 
 	if (config_path)
 		if (vnode__load_config(config_path) < 0)
