@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
 	const char* config = NULL;
 
 	while (1) {
-		int c = getopt_long(argc, argv, "hTc", long_options, NULL);
+		int c = getopt_long(argc, argv, "hTc:", long_options, NULL);
 		if (c < 0)
 			break;
 
