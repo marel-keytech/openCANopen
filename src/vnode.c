@@ -35,6 +35,7 @@ enum vnode__bootup_method {
 
 static int vnode__have_heartbeat = 0;
 static int vnode__have_node_guarding = 0;
+static int vnode__have_guard_status_bug = 0;
 static enum vnode__bootup_method vnode__bootup_method = VNODE_BOOT_UNSPEC;
 
 static enum vnode__bootup_method
@@ -66,6 +67,8 @@ static void vnode__load_device_info(void)
 
 	vnode__have_heartbeat = vnode__config_is_true(s, "heartbeat");
 	vnode__have_node_guarding = vnode__config_is_true(s, "node_guarding");
+	vnode__have_guard_status_bug
+		= vnode__config_is_true(s, "guard_status_bug");
 	vnode__bootup_method = vnode__get_bootup_method(s);
 }
 
@@ -95,7 +98,8 @@ static void vnode__send_state(void)
 		.can_dlc = 1
 	};
 
-	heartbeat_set_state(&cf, vnode__state);
+	if (!vnode__have_guard_status_bug)
+		heartbeat_set_state(&cf, vnode__state);
 
 	sock_send(&vnode__sock, &cf, -1);
 }
