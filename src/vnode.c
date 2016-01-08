@@ -246,17 +246,17 @@ static int vnode__sdo_get_config(struct sdo_srv* srv)
 
 static int vnode__on_sdo_init(struct sdo_srv* srv)
 {
-	if (srv->req_type == SDO_REQ_DOWNLOAD)
-		return 0;
-
 	uint32_t index = srv->index;
 	uint32_t subindex = srv->subindex;
 
 	switch (SDO_MUX(index, subindex)) {
 	case HEARTBEAT_PERIOD:
-		return vnode__sdo_get_heartbeat(srv);
+		return srv->req_type == SDO_REQ_UPLOAD
+		     ? vnode__sdo_get_heartbeat(srv) : 0;
 	default:
-		return vnode__sdo_get_config(srv);
+		return srv->req_type == SDO_REQ_UPLOAD
+		     ? vnode__sdo_get_config(srv)
+		     : sdo_srv_abort(srv, SDO_ABORT_RO);
 	}
 
 	abort();
