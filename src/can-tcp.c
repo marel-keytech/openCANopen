@@ -91,8 +91,10 @@ static void can_tcp__forward_message(struct mloop_socket* socket)
 	struct can_tcp_entry* entry = mloop_socket_get_context(socket);
 	assert(entry);
 
-	if (sock_recv(&entry->sock, &cf, 0) <= 0)
+	if (sock_recv(&entry->sock, &cf, 0) <= 0) {
 		mloop_socket_stop(socket);
+		return;
+	}
 
 	can_tcp__send_to_others(entry, &cf);
 }
