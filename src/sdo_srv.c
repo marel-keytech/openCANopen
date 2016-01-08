@@ -40,13 +40,15 @@ int sdo_srv__send(struct sdo_srv* self, struct can_frame* cf)
 
 int sdo_srv__on_done(struct sdo_srv* self)
 {
+	int r = 0;
+
 	sdo_srv_fn on_done = self->on_done;
 	if (on_done)
-		on_done(self);
+		r = on_done(self);
 
 	self->comm_state = SDO_SRV_COMM_INIT_REQ;
 
-	return 0;
+	return r;
 }
 
 int sdo_srv__on_init(struct sdo_srv* self)
@@ -122,7 +124,8 @@ int sdo_srv__dl_expediated(struct sdo_srv* self, const struct can_frame* cf)
 	assert(rc == 0);
 
 	self->status = SDO_REQ_OK;
-	sdo_srv__on_done(self);
+	if (sdo_srv__on_done(self) < 0)
+		return -1;
 
 	return sdo_srv__dl_init_res(self);
 }
@@ -193,7 +196,8 @@ int sdo_srv__dl_seg_req(struct sdo_srv* self, const struct can_frame* cf)
 
 	if (sdo_is_end_segment(cf)) {
 		self->status = SDO_REQ_OK;
-		sdo_srv__on_done(self);
+		if (sdo_srv__on_done(self) < 0)
+			return -1;
 	}
 
 	return sdo_srv__dl_seg_res(self);
@@ -219,7 +223,8 @@ int sdo_srv__ul_expediated(struct sdo_srv* self)
 	memcpy(data, self->buffer.data, size);
 	cf.can_dlc = SDO_EXPEDIATED_DATA_IDX + size;
 
-	sdo_srv__on_done(self);
+	if (sdo_srv__on_done(self) < 0)
+		return -1;
 
 	return sdo_srv__send(self, &cf);
 }
@@ -287,7 +292,8 @@ int sdo_srv__ul_seg_req(struct sdo_srv* self, const struct can_frame* cf)
 
 	if (self->pos >= self->buffer.index) {
 		self->status = SDO_REQ_OK;
-		sdo_srv__on_done(self);
+		if (sdo_srv__on_done(self) < 0)
+			return -1;
 		sdo_end_segment(&rcf);
 	}
 
