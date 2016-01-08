@@ -274,7 +274,8 @@ int sdo_srv__ul_seg_req(struct sdo_srv* self, const struct can_frame* cf)
 	sdo_set_segment_size(&rcf, size);
 
 	void* dst = &rcf.data[SDO_SEGMENT_IDX];
-	const void* src = &self->buffer.data[self->pos];
+	const char* data = self->buffer.data;
+	const void* src = &data[self->pos];
 
 	memcpy(dst, src, size);
 
