@@ -429,7 +429,7 @@ static int initialize_legacy_driver(int nodeid)
 	if (rc >= 0) {
 		legacy_driver_iface_process_node_state(node->driver, 1);
 		info->is_active = 1;
-		info->last_seen = gettime_s(CLOCK_REALTIME);
+		info->last_seen = time(NULL);
 	} else {
 		plog(LOG_ERROR, "initialize_legacy_driver: Failed to initialize \"%s\" with id %d",
 		     node->name, nodeid);
@@ -455,7 +455,7 @@ static int initialize_new_driver(int nodeid)
 	int rc = co_drv_init(&node->ndrv);
 	if (rc >= 0) {
 		info->is_active = 1;
-		info->last_seen = gettime_s(CLOCK_REALTIME);
+		info->last_seen = time(NULL);
 	} else {
 		plog(LOG_ERROR, "initialize_new_driver: Failed to initialize \"%s\" with id %d",
 		     node->name, nodeid);
@@ -620,7 +620,7 @@ static int handle_heartbeat(struct co_master_node* node,
 		co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
 
 	struct canopen_info* info = canopen_info_get(nodeid);
-	info->last_seen = gettime_s(CLOCK_REALTIME);
+	info->last_seen = time(NULL);
 
 	return 0;
 }
