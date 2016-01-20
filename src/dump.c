@@ -322,7 +322,7 @@ static int multiplex(struct can_frame* cf)
 static void run_dumper(struct sock* sock)
 {
 	struct can_frame cf;
-	while (sock_timed_recv(sock, &cf, -1) > 0)
+	while (sock_recv(sock, &cf, 0) > 0)
 		multiplex(&cf);
 }
 
@@ -336,8 +336,6 @@ int co_dump(const char* addr, enum co_dump_options options)
 		perror("Could not open CAN bus");
 		return 1;
 	}
-
-	net_dont_block(sock.fd);
 
 	if (type == SOCK_TYPE_CAN)
 		net_fix_sndbuf(sock.fd);
