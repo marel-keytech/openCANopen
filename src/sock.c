@@ -53,6 +53,11 @@ sock__frame_ntohl(const struct sock* sock, struct can_frame* cf)
 	return cf;
 }
 
+ssize_t sock_send(const struct sock* sock, struct can_frame* cf, int flags)
+{
+	return send(sock->fd, sock__frame_htonl(sock, cf), sizeof(*cf), flags);
+}
+
 int sock_timed_send(const struct sock* sock, struct can_frame* cf, int timeout)
 {
 	return net_write_frame(sock->fd, sock__frame_htonl(sock, cf), timeout);

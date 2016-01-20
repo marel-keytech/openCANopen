@@ -24,6 +24,7 @@ static inline void sock_init(struct sock* sock, enum sock_type type, int fd)
 
 int sock_open(struct sock* sock, enum sock_type type, const char* addr);
 
+ssize_t sock_send(const struct sock* sock, struct can_frame* cf, int flags);
 int sock_timed_send(const struct sock* sock, struct can_frame* cf, int timeout);
 
 ssize_t sock_recv(const struct sock* sock, struct can_frame* cf, int flags);
