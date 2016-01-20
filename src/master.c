@@ -732,16 +732,11 @@ static int handle_with_new_driver(struct co_master_node* node,
 	return -1;
 }
 
-static void mux_handler_fn(struct mloop_socket* self)
+static void mux_on_frame(const struct can_frame* cf)
 {
-	(void)self;
-
-	struct can_frame cf;
 	struct canopen_msg msg;
 
-	sock_timed_recv(&socket_, &cf, -1);
-
-	if (canopen_get_object_type(&msg, &cf) < 0)
+	if (canopen_get_object_type(&msg, cf) < 0)
 		return;
 
 	if (!(nodeid_min() <= msg.id && msg.id <= nodeid_max()))
@@ -751,14 +746,30 @@ static void mux_handler_fn(struct mloop_socket* self)
 
 	switch (node->driver_type) {
 	case CO_MASTER_DRIVER_NONE:
-		handle_not_loaded(node, &msg, &cf);
+		handle_not_loaded(node, &msg, cf);
 		break;
 	case CO_MASTER_DRIVER_LEGACY:
-		handle_with_legacy(node, &msg, &cf);
+		handle_with_legacy(node, &msg, cf);
 		break;
 	case CO_MASTER_DRIVER_NEW:
-		handle_with_new_driver(node, &msg, &cf);
+		handle_with_new_driver(node, &msg, cf);
 		break;
+	}
+}
+
+static void mux_handler_fn(struct mloop_socket* self)
+{
+	struct can_frame cf;
+
+	while (1) {
+		ssize_t rsize = sock_recv(&socket_, &cf, MSG_DONTWAIT);
+		if (rsize == 0)
+			mloop_socket_stop(self);
+
+		if (rsize <= 0)
+			return;
+
+		mux_on_frame(&cf);
 	}
 }
 
@@ -1146,8 +1157,6 @@ int co_master_run(const struct co_master_options* opt)
 	profile("Initialize node structure...\n");
 	if (init_all_node_structures() < 0)
 		goto node_init_failure;
-
-	net_dont_block(socket_.fd);
 
 	if (sock_type == SOCK_TYPE_CAN)
 		net_fix_sndbuf(socket_.fd);
