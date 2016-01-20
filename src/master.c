@@ -245,7 +245,7 @@ static void on_ping_timeout(struct mloop_timer* timer)
 	cf.can_dlc = 1;
 	heartbeat_set_state(&cf, 1);
 
-	sock_timed_send(&socket_, &cf, -1);
+	sock_send(&socket_, &cf, 0);
 }
 
 static int start_ping_timer(int nodeid)
@@ -979,7 +979,7 @@ int co__rpdox(int nodeid, int type, const void* data, size_t size)
 
 	memcpy(cf.data, data, size);
 
-	return sock_timed_send(&socket_, &cf, -1);
+	return sock_send(&socket_, &cf, 0);
 
 }
 
