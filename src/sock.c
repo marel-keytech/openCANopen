@@ -2,6 +2,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include "sock.h"
 #include "socketcan.h"
@@ -54,6 +56,15 @@ sock__frame_ntohl(const struct sock* sock, struct can_frame* cf)
 int sock_send(const struct sock* sock, struct can_frame* cf, int timeout)
 {
 	return net_write_frame(sock->fd, sock__frame_htonl(sock, cf), timeout);
+}
+
+ssize_t sock_recv(const struct sock* sock, struct can_frame* cf, int flags)
+{
+	ssize_t rsize = recv(sock->fd, cf, sizeof(*cf), flags);
+	if (rsize <= 0)
+		return rsize;
+	sock__frame_ntohl(sock, cf);
+	return rsize;
 }
 
 int sock_timed_recv(const struct sock* sock, struct can_frame* cf, int timeout)
