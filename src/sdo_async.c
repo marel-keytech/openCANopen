@@ -75,7 +75,7 @@ static int sdo_async__abort(struct sdo_async* self, enum sdo_abort_code code)
 	mloop_timer_stop(self->timer);
 	sdo_async__init_frame(self, &cf);
 	sdo_abort(&cf, code, self->index, self->subindex);
-	sock_timed_send(&self->sock, &cf, -1);
+	sock_send(&self->sock, &cf, 0);
 	self->status = SDO_REQ_LOCAL_ABORT;
 	self->abort_code = code;
 	sdo_async__on_done(self);
@@ -141,7 +141,7 @@ int sdo_async__send_init_dl(struct sdo_async* self)
 		cf.can_dlc = CAN_MAX_DLC;
 	}
 	mloop_timer_start(self->timer);
-	sock_timed_send(&self->sock, &cf, -1);
+	sock_send(&self->sock, &cf, 0);
 	return 0;
 }
 
@@ -154,7 +154,7 @@ int sdo_async__send_init_ul(struct sdo_async* self)
 	sdo_set_subindex(&cf, self->subindex);
 	cf.can_dlc = 4;
 	mloop_timer_start(self->timer);
-	sock_timed_send(&self->sock, &cf, -1);
+	sock_send(&self->sock, &cf, 0);
 	return 0;
 }
 
@@ -224,7 +224,7 @@ int sdo_async__request_dl_segment(struct sdo_async* self)
 		sdo_end_segment(&cf);
 
 	mloop_timer_start(self->timer);
-	sock_timed_send(&self->sock, &cf, -1);
+	sock_send(&self->sock, &cf, 0);
 
 	return 0;
 }
@@ -279,7 +279,7 @@ int sdo_async__request_ul_segment(struct sdo_async* self)
 	if (self->is_toggled) sdo_toggle(&cf);
 	cf.can_dlc = 1;
 	mloop_timer_start(self->timer);
-	sock_timed_send(&self->sock, &cf, -1);
+	sock_send(&self->sock, &cf, 0);
 	return 0;
 }
 
