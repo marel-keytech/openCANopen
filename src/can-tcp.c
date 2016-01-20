@@ -71,7 +71,7 @@ void my_sock_send(struct sock* sock, const struct can_frame* cf)
 {
 	struct can_frame cp;
 	memcpy(&cp, cf, sizeof(cp));
-	sock_send(sock, &cp, -1);
+	sock_timed_send(sock, &cp, -1);
 }
 
 static void can_tcp__send_to_others(struct can_tcp_entry* entry,

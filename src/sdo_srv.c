@@ -35,7 +35,7 @@ void sdo_srv_destroy(struct sdo_srv* self)
 int sdo_srv__send(struct sdo_srv* self, struct can_frame* cf)
 {
 	cf->can_id = R_TSDO + self->nodeid;
-	return sock_send(&self->sock, cf, -1);
+	return sock_timed_send(&self->sock, cf, -1);
 }
 
 int sdo_srv__on_done(struct sdo_srv* self)

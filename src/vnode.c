@@ -102,7 +102,7 @@ static void vnode__send_state(void)
 	if (!vnode__have_guard_status_bug)
 		heartbeat_set_state(&cf, vnode__state);
 
-	sock_send(&vnode__sock, &cf, -1);
+	sock_timed_send(&vnode__sock, &cf, -1);
 }
 
 static void vnode__send_legacy_bootup(void)
@@ -112,7 +112,7 @@ static void vnode__send_legacy_bootup(void)
 		.can_dlc = 0
 	};
 
-	sock_send(&vnode__sock, &cf, -1);
+	sock_timed_send(&vnode__sock, &cf, -1);
 }
 
 static void vnode__reset_communication(void)

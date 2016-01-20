@@ -24,7 +24,7 @@ int co_net_send_nmt(const struct sock* sock, int cs, int nodeid)
 	cf.can_dlc = 2;
 	nmt_set_cs(&cf, cs);
 	nmt_set_nodeid(&cf, nodeid);
-	return sock_send(sock, &cf, -1);
+	return sock_timed_send(sock, &cf, -1);
 }
 
 int co_net__request_heartbeat(const struct sock* sock, int nodeid)
@@ -32,7 +32,7 @@ int co_net__request_heartbeat(const struct sock* sock, int nodeid)
 	struct can_frame cf = { 0 };
 	cf.can_id = R_HEARTBEAT + nodeid;
 	cf.can_id |= CAN_RTR_FLAG;
-	return sock_send(sock, &cf, -1);
+	return sock_timed_send(sock, &cf, -1);
 }
 
 int co_net__request_sdo(const struct sock* sock, int nodeid)
@@ -44,7 +44,7 @@ int co_net__request_sdo(const struct sock* sock, int nodeid)
 	sdo_set_index(&cf, 0x1000);
 	sdo_set_subindex(&cf, 0);
 	sdo_set_cs(&cf, SDO_CCS_UL_INIT_REQ);
-	return sock_send(sock, &cf, -1);
+	return sock_timed_send(sock, &cf, -1);
 }
 
 int co_net__wait_for_bootup(const struct sock* sock, char* nodes_seen,
