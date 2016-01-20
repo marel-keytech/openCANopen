@@ -739,7 +739,7 @@ static void mux_handler_fn(struct mloop_socket* self)
 	struct can_frame cf;
 	struct canopen_msg msg;
 
-	sock_recv(&socket_, &cf, -1);
+	sock_timed_recv(&socket_, &cf, -1);
 
 	if (canopen_get_object_type(&msg, &cf) < 0)
 		return;

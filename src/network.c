@@ -56,7 +56,7 @@ int co_net__wait_for_bootup(const struct sock* sock, char* nodes_seen,
 	int t = gettime_ms(CLOCK_MONOTONIC);
 	int t_end = t + timeout;
 
-	while (sock_recv(sock, &cf, MAX(0, t_end - t)) > 0) {
+	while (sock_timed_recv(sock, &cf, MAX(0, t_end - t)) > 0) {
 		t = gettime_ms(CLOCK_MONOTONIC);
 
 		canopen_get_object_type(&msg, &cf);
@@ -83,7 +83,7 @@ int co_net__wait_for_sdo(const struct sock* sock, char* nodes_seen,
 	int t = gettime_ms(CLOCK_MONOTONIC);
 	int t_end = t + timeout;
 
-	while (sock_recv(sock, &cf, MAX(0, t_end - t)) > 0) {
+	while (sock_timed_recv(sock, &cf, MAX(0, t_end - t)) > 0) {
 		t = gettime_ms(CLOCK_MONOTONIC);
 
 		canopen_get_object_type(&msg, &cf);

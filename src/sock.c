@@ -56,7 +56,7 @@ int sock_send(const struct sock* sock, struct can_frame* cf, int timeout)
 	return net_write_frame(sock->fd, sock__frame_htonl(sock, cf), timeout);
 }
 
-int sock_recv(const struct sock* sock, struct can_frame* cf, int timeout)
+int sock_timed_recv(const struct sock* sock, struct can_frame* cf, int timeout)
 {
 	int rc = net_read_frame(sock->fd, cf, timeout);
 	sock__frame_ntohl(sock, cf);
