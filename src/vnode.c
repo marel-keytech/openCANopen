@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <mloop.h>
+#include <errno.h>
 
 #include "socketcan.h"
 #include "canopen.h"
@@ -326,20 +327,11 @@ static void vnode__rsdo(const struct can_frame* cf)
 	sdo_srv_feed(&vnode__sdo_srv, cf);
 }
 
-static void vnode__mux(struct mloop_socket* socket)
+static void vnode__on_frame(const struct can_frame* cf)
 {
-	struct sock* sock = mloop_socket_get_context(socket);
-	assert(sock);
-
-	struct can_frame cf;
 	struct canopen_msg msg;
 
-	if (sock_timed_recv(sock, &cf, 0) <= 0) {
-		mloop_socket_stop(socket);
-		return;
-	}
-
-	if (canopen_get_object_type(&msg, &cf) < 0)
+	if (canopen_get_object_type(&msg, cf) < 0)
 		return;
 
 	if (msg.object != CANOPEN_NMT) {
@@ -353,16 +345,35 @@ static void vnode__mux(struct mloop_socket* socket)
 
 	switch (msg.object) {
 	case CANOPEN_HEARTBEAT:
-		vnode__heartbeat(&cf);
+		vnode__heartbeat(cf);
 		break;
 	case CANOPEN_NMT:
-		vnode__nmt(&cf);
+		vnode__nmt(cf);
 		break;
 	case CANOPEN_RSDO:
-		vnode__rsdo(&cf);
+		vnode__rsdo(cf);
 		break;
 	default:
 		break;
+	}
+}
+
+static void vnode__mux(struct mloop_socket* socket)
+{
+	struct sock* sock = mloop_socket_get_context(socket);
+	assert(sock);
+
+	struct can_frame cf;
+
+	while (1) {
+		ssize_t rsize = sock_recv(sock, &cf, MSG_DONTWAIT);
+		if (rsize == 0)
+			mloop_socket_stop(socket);
+
+		if (rsize <= 0)
+			return;
+
+		vnode__on_frame(&cf);
 	}
 }
 
