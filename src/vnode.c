@@ -35,7 +35,7 @@ enum vnode__bootup_method {
 };
 
 struct vnode {
-	struct sock sock;
+	int is_running;
 	struct ini_file config;
 	int nodeid;
 	enum nmt_state state;
@@ -47,6 +47,16 @@ struct vnode {
 	int have_guard_status_bug;
 	enum vnode__bootup_method bootup_method;
 };
+
+struct sock vnode__sock;
+static struct mloop_socket* vnode__socket = NULL;
+
+struct vnode vnode__node[127] = { 0 };
+
+static inline struct vnode* vnode__get_node(int nodeid)
+{
+	return &vnode__node[nodeid - 1];
+}
 
 static void vnode__init(struct vnode* self)
 {
@@ -118,7 +128,7 @@ static void vnode__send_state(struct vnode* self)
 	if (!self->have_guard_status_bug)
 		heartbeat_set_state(&cf, self->state);
 
-	sock_send(&self->sock, &cf, 0);
+	sock_send(&vnode__sock, &cf, 0);
 }
 
 static void vnode__send_legacy_bootup(struct vnode* self)
@@ -128,7 +138,7 @@ static void vnode__send_legacy_bootup(struct vnode* self)
 		.can_dlc = 0
 	};
 
-	sock_send(&self->sock, &cf, 0);
+	sock_send(&vnode__sock, &cf, 0);
 }
 
 static void vnode__reset_communication(struct vnode* self)
@@ -166,7 +176,6 @@ static int vnode__start_heartbeat_timer(struct vnode* self)
 
 	struct mloop_timer* timer = self->heartbeat_timer;
 	mloop_timer_set_time(timer, (uint64_t)self->heartbeat_period * 1000000ULL);
-	mloop_timer_set_context(timer, self, NULL);
 	return mloop_timer_start(timer);
 }
 
@@ -348,8 +357,9 @@ static void vnode__rsdo(struct vnode* self, const struct can_frame* cf)
 	sdo_srv_feed(&self->sdo_srv, cf);
 }
 
-static void vnode__on_frame(struct vnode* self, const struct can_frame* cf)
+static void vnode__on_frame(const struct can_frame* cf)
 {
+	struct vnode* self;
 	struct canopen_msg msg;
 
 	if (canopen_get_object_type(&msg, cf) < 0)
@@ -360,8 +370,23 @@ static void vnode__on_frame(struct vnode* self, const struct can_frame* cf)
 		      && msg.id <= CANOPEN_NODEID_MAX))
 			return;
 
+		self = vnode__get_node(msg.id);
+		if (!self)
+			return;
+
 		if (msg.id != self->nodeid)
 			return;
+	} else {
+		if (nmt_get_nodeid(cf) == 0) {
+			for (int i = 1; i < 128; ++i) {
+				self = vnode__get_node(i);
+				if (self->is_running)
+					vnode__nmt(self, cf);
+				return;
+			}
+		} else {
+			self = vnode__get_node(nmt_get_nodeid(cf));
+		}
 	}
 
 	switch (msg.object) {
@@ -381,20 +406,17 @@ static void vnode__on_frame(struct vnode* self, const struct can_frame* cf)
 
 static void vnode__mux(struct mloop_socket* socket)
 {
-	struct vnode* self = mloop_socket_get_context(socket);
-	struct sock* sock = &self->sock;
-
 	struct can_frame cf;
 
 	while (1) {
-		ssize_t rsize = sock_recv(sock, &cf, MSG_DONTWAIT);
+		ssize_t rsize = sock_recv(&vnode__sock, &cf, MSG_DONTWAIT);
 		if (rsize == 0)
 			mloop_socket_stop(socket);
 
 		if (rsize <= 0)
 			return;
 
-		vnode__on_frame(self, &cf);
+		vnode__on_frame(&cf);
 	}
 }
 
@@ -404,40 +426,63 @@ static int vnode__setup_mloop(struct vnode* self)
 	if (!socket)
 		return -1;
 
-	mloop_socket_set_fd(socket, self->sock.fd);
-	mloop_socket_set_context(socket, self, NULL);
+	mloop_socket_set_fd(socket, vnode__sock.fd);
+	mloop_socket_set_context(socket, &vnode__sock,
+				 (mloop_free_fn)sock_close);
 	mloop_socket_set_callback(socket, vnode__mux);
 
-	int rc = mloop_socket_start(socket);
-	mloop_socket_unref(socket);
+	if (mloop_socket_start(socket) < 0) {
+		mloop_socket_unref(socket);
+		return -1;
+	}
 
-	return rc;
+	vnode__socket = socket;
+	return 0;
 }
 
-void vnode__apply_filters(int fd, int nodeid)
+static void vnode__cleanup_mloop(void)
 {
-	struct can_filter filters[CANOPEN_SLAVE_FILTER_LENGTH];
-	socketcan_make_slave_filters(filters, nodeid);
-	socketcan_apply_filters(fd, filters, CANOPEN_SLAVE_FILTER_LENGTH);
+	if (mloop_socket_unref(vnode__socket) == 1) {
+		mloop_socket_stop(vnode__socket);
+		vnode__socket = NULL;
+	}
+}
+
+int vnode__init_socket(struct vnode* self, enum sock_type type,
+		       const char* iface)
+{
+	if (vnode__socket) {
+		mloop_socket_ref(vnode__socket);
+		return 0;
+	}
+
+	if (sock_open(&vnode__sock, type, iface) < 0) {
+		perror("Failed to open CAN interface");
+		return -1;
+	}
+
+	if (vnode__setup_mloop(self) < 0)
+		goto failure;
+
+	return 0;
+
+failure:
+	sock_close(&vnode__sock);
+	return -1;
 }
 
 __attribute__((visibility("default")))
 struct vnode* co_vnode_new(enum sock_type type, const char* iface,
 			   const char* config_path, int nodeid)
 {
-	struct vnode* self = malloc(sizeof(*self));
+	struct vnode* self = vnode__get_node(nodeid);
 	if (!self)
 		return NULL;
 
 	vnode__init(self);
 
-	if (sock_open(&self->sock, type, iface) < 0) {
-		perror("Failed to open CAN interface");
-		goto sock_failure;
-	}
-
-	if (type == SOCK_TYPE_CAN)
-		vnode__apply_filters(self->sock.fd, nodeid);
+	if (vnode__init_socket(self, type, iface) < 0)
+		return NULL;
 
 	if (config_path)
 		if (vnode__load_config(self, config_path) < 0)
@@ -446,33 +491,28 @@ struct vnode* co_vnode_new(enum sock_type type, const char* iface,
 	self->nodeid = nodeid;
 	self->state = NMT_STATE_BOOTUP;
 
-	if (sdo_srv_init(&self->sdo_srv, &self->sock, nodeid,
+	if (sdo_srv_init(&self->sdo_srv, &vnode__sock, nodeid,
 			 vnode__on_sdo_init, vnode__on_sdo_done) < 0)
 		goto srv_failure;
 
-	if (vnode__setup_mloop(self) < 0)
-		goto mloop_failure;
-
 	if (self->have_heartbeat)
 		if (vnode__setup_heartbeat_timer(self) < 0)
-			goto mloop_failure;
+			goto srv_failure;
 
 	if (self->bootup_method & VNODE_BOOT_LEGACY)
 		vnode__send_legacy_bootup(self);
 
 	vnode__reset_communication(self);
 
+	self->is_running = 1;
 	return self;
 
-mloop_failure:
 	sdo_srv_destroy(&self->sdo_srv);
 srv_failure:
 	if (config_path)
 		ini_destroy(&self->config);
 config_failure:
-	sock_close(&self->sock);
-sock_failure:
-	free(self);
+	vnode__cleanup_mloop();
 	return NULL;
 }
 
@@ -484,7 +524,7 @@ void co_vnode_destroy(struct vnode* self)
 
 	sdo_srv_destroy(&self->sdo_srv);
 	ini_destroy(&self->config);
-	sock_close(&self->sock);
-	free(self);
+	vnode__cleanup_mloop();
+	self->is_running = 0;
 }
 
