@@ -322,7 +322,7 @@ static int multiplex(struct can_frame* cf)
 static void run_dumper(struct sock* sock)
 {
 	struct can_frame cf;
-	while (sock_recv(sock, &cf, 0) > 0)
+	while (sock_recv(sock, &cf, MSG_WAITALL) > 0)
 		multiplex(&cf);
 }
 
