@@ -7,7 +7,7 @@
 #include "vnode.h"
 
 const char usage_[] =
-"Usage: canopen-vnode [options] <interface> <nodeid>\n"
+"Usage: canopen-vnode [options] <interface> <nodeid> [nodeid] [...]\n"
 "\n"
 "Options:\n"
 "    -h, --help                 Get help.\n"
@@ -19,10 +19,46 @@ const char usage_[] =
 "    $ canopen-vnode -T 127.0.0.1\n"
 "\n";
 
+static struct vnode* node[127];
+
 static inline int print_usage(FILE* output, int status)
 {
 	fprintf(output, "%s", usage_);
 	return status;
+}
+
+int init_nodes(enum sock_type type, const char* config, const char* iface,
+	       char* ids[], int n_ids)
+{
+	memset(node, 0, sizeof(node));
+
+	int i;
+	for (i = 0; i < n_ids; ++i) {
+		int nodeid = atoi(ids[i]);
+
+		struct vnode* vnode = co_vnode_new(type, iface, config, nodeid);
+		if (!vnode)
+			goto failure;
+
+		node[nodeid - 1] = vnode;
+	}
+
+	return 0;
+
+failure:
+	for (--i; i >= 0; --i) {
+		int nodeid = atoi(ids[i]);
+		co_vnode_destroy(node[nodeid - 1]);
+	}
+
+	return -1;
+}
+
+void destroy_nodes(void)
+{
+	for (int i = 0; i < 127; ++i)
+		if (node[i])
+			co_vnode_destroy(node[i]);
 }
 
 int main(int argc, char* argv[])
@@ -56,22 +92,18 @@ int main(int argc, char* argv[])
 		return print_usage(stderr, 1);
 
 	const char* iface = args[0];
-	const char* nodeidstr = args[1];
-
-	int nodeid = atoi(nodeidstr);
 
 	enum sock_type type = use_tcp ? SOCK_TYPE_TCP : SOCK_TYPE_CAN;
 
 	struct mloop* mloop = mloop_default();
 	mloop_ref(mloop);
 
-	struct vnode* vnode = co_vnode_new(type, iface, config, nodeid);
-	if (!vnode)
+	if (init_nodes(type, config, iface, &args[1], nargs - 1) < 0)
 		return 1;
 
 	mloop_run(mloop);
 
-	co_vnode_destroy(vnode);
+	destroy_nodes();
 	mloop_unref(mloop);
 	return 0;
 }
