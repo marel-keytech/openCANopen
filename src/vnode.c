@@ -165,7 +165,7 @@ static int vnode__restart_heartbeat_timer(void)
 static void vnode__nmt(const struct can_frame* cf)
 {
 	int nodeid = nmt_get_nodeid(cf);
-	if (nodeid != vnode__nodeid || nodeid == 0)
+	if (nodeid != vnode__nodeid && nodeid != 0)
 		return;
 
 	enum nmt_cs cs = nmt_get_cs(cf);
