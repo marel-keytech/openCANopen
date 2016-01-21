@@ -65,12 +65,13 @@ int main(int argc, char* argv[])
 	struct mloop* mloop = mloop_default();
 	mloop_ref(mloop);
 
-	if (co_vnode_init(type, iface, config, nodeid) < 0)
+	struct vnode* vnode = co_vnode_new(type, iface, config, nodeid);
+	if (!vnode)
 		return 1;
 
 	mloop_run(mloop);
 
-	co_vnode_destroy();
+	co_vnode_destroy(vnode);
 	mloop_unref(mloop);
 	return 0;
 }

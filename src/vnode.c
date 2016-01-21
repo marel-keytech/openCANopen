@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <mloop.h>
 #include <errno.h>
+#include <stddef.h>
 
 #include "socketcan.h"
 #include "canopen.h"
@@ -15,17 +16,16 @@
 #include "sock.h"
 #include "ini_parser.h"
 #include "conversions.h"
+#include "vnode.h"
+
+#define container_of(ptr, type, member) \
+({ \
+	const typeof( ((type *)0)->member ) *__mptr = (ptr); \
+	(type *)( (char *)__mptr - offsetof(type,member) ); \
+})
 
 #define SDO_MUX(index, subindex) ((index << 16) | subindex)
 #define HEARTBEAT_PERIOD SDO_MUX(0x1017, 0)
-
-static struct sock vnode__sock;
-static struct ini_file vnode__config;
-static int vnode__nodeid = -1;
-static enum nmt_state vnode__state;
-static struct sdo_srv vnode__sdo_srv;
-static uint16_t vnode__heartbeat_period = 0;
-static struct mloop_timer* vnode__heartbeat_timer = 0;
 
 enum vnode__bootup_method {
 	VNODE_BOOT_UNSPEC = 0,
@@ -34,10 +34,26 @@ enum vnode__bootup_method {
 	VNODE_BOOT_BOTH = VNODE_BOOT_STANDARD | VNODE_BOOT_LEGACY,
 };
 
-static int vnode__have_heartbeat = 0;
-static int vnode__have_node_guarding = 0;
-static int vnode__have_guard_status_bug = 0;
-static enum vnode__bootup_method vnode__bootup_method = VNODE_BOOT_UNSPEC;
+struct vnode {
+	struct sock sock;
+	struct ini_file config;
+	int nodeid;
+	enum nmt_state state;
+	struct sdo_srv sdo_srv;
+	uint16_t heartbeat_period;
+	struct mloop_timer* heartbeat_timer;
+	int have_heartbeat;
+	int have_node_guarding;
+	int have_guard_status_bug;
+	enum vnode__bootup_method bootup_method;
+};
+
+static void vnode__init(struct vnode* self)
+{
+	memset(self, 0, sizeof(*self));
+	self->nodeid = -1;
+	self->bootup_method = VNODE_BOOT_UNSPEC;
+}
 
 static enum vnode__bootup_method
 vnode__get_bootup_method(const struct ini_section* s)
@@ -59,21 +75,21 @@ static int vnode__config_is_true(const struct ini_section* s, const char* key)
 	return value ? strcasecmp(value, "yes") == 0 : 0;
 }
 
-static void vnode__load_device_info(void)
+static void vnode__load_device_info(struct vnode* self)
 {
 	const struct ini_section* s;
-	s = ini_find_section(&vnode__config, "device");
+	s = ini_find_section(&self->config, "device");
 	if (!s)
 		return;
 
-	vnode__have_heartbeat = vnode__config_is_true(s, "heartbeat");
-	vnode__have_node_guarding = vnode__config_is_true(s, "node_guarding");
-	vnode__have_guard_status_bug
+	self->have_heartbeat = vnode__config_is_true(s, "heartbeat");
+	self->have_node_guarding = vnode__config_is_true(s, "node_guarding");
+	self->have_guard_status_bug
 		= vnode__config_is_true(s, "guard_status_bug");
-	vnode__bootup_method = vnode__get_bootup_method(s);
+	self->bootup_method = vnode__get_bootup_method(s);
 }
 
-static int vnode__load_config(const char* path)
+static int vnode__load_config(struct vnode* self, const char* path)
 {
 	FILE* stream = fopen(path, "r");
 	if (!stream) {
@@ -81,123 +97,124 @@ static int vnode__load_config(const char* path)
 		return -1;
 	}
 
-	int rc = ini_parse(&vnode__config, stream);
+	int rc = ini_parse(&self->config, stream);
 	if (rc < 0)
 		perror("Could not parse config");
 
 	fclose(stream);
 
-	vnode__load_device_info();
+	vnode__load_device_info(self);
 
 	return rc;
 }
 
-static void vnode__send_state(void)
+static void vnode__send_state(struct vnode* self)
 {
 	struct can_frame cf = {
-		.can_id = R_HEARTBEAT + vnode__nodeid,
+		.can_id = R_HEARTBEAT + self->nodeid,
 		.can_dlc = 1
 	};
 
-	if (!vnode__have_guard_status_bug)
-		heartbeat_set_state(&cf, vnode__state);
+	if (!self->have_guard_status_bug)
+		heartbeat_set_state(&cf, self->state);
 
-	sock_send(&vnode__sock, &cf, 0);
+	sock_send(&self->sock, &cf, 0);
 }
 
-static void vnode__send_legacy_bootup(void)
+static void vnode__send_legacy_bootup(struct vnode* self)
 {
 	struct can_frame cf = {
-		.can_id = R_EMCY + vnode__nodeid,
+		.can_id = R_EMCY + self->nodeid,
 		.can_dlc = 0
 	};
 
-	sock_send(&vnode__sock, &cf, 0);
+	sock_send(&self->sock, &cf, 0);
 }
 
-static void vnode__reset_communication(void)
+static void vnode__reset_communication(struct vnode* self)
 {
-	if (!(vnode__bootup_method & VNODE_BOOT_STANDARD))
+	if (!(self->bootup_method & VNODE_BOOT_STANDARD))
 		return;
 
-	vnode__state = NMT_STATE_BOOTUP;
-	vnode__send_state();
-	vnode__state = NMT_STATE_PREOPERATIONAL;
+	self->state = NMT_STATE_BOOTUP;
+	vnode__send_state(self);
+	self->state = NMT_STATE_PREOPERATIONAL;
 }
 
 static void vnode__on_heartbeat(struct mloop_timer* timer)
 {
-	(void)timer;
-	vnode__send_state();
+	struct vnode* self = mloop_timer_get_context(timer);
+	vnode__send_state(self);
 }
 
-static void vnode__heartbeat(const struct can_frame* cf)
+static void vnode__heartbeat(struct vnode* self, const struct can_frame* cf)
 {
 	(void)cf;
 
-	if (vnode__have_node_guarding)
-		vnode__send_state();
+	if (self->have_node_guarding)
+		vnode__send_state(self);
 }
 
-static int vnode__start_heartbeat_timer(void)
+static int vnode__start_heartbeat_timer(struct vnode* self)
 {
-	if (!vnode__have_heartbeat)
+	if (!self->have_heartbeat)
 		return 0;
 
-	if (vnode__state != NMT_STATE_OPERATIONAL
-	 || vnode__heartbeat_period == 0)
+	if (self->state != NMT_STATE_OPERATIONAL
+	 || self->heartbeat_period == 0)
 		return 0;
 
-	struct mloop_timer* timer = vnode__heartbeat_timer;
-	mloop_timer_set_time(timer, (uint64_t)vnode__heartbeat_period * 1000000ULL);
+	struct mloop_timer* timer = self->heartbeat_timer;
+	mloop_timer_set_time(timer, (uint64_t)self->heartbeat_period * 1000000ULL);
+	mloop_timer_set_context(timer, self, NULL);
 	return mloop_timer_start(timer);
 }
 
-static int vnode__restart_heartbeat_timer(void)
+static int vnode__restart_heartbeat_timer(struct vnode* self)
 {
-	if (!vnode__have_heartbeat)
+	if (!self->have_heartbeat)
 		return 0;
 
-	mloop_timer_stop(vnode__heartbeat_timer);
-	return vnode__start_heartbeat_timer();
+	mloop_timer_stop(self->heartbeat_timer);
+	return vnode__start_heartbeat_timer(self);
 }
 
-static void vnode__nmt(const struct can_frame* cf)
+static void vnode__nmt(struct vnode* self, const struct can_frame* cf)
 {
 	int nodeid = nmt_get_nodeid(cf);
-	if (nodeid != vnode__nodeid && nodeid != 0)
+	if (nodeid != self->nodeid && nodeid != 0)
 		return;
 
 	enum nmt_cs cs = nmt_get_cs(cf);
 	switch (cs) {
 	case NMT_CS_START:
-		vnode__state = NMT_STATE_OPERATIONAL;
-		vnode__start_heartbeat_timer();
+		self->state = NMT_STATE_OPERATIONAL;
+		vnode__start_heartbeat_timer(self);
 		break;
 	case NMT_CS_STOP:
-		vnode__state = NMT_STATE_STOPPED;
-		if (vnode__have_heartbeat)
-			mloop_timer_stop(vnode__heartbeat_timer);
+		self->state = NMT_STATE_STOPPED;
+		if (self->have_heartbeat)
+			mloop_timer_stop(self->heartbeat_timer);
 		break;
 	case NMT_CS_ENTER_PREOPERATIONAL:
-		vnode__state = NMT_STATE_PREOPERATIONAL;
+		self->state = NMT_STATE_PREOPERATIONAL;
 		break;
 	case NMT_CS_RESET_NODE:
 	case NMT_CS_RESET_COMMUNICATION:
-		if (vnode__have_heartbeat)
-			mloop_timer_stop(vnode__heartbeat_timer);
-		vnode__reset_communication();
+		if (self->have_heartbeat)
+			mloop_timer_stop(self->heartbeat_timer);
+		vnode__reset_communication(self);
 		break;
 	}
 }
 
-static int vnode__sdo_get_heartbeat(struct sdo_srv* srv)
+static int vnode__sdo_get_heartbeat(struct vnode* self, struct sdo_srv* srv)
 {
-	if (!vnode__have_heartbeat)
+	if (!self->have_heartbeat)
 		return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
 
 	uint16_t netorder = 0;
-	byteorder(&netorder, &vnode__heartbeat_period, sizeof(netorder));
+	byteorder(&netorder, &self->heartbeat_period, sizeof(netorder));
 	vector_assign(&srv->buffer, &netorder, sizeof(netorder));
 	return 0;
 }
@@ -218,12 +235,12 @@ static enum canopen_type vnode__get_section_type(const struct ini_section* s)
 	return canopen_type_from_string(type_str);
 }
 
-static int vnode__sdo_get_config(struct sdo_srv* srv)
+static int vnode__sdo_get_config(struct vnode* self, struct sdo_srv* srv)
 {
 	const char* section;
 	section = vnode__make_section_string(srv->index, srv->subindex);
 
-	const struct ini_section* s = ini_find_section(&vnode__config, section);
+	const struct ini_section* s = ini_find_section(&self->config, section);
 	if (!s)
 		return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
 
@@ -247,16 +264,17 @@ static int vnode__sdo_get_config(struct sdo_srv* srv)
 
 static int vnode__on_sdo_init(struct sdo_srv* srv)
 {
+	struct vnode* self = container_of(srv, struct vnode, sdo_srv);
 	uint32_t index = srv->index;
 	uint32_t subindex = srv->subindex;
 
 	switch (SDO_MUX(index, subindex)) {
 	case HEARTBEAT_PERIOD:
 		return srv->req_type == SDO_REQ_UPLOAD
-		     ? vnode__sdo_get_heartbeat(srv) : 0;
+		     ? vnode__sdo_get_heartbeat(self, srv) : 0;
 	default:
 		return srv->req_type == SDO_REQ_UPLOAD
-		     ? vnode__sdo_get_config(srv)
+		     ? vnode__sdo_get_config(self, srv)
 		     : sdo_srv_abort(srv, SDO_ABORT_RO);
 	}
 
@@ -264,7 +282,7 @@ static int vnode__on_sdo_init(struct sdo_srv* srv)
 	return -1;
 }
 
-static int vnode__setup_heartbeat_timer(void)
+static int vnode__setup_heartbeat_timer(struct vnode* self)
 {
 	struct mloop_timer* timer = mloop_timer_new(mloop_default());
 	if (!timer)
@@ -272,15 +290,16 @@ static int vnode__setup_heartbeat_timer(void)
 
 	mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC | MLOOP_TIMER_RELATIVE);
 	mloop_timer_set_callback(timer, vnode__on_heartbeat);
+	mloop_timer_set_context(timer, self, NULL);
 
-	vnode__heartbeat_timer = timer;
+	self->heartbeat_timer = timer;
 
 	return 0;
 }
 
-static int vnode__sdo_set_heartbeat(struct sdo_srv* srv)
+static int vnode__sdo_set_heartbeat(struct vnode* self, struct sdo_srv* srv)
 {
-	if (!vnode__have_heartbeat)
+	if (!self->have_heartbeat)
 		return sdo_srv_abort(srv, SDO_ABORT_NEXIST);
 
 	uint16_t period = 0;
@@ -290,8 +309,8 @@ static int vnode__sdo_set_heartbeat(struct sdo_srv* srv)
 	byteorder2(&period, srv->buffer.data, sizeof(period),
 		   srv->buffer.index);
 
-	vnode__heartbeat_period = period;
-	vnode__restart_heartbeat_timer();
+	self->heartbeat_period = period;
+	vnode__restart_heartbeat_timer(self);
 
 	return 0;
 }
@@ -303,6 +322,8 @@ static int vnode__sdo_set_config(struct sdo_srv* srv)
 
 static int vnode__on_sdo_done(struct sdo_srv* srv)
 {
+	struct vnode* self = container_of(srv, struct vnode, sdo_srv);
+
 	if (srv->req_type == SDO_REQ_UPLOAD)
 		return 0;
 
@@ -311,7 +332,7 @@ static int vnode__on_sdo_done(struct sdo_srv* srv)
 
 	switch (SDO_MUX(index, subindex)) {
 	case HEARTBEAT_PERIOD:
-		return vnode__sdo_set_heartbeat(srv);
+		return vnode__sdo_set_heartbeat(self, srv);
 	default:
 		return vnode__sdo_set_config(srv);
 	}
@@ -322,12 +343,12 @@ static int vnode__on_sdo_done(struct sdo_srv* srv)
 	return 0;
 }
 
-static void vnode__rsdo(const struct can_frame* cf)
+static void vnode__rsdo(struct vnode* self, const struct can_frame* cf)
 {
-	sdo_srv_feed(&vnode__sdo_srv, cf);
+	sdo_srv_feed(&self->sdo_srv, cf);
 }
 
-static void vnode__on_frame(const struct can_frame* cf)
+static void vnode__on_frame(struct vnode* self, const struct can_frame* cf)
 {
 	struct canopen_msg msg;
 
@@ -339,19 +360,19 @@ static void vnode__on_frame(const struct can_frame* cf)
 		      && msg.id <= CANOPEN_NODEID_MAX))
 			return;
 
-		if (msg.id != vnode__nodeid)
+		if (msg.id != self->nodeid)
 			return;
 	}
 
 	switch (msg.object) {
 	case CANOPEN_HEARTBEAT:
-		vnode__heartbeat(cf);
+		vnode__heartbeat(self, cf);
 		break;
 	case CANOPEN_NMT:
-		vnode__nmt(cf);
+		vnode__nmt(self, cf);
 		break;
 	case CANOPEN_RSDO:
-		vnode__rsdo(cf);
+		vnode__rsdo(self, cf);
 		break;
 	default:
 		break;
@@ -360,8 +381,8 @@ static void vnode__on_frame(const struct can_frame* cf)
 
 static void vnode__mux(struct mloop_socket* socket)
 {
-	struct sock* sock = mloop_socket_get_context(socket);
-	assert(sock);
+	struct vnode* self = mloop_socket_get_context(socket);
+	struct sock* sock = &self->sock;
 
 	struct can_frame cf;
 
@@ -373,19 +394,18 @@ static void vnode__mux(struct mloop_socket* socket)
 		if (rsize <= 0)
 			return;
 
-		vnode__on_frame(&cf);
+		vnode__on_frame(self, &cf);
 	}
 }
 
-static int vnode__setup_mloop(void)
+static int vnode__setup_mloop(struct vnode* self)
 {
 	struct mloop_socket* socket = mloop_socket_new(mloop_default());
 	if (!socket)
 		return -1;
 
-	mloop_socket_set_fd(socket, vnode__sock.fd);
-	mloop_socket_set_context(socket, &vnode__sock,
-				 (mloop_free_fn)sock_close);
+	mloop_socket_set_fd(socket, self->sock.fd);
+	mloop_socket_set_context(socket, self, NULL);
 	mloop_socket_set_callback(socket, vnode__mux);
 
 	int rc = mloop_socket_start(socket);
@@ -402,60 +422,69 @@ void vnode__apply_filters(int fd, int nodeid)
 }
 
 __attribute__((visibility("default")))
-int co_vnode_init(enum sock_type type, const char* iface,
-		  const char* config_path, int nodeid)
+struct vnode* co_vnode_new(enum sock_type type, const char* iface,
+			   const char* config_path, int nodeid)
 {
-	if (sock_open(&vnode__sock, type, iface) < 0) {
+	struct vnode* self = malloc(sizeof(*self));
+	if (!self)
+		return NULL;
+
+	vnode__init(self);
+
+	if (sock_open(&self->sock, type, iface) < 0) {
 		perror("Failed to open CAN interface");
-		return -1;
+		goto sock_failure;
 	}
 
 	if (type == SOCK_TYPE_CAN)
-		vnode__apply_filters(vnode__sock.fd, nodeid);
+		vnode__apply_filters(self->sock.fd, nodeid);
 
 	if (config_path)
-		if (vnode__load_config(config_path) < 0)
-			goto failure;
+		if (vnode__load_config(self, config_path) < 0)
+			goto config_failure;
 
-	vnode__nodeid = nodeid;
-	vnode__state = NMT_STATE_BOOTUP;
+	self->nodeid = nodeid;
+	self->state = NMT_STATE_BOOTUP;
 
-	if (sdo_srv_init(&vnode__sdo_srv, &vnode__sock, nodeid,
+	if (sdo_srv_init(&self->sdo_srv, &self->sock, nodeid,
 			 vnode__on_sdo_init, vnode__on_sdo_done) < 0)
 		goto srv_failure;
 
-	if (vnode__setup_mloop() < 0)
+	if (vnode__setup_mloop(self) < 0)
 		goto mloop_failure;
 
-	if (vnode__have_heartbeat)
-		if (vnode__setup_heartbeat_timer() < 0)
+	if (self->have_heartbeat)
+		if (vnode__setup_heartbeat_timer(self) < 0)
 			goto mloop_failure;
 
-	if (vnode__bootup_method & VNODE_BOOT_LEGACY)
-		vnode__send_legacy_bootup();
+	if (self->bootup_method & VNODE_BOOT_LEGACY)
+		vnode__send_legacy_bootup(self);
 
-	vnode__reset_communication();
+	vnode__reset_communication(self);
 
-	return 0;
+	return self;
 
 mloop_failure:
-	sdo_srv_destroy(&vnode__sdo_srv);
+	sdo_srv_destroy(&self->sdo_srv);
 srv_failure:
 	if (config_path)
-		ini_destroy(&vnode__config);
-failure:
-	sock_close(&vnode__sock);
-	return -1;
+		ini_destroy(&self->config);
+config_failure:
+	sock_close(&self->sock);
+sock_failure:
+	free(self);
+	return NULL;
 }
 
 __attribute__((visibility("default")))
-void co_vnode_destroy(void)
+void co_vnode_destroy(struct vnode* self)
 {
-	if (vnode__have_heartbeat)
-		mloop_timer_unref(vnode__heartbeat_timer);
+	if (self->have_heartbeat)
+		mloop_timer_unref(self->heartbeat_timer);
 
-	sdo_srv_destroy(&vnode__sdo_srv);
-	ini_destroy(&vnode__config);
-	sock_close(&vnode__sock);
+	sdo_srv_destroy(&self->sdo_srv);
+	ini_destroy(&self->config);
+	sock_close(&self->sock);
+	free(self);
 }
 
