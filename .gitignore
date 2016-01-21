@@ -11,3 +11,5 @@ build-*
 .sconsign.dblite
 *_version.c
 lib.map
+debian_*
+*.doxy
