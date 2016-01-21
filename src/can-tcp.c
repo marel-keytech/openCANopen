@@ -71,7 +71,7 @@ void my_sock_send(struct sock* sock, const struct can_frame* cf)
 {
 	struct can_frame cp;
 	memcpy(&cp, cf, sizeof(cp));
-	sock_timed_send(sock, &cp, -1);
+	sock_send(sock, &cp, 0);
 }
 
 static void can_tcp__send_to_others(struct can_tcp_entry* entry,
@@ -91,7 +91,7 @@ static void can_tcp__forward_message(struct mloop_socket* socket)
 	struct can_tcp_entry* entry = mloop_socket_get_context(socket);
 	assert(entry);
 
-	if (sock_timed_recv(&entry->sock, &cf, 0) <= 0) {
+	if (sock_recv(&entry->sock, &cf, MSG_DONTWAIT) <= 0) {
 		mloop_socket_stop(socket);
 		return;
 	}
@@ -146,7 +146,6 @@ static int open_can(const char* iface)
 	if (fd < 0)
 		return -1;
 
-	net_dont_block(fd);
 	net_fix_sndbuf(fd);
 
 	return fd;
@@ -159,7 +158,6 @@ static int open_tcp_server(int port)
 		return -1;
 
 	net_reuse_addr(fd);
-	net_dont_block(fd);
 
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
@@ -194,8 +192,6 @@ int can_tcp_open(const char* address, int port)
 
 	if (connect(fd, &addr, sizeof(addr)) < 0)
 		goto failure;
-
-	net_dont_block(fd);
 
 	return fd;
 
