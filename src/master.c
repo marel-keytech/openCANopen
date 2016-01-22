@@ -434,9 +434,6 @@ static int initialize_legacy_driver(int nodeid)
 		plog(LOG_ERROR, "initialize_legacy_driver: Failed to initialize \"%s\" with id %d",
 		     node->name, nodeid);
 
-		if (node->is_heartbeat_supported)
-			set_heartbeat_period(nodeid, 0);
-
 		unload_legacy_module(node->device_type, node->driver);
 		legacy_master_iface_delete(node->master_iface);
 		node->driver = NULL;
@@ -459,9 +456,6 @@ static int initialize_new_driver(int nodeid)
 	} else {
 		plog(LOG_ERROR, "initialize_new_driver: Failed to initialize \"%s\" with id %d",
 		     node->name, nodeid);
-
-		if (node->is_heartbeat_supported)
-			set_heartbeat_period(nodeid, 0);
 
 		co_drv_unload(&node->ndrv);
 		node->driver_type = CO_MASTER_DRIVER_NONE;
