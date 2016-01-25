@@ -44,6 +44,7 @@ SRC := \
 	dump.c \
 	vnode.c \
 	sdo-dict.c \
+	hexdump.c \
 	can-tcp.c
 
 TEST_SRC := \
