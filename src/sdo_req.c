@@ -26,6 +26,8 @@
 #define SDO_REQ_TIMEOUT 1000 /* ms */
 #define SDO_REQ_ASYNC_PRIO 1000
 
+#define SDO_BUFFER_INITIAL_SIZE 8
+
 /* Index 0 is unused */
 static struct sdo_req_queue sdo_req__queues[128];
 
@@ -44,10 +46,20 @@ struct sdo_req* sdo_req_new(struct sdo_req_info* info)
 	self->on_done = info->on_done;
 	self->context = info->context;
 
-	if (info->type == SDO_REQ_DOWNLOAD)
-		vector_assign(&self->data, info->dl_data, info->dl_size);
+	if (info->type == SDO_REQ_DOWNLOAD) {
+		if (vector_assign(&self->data, info->dl_data,
+				  info->dl_size) < 0)
+			goto failure;
+	} else {
+		if (vector_init(&self->data, SDO_BUFFER_INITIAL_SIZE) < 0)
+			goto failure;
+	}
 
 	return self;
+
+failure:
+	free(self);
+	return NULL;
 }
 
 void sdo_req_free(struct sdo_req* self)
@@ -294,7 +306,8 @@ void sdo_req__on_done(struct sdo_async* async)
 	req->abort_code = async->abort_code;
 
 	if (req->type == SDO_REQ_UPLOAD)
-		vector_copy(&req->data, &async->buffer);
+		if (vector_copy(&req->data, &async->buffer) < 0)
+			req->status = SDO_REQ_NOMEM;
 
 	sdo_req_fn on_done = req->on_done;
 	if (on_done)
