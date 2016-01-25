@@ -121,7 +121,11 @@ static int dump_sdo_dl_seg_req(struct canopen_msg* msg, struct can_frame* cf)
 {
 	int is_end = sdo_is_end_segment(cf);
 
-	printf("RSDO %d download-segment%s\n", msg->id, is_end ? "-end" : "");
+	void* data = &cf->data[SDO_SEGMENT_IDX];
+	size_t size = cf->can_dlc - SDO_SEGMENT_IDX;
+
+	printf("RSDO %d download-segment%s size=%d,data=%s\n", msg->id,
+	       is_end ? "-end" : "", size, hexdump(data, size));
 
 	return 0;
 }
@@ -202,7 +206,11 @@ static int dump_sdo_ul_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 {
 	int is_end = sdo_is_end_segment(cf);
 
-	printf("TSDO %d upload-segment%s\n", msg->id, is_end ? "-end" : "");
+	void* data = &cf->data[SDO_SEGMENT_IDX];
+	size_t size = cf->can_dlc - SDO_SEGMENT_IDX;
+
+	printf("TSDO %d upload-segment%s size=%d,data=%s\n", msg->id,
+	       is_end ? "-end" : "", size, hexdump(data, size));
 
 	return 0;
 }
