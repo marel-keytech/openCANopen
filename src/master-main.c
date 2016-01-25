@@ -21,7 +21,7 @@ const char usage_[] =
 "    -h, --help                Get help.\n"
 "    -W, --worker-threads      Set the number of worker threads (default 4).\n"
 "    -s, --worker-stack-size   Set worker thread stack size.\n"
-"    -j, --job-queue-length    Set length of the job queue (default 64).\n"
+"    -j, --job-queue-length    Set length of the job queue (default 256).\n"
 "    -S, --sdo-queue-length    Set length of the sdo queue (default 1024).\n"
 "    -R, --rest-port           Set TCP port of the rest service (default 9191).\n"
 "    -f, --strict              Force strict communication patterns.\n"
@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
 	struct co_master_options mopt = {
 		.nworkers = 4,
 		.worker_stack_size = 0,
-		.job_queue_length = 64,
+		.job_queue_length = 256,
 		.sdo_queue_length = SDO_FIFO_MAX_LENGTH,
 		.rest_port = REST_DEFAULT_PORT,
 		.heartbeat_period = HEARTBEAT_PERIOD,
