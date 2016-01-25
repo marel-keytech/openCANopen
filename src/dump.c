@@ -13,6 +13,10 @@
 #include "sock.h"
 #include "canopen/sdo-dict.h"
 
+#ifndef CAN_MAX_DLC
+#define CAN_MAX_DLC 8
+#endif
+
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 char* strlcpy(char* dst, const char* src, size_t size);
