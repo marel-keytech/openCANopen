@@ -11,10 +11,16 @@
 #include "canopen/dump.h"
 #include "net-util.h"
 #include "sock.h"
+#include "canopen/sdo-dict.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+char* strlcpy(char* dst, const char* src, size_t size);
 const char* hexdump(const void* data, size_t size);
+
+static uint32_t current_mux[128] = { 0 };
+
+#define CURRENT_MUX(nodeid) current_mux[(nodeid) <= 127 ? (nodeid) : 0]
 
 static const char* nmt_cs_str(enum nmt_cs cs)
 {
@@ -103,6 +109,9 @@ static int dump_sdo_dl_init_req(struct canopen_msg* msg, struct can_frame* cf)
 	int index = sdo_get_index(cf);
 	int subindex = sdo_get_subindex(cf);
 
+	if (!is_expediated)
+		CURRENT_MUX(msg->id) = SDO_MUX(index, subindex);
+
 	printf("RSDO %d init-download-%s index=%x,subindex=%d", msg->id,
 	       is_expediated ? "expediated" : "segment", index, subindex);
 
@@ -117,15 +126,36 @@ static int dump_sdo_dl_init_req(struct canopen_msg* msg, struct can_frame* cf)
 	return 0;
 }
 
+static inline const char* terminate_string(const char* str, size_t size)
+{
+	static char buffer[256];
+	strlcpy(buffer, str, MIN(sizeof(buffer), size + 1));
+	return buffer;
+}
+
+static const char* get_segment_data(struct canopen_msg* msg,
+				    struct can_frame* cf)
+{
+	void* data = &cf->data[SDO_SEGMENT_IDX];
+	size_t size = cf->can_dlc - SDO_SEGMENT_IDX;
+
+	if (sdo_dict_type(CURRENT_MUX(msg->id)) == CANOPEN_VISIBLE_STRING)
+		return terminate_string(data, size);
+
+	return hexdump(data, size);
+}
+
 static int dump_sdo_dl_seg_req(struct canopen_msg* msg, struct can_frame* cf)
 {
 	int is_end = sdo_is_end_segment(cf);
 
-	void* data = &cf->data[SDO_SEGMENT_IDX];
 	size_t size = cf->can_dlc - SDO_SEGMENT_IDX;
 
 	printf("RSDO %d download-segment%s size=%d,data=%s\n", msg->id,
-	       is_end ? "-end" : "", size, hexdump(data, size));
+	       is_end ? "-end" : "", size, get_segment_data(msg, cf));
+
+	if (is_end)
+		CURRENT_MUX(msg->id) = 0;
 
 	return 0;
 }
@@ -188,6 +218,9 @@ static int dump_sdo_ul_init_res(struct canopen_msg* msg, struct can_frame* cf)
 	int index = sdo_get_index(cf);
 	int subindex = sdo_get_subindex(cf);
 
+	if (!is_expediated)
+		CURRENT_MUX(msg->id) = SDO_MUX(index, subindex);
+
 	printf("TSDO %d init-upload-%s index=%x,subindex=%d", msg->id,
 	       is_expediated ? "expediated" : "segment", index, subindex);
 
@@ -206,11 +239,13 @@ static int dump_sdo_ul_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 {
 	int is_end = sdo_is_end_segment(cf);
 
-	void* data = &cf->data[SDO_SEGMENT_IDX];
 	size_t size = cf->can_dlc - SDO_SEGMENT_IDX;
 
 	printf("TSDO %d upload-segment%s size=%d,data=%s\n", msg->id,
-	       is_end ? "-end" : "", size, hexdump(data, size));
+	       is_end ? "-end" : "", size, get_segment_data(msg, cf));
+
+	if (is_end)
+		CURRENT_MUX(msg->id) = 0;
 
 	return 0;
 }
