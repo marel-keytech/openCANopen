@@ -43,6 +43,7 @@ SRC := \
 	stream.c \
 	dump.c \
 	vnode.c \
+	sdo-dict.c \
 	can-tcp.c
 
 TEST_SRC := \
@@ -58,6 +59,7 @@ TEST_SRC := \
 	unit_sdo_async.c \
 	unit_rest.c \
 	unit_types.c \
+	unit_sdo-dict.c \
 	sdo_async_fuzz_test.c
 
 include $(MDEV)/make/make.main
