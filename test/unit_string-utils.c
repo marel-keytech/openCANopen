@@ -68,6 +68,12 @@ static int test_string_ends_with()
 	return 0;
 }
 
+static int test_string_replace_char()
+{
+	ASSERT_STR_EQ("a.b.c.d", string_replace_char(',', '.', string("a,b,c,d")));
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
@@ -78,5 +84,6 @@ int main()
 	RUN_TEST(test_keep_if_alpha);
 	RUN_TEST(test_string_begins_with);
 	RUN_TEST(test_string_ends_with);
+	RUN_TEST(test_string_replace_char);
 	return r;
 }

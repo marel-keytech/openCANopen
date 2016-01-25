@@ -67,6 +67,15 @@ static inline char* string_tolower(char* str)
 	return str;
 }
 
+static inline char* string_replace_char(char m, char r, char* str)
+{
+	char* ptr = str;
+	for (; *ptr; ++ptr)
+		if (*ptr == m)
+			*ptr = r;
+	return str;
+}
+
 #undef SPACE_CHARACTER
 
 #endif /* STRING_UTILS_H_ */
