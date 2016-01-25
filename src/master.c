@@ -50,6 +50,7 @@ size_t strlcpy(char* dst, const char* src, size_t dsize);
 
 static struct sock socket_ = { .fd = -1 };
 static char nodes_seen_[CANOPEN_NODEID_MAX + 1];
+static char nodes_seen_late_[CANOPEN_NODEID_MAX + 1];
 /* Note: nodes_seen_[0] is unused */
 
 enum master_state {
@@ -551,10 +552,14 @@ static int schedule_load_driver(int nodeid)
 
 static int handle_bootup(struct co_master_node* node)
 {
-	if (master_state_ == MASTER_STATE_STARTUP)
-		return 0;
+	int nodeid = co_master_get_node_id(node);
 
-	return schedule_load_driver(co_master_get_node_id(node));
+	if (master_state_ == MASTER_STATE_STARTUP) {
+		nodes_seen_late_[nodeid] = 1;
+		return 0;
+	}
+
+	return schedule_load_driver(nodeid);
 }
 
 static int handle_emcy(struct co_master_node* node,
@@ -791,6 +796,16 @@ static void run_bootup(struct mloop_work* self)
 			load_driver(i);
 }
 
+static void load_late_nodes(void)
+{
+	int i;
+	for_each_node(i)
+		if (nodes_seen_late_[i]) {
+			plog(LOG_WARNING, "Node %d was late", i);
+			schedule_load_driver(i);
+		}
+}
+
 static void on_bootup_done(struct mloop_work* self)
 {
 	int i;
@@ -816,6 +831,8 @@ static void on_bootup_done(struct mloop_work* self)
 	profile("Boot-up finished!\n");
 
 	master_state_ = MASTER_STATE_RUNNING;
+
+	load_late_nodes();
 }
 
 static void on_net_probe_done(struct mloop_work* self)
@@ -1108,6 +1125,7 @@ int co_master_run(const struct co_master_options* opt)
 	profile("Starting up canopen-master...\n");
 
 	memset(nodes_seen_, 0, sizeof(nodes_seen_));
+	memset(nodes_seen_late_, 0, sizeof(nodes_seen_));
 	memset(co_master_node_, 0, sizeof(co_master_node_));
 
 	mloop_ = mloop_default();
