@@ -53,6 +53,8 @@ static char nodes_seen_[CANOPEN_NODEID_MAX + 1];
 static char nodes_seen_late_[CANOPEN_NODEID_MAX + 1];
 /* Note: nodes_seen_[0] is unused */
 
+static unsigned int n_scheduled_bootups = 0;
+
 enum master_state {
 	MASTER_STATE_STARTUP = 0,
 	MASTER_STATE_RUNNING,
@@ -74,6 +76,7 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 			   unsigned char* data, size_t size);
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size);
 static void unload_legacy_module(int device_type, void* driver);
+static void on_bootup_done(struct mloop_work* self);
 
 struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unused */
@@ -515,6 +518,11 @@ static void on_load_driver_done(struct mloop_work* self)
 	struct co_master_node* node = mloop_work_get_context(self);
 	int nodeid = co_master_get_node_id(node);
 
+	--n_scheduled_bootups;
+
+	if (master_state_ == MASTER_STATE_STARTUP)
+		return;
+
 	if (node->driver_type == CO_MASTER_DRIVER_NONE)
 		return;
 
@@ -542,6 +550,8 @@ static int schedule_load_driver(int nodeid)
 	mloop_work_set_done_fn(work, on_load_driver_done);
 
 	int rc = mloop_work_start(work);
+	if (rc >= 0)
+		++n_scheduled_bootups;
 
 	mloop_work_unref(work);
 
@@ -784,16 +794,36 @@ static int init_multiplexer()
 	return mloop_socket_start(mux_handler_);
 }
 
-static void run_bootup(struct mloop_work* self)
+static void wait_for_bootup(struct mloop_work* self)
 {
 	(void)self;
+	while (n_scheduled_bootups > 0)
+		usleep(100);
+}
 
+static void schedule_bootup_done(void)
+{
+	struct mloop_work* work = mloop_work_new(mloop_default());
+	assert(work);
+	mloop_work_set_work_fn(work, wait_for_bootup);
+	mloop_work_set_done_fn(work, on_bootup_done);
+
+	int rc = mloop_work_start(work);
+	assert(rc == 0);
+
+	mloop_work_unref(work);
+}
+
+
+static void run_bootup(void)
+{
 	int i;
-
 	profile("Load drivers...\n");
 	for_each_node(i)
 		if (nodes_seen_[i])
-			load_driver(i);
+			schedule_load_driver(i);
+
+	schedule_bootup_done();
 }
 
 static void load_late_nodes(void)
@@ -809,11 +839,6 @@ static void load_late_nodes(void)
 static void on_bootup_done(struct mloop_work* self)
 {
 	int i;
-
-	profile("Initialize drivers...\n");
-	for_each_node(i)
-		if (co_master_get_node(i)->driver_type != CO_MASTER_DRIVER_NONE)
-			initialize_driver(i);
 
 	/* We start each node individually because we don't want to start nodes
 	 * that were not properly registered.
@@ -841,15 +866,7 @@ static void on_net_probe_done(struct mloop_work* self)
 	int __unused rc = init_multiplexer();
 	assert(rc == 0);
 
-	struct mloop_work* work = mloop_work_new(mloop_default());
-	assert(work);
-	mloop_work_set_work_fn(work, run_bootup);
-	mloop_work_set_done_fn(work, on_bootup_done);
-
-	rc = mloop_work_start(work);
-	assert(rc == 0);
-
-	mloop_work_unref(work);
+	run_bootup();
 }
 
 static int appbase_dummy()
