@@ -12,6 +12,10 @@
 #include "net-util.h"
 #include "sock.h"
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
+const char* hexdump(const void* data, size_t size);
+
 static const char* nmt_cs_str(enum nmt_cs cs)
 {
 	switch (cs) {
@@ -83,56 +87,32 @@ static int dump_pdo(int type, int n, struct canopen_msg* msg,
 	return 0;
 }
 
+static size_t get_expediated_size(const struct can_frame* cf)
+{
+	size_t max_size = cf->can_dlc - SDO_EXPEDIATED_DATA_IDX;
+
+	return sdo_is_size_indicated(cf)
+	     ? MIN(sdo_get_expediated_size(cf), max_size) : max_size;
+}
+
 static int dump_sdo_dl_init_req(struct canopen_msg* msg, struct can_frame* cf)
 {
 	int is_expediated = sdo_is_expediated(cf);
-	//int is_size_indicated = sdo_is_size_indicated(cf);
+	int is_size_indicated = sdo_is_size_indicated(cf);
 
 	int index = sdo_get_index(cf);
 	int subindex = sdo_get_subindex(cf);
 
-	if (is_expediated)
-		printf("RSDO %d init-download-expediated index=%x,subindex=%d\n",
-		       msg->id, index, subindex);
-	else
-		printf("RSDO %d init-download-segment index=%x,subindex=%d\n",
-		       msg->id, index, subindex);
+	printf("RSDO %d init-download-%s index=%x,subindex=%d", msg->id,
+	       is_expediated ? "expediated" : "segment", index, subindex);
 
-	return 0;
-
-	/*
-	if (is_expediated && is_size_indicated) {
-		size_t size = sdo_get_expediated_size(cf);
-
-		if (cf->can_dlc < size + SDO_MULTIPLEXER_SIZE) {
-			printf("RSDO %d init-expediated-download index=%x,subindex=%d,size=%d,data=INCOMPLETE\n",
-			       msg->id, index, subindex, size);
-			return 0;
-		}
-
-		uint32_t data;
-		byteorder(&data, &cf->data[SDO_EXPEDIATED_DATA_IDX],
-			  sizeof(data));
-
-		printf("RSDO %d init-expediated-download index=%x,subindex=%d,size=%d,data=%x\n",
-		       msg->id, index, subindex, size, data);
-	} else if (is_expediated && !is_size_indicated) {
-		uint32_t data;
-		byteorder(&data, &cf->data[SDO_EXPEDIATED_DATA_IDX],
-			  sizeof(data));
-
-		printf("RSDO %d init-expediated-download index=%x,subindex=%d,data=%x\n",
-		       msg->id, index, subindex, data);
-	} else if (!is_expediated && is_size_indicated) {
-		size_t size = sdo_get_indicated_size(cf);
-
-		printf("RSDO %d init-download index=%x,subindex=%d,size=%x\n",
-		       msg->id, index, subindex, size);
-	} else if (!is_expediated && !is_size_indicated) {
-		printf("RSDO %d init-download index=%x,subindex=%d\n",
-		       msg->id, index, subindex);
+	if (!is_expediated && is_size_indicated && cf->can_dlc == CAN_MAX_DLC) {
+		printf(",size=%d\n", sdo_get_indicated_size(cf));
+	} else if (is_expediated) {
+		size_t size = get_expediated_size(cf);
+		printf(",size=%d,data=%s\n", size,
+		       hexdump(&cf->data[SDO_EXPEDIATED_DATA_IDX], size));
 	}
-	*/
 
 	return 0;
 }
@@ -199,16 +179,21 @@ static int dump_rsdo(struct canopen_msg* msg, struct can_frame* cf)
 static int dump_sdo_ul_init_res(struct canopen_msg* msg, struct can_frame* cf)
 {
 	int is_expediated = sdo_is_expediated(cf);
+	int is_size_indicated = sdo_is_size_indicated(cf);
 
 	int index = sdo_get_index(cf);
 	int subindex = sdo_get_subindex(cf);
 
-	if (is_expediated)
-		printf("TSDO %d init-upload-expediated index=%x,subindex=%d\n",
-		       msg->id, index, subindex);
-	else
-		printf("TSDO %d init-upload-segment index=%x,subindex=%d\n",
-		       msg->id, index, subindex);
+	printf("TSDO %d init-upload-%s index=%x,subindex=%d", msg->id,
+	       is_expediated ? "expediated" : "segment", index, subindex);
+
+	if (!is_expediated && is_size_indicated && cf->can_dlc == CAN_MAX_DLC) {
+		printf(",size=%d\n", sdo_get_indicated_size(cf));
+	} else if (is_expediated) {
+		size_t size = get_expediated_size(cf);
+		printf(",size=%d,data=%s\n", size,
+		       hexdump(&cf->data[SDO_EXPEDIATED_DATA_IDX], size));
+	}
 
 	return 0;
 }
