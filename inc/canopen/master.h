@@ -5,6 +5,7 @@
 #include <assert.h>
 #include "canopen.h"
 #include "canopen-driver.h"
+#include "type-macros.h"
 
 enum co_master_options_flags {
 	CO_MASTER_OPTION_WITH_QUIRKS = 1,
@@ -37,7 +38,6 @@ struct co_drv {
 	void* dso;
 	co_drv_init_fn init_fn;
 
-	struct co_master_node* node;
 	struct sdo_req_queue* sdo_queue;
 
 	void* context;
@@ -102,5 +102,10 @@ int co_drv_init(struct co_drv* drv);
 void co_drv_unload(struct co_drv* drv);
 
 int co__rpdox(int nodeid, int type, const void* data, size_t size);
+
+static inline struct co_master_node* co_drv_node(const struct co_drv* drv)
+{
+	return container_of(drv, struct co_master_node, ndrv);
+}
 
 #endif /* CANOPEN_MASTER_H_ */

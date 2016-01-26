@@ -1083,8 +1083,6 @@ static int init_node_structure(int nodeid)
 
 	memset(node, 0, sizeof(*node));
 
-	node->ndrv.node = node;
-
 	if (init_heartbeat_timer(node) < 0)
 		return -1;;
 

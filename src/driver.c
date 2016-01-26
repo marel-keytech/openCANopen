@@ -78,32 +78,32 @@ void co_drv_unload(struct co_drv* drv)
 
 int co_get_nodeid(const struct co_drv* self)
 {
-	return co_master_get_node_id(self->node);
+	return co_master_get_node_id(co_drv_node(self));
 }
 
 uint32_t co_get_device_type(const struct co_drv* self)
 {
-	return self->node->device_type;
+	return co_drv_node(self)->device_type;
 }
 
 uint32_t co_get_vendor_id(const struct co_drv* self)
 {
-	return self->node->vendor_id;
+	return co_drv_node(self)->vendor_id;
 }
 
 uint32_t co_get_product_code(const struct co_drv* self)
 {
-	return self->node->product_code;
+	return co_drv_node(self)->product_code;
 }
 
 uint32_t co_get_revision_number(const struct co_drv* self)
 {
-	return self->node->revision_number;
+	return co_drv_node(self)->revision_number;
 }
 
 const char* co_get_name(const struct co_drv* self)
 {
-	return self->node->name;
+	return co_drv_node(self)->name;
 }
 
 void co_set_context(struct co_drv* self, void* context, co_free_fn fn)
