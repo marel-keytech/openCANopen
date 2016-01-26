@@ -361,8 +361,11 @@ static void apply_quirks(struct co_master_node* node)
 static int load_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
-	if (node->driver)
-		unload_driver(nodeid);
+	if (node->driver_type != CO_MASTER_DRIVER_NONE) {
+		plog(LOG_ERROR, "load_driver: A driver is already loaded for node %d",
+		     nodeid);
+		return -1;
+	}
 
 	errno = 0;
 	node->device_type = get_device_type(nodeid);
@@ -544,6 +547,9 @@ static int schedule_load_driver(int nodeid)
 	struct mloop_work* work = mloop_work_new(mloop_default());
 	if (!work)
 		return -1;
+
+	if (node->driver_type != CO_MASTER_DRIVER_NONE)
+		unload_driver(nodeid);
 
 	mloop_work_set_context(work, node, NULL);
 	mloop_work_set_work_fn(work, run_load_driver);
