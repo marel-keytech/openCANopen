@@ -12,6 +12,7 @@
 #include "net-util.h"
 #include "sock.h"
 #include "canopen/sdo-dict.h"
+#include "vector.h"
 
 #ifndef CAN_MAX_DLC
 #define CAN_MAX_DLC 8
@@ -21,9 +22,10 @@
 
 struct node_state {
 	uint32_t current_mux;
+	struct vector sdo_data;
 };
 
-static struct node_state node_state_[128] = { 0 };
+static struct node_state node_state_[127] = { 0 };
 
 char* strlcpy(char* dst, const char* src, size_t size);
 const char* hexdump(const void* data, size_t size);
@@ -31,6 +33,12 @@ const char* hexdump(const void* data, size_t size);
 static inline struct node_state* get_node_state(int nodeid)
 {
 	return 0 < nodeid && nodeid <= 127 ? &node_state_[nodeid - 1] : NULL;
+}
+
+static void node_state_init(void)
+{
+	for (int i = 0; i < 127; ++i)
+		vector_init(&node_state_[i].sdo_data, 8);
 }
 
 static const char* nmt_cs_str(enum nmt_cs cs)
@@ -129,7 +137,12 @@ static int dump_sdo_dl_init_req(struct canopen_msg* msg, struct can_frame* cf)
 	       is_expediated ? "expediated" : "segment", index, subindex);
 
 	if (!is_expediated && is_size_indicated && cf->can_dlc == CAN_MAX_DLC) {
-		printf(",size=%d\n", sdo_get_indicated_size(cf));
+		size_t size = sdo_get_indicated_size(cf);
+		printf(",size=%d\n", size);
+		if (state) {
+			vector_reserve(&state->sdo_data, size);
+			vector_clear(&state->sdo_data);
+		}
 	} else if (is_expediated) {
 		size_t size = get_expediated_size(cf);
 		printf(",size=%d,data=%s\n", size,
@@ -146,14 +159,9 @@ static inline const char* terminate_string(const char* str, size_t size)
 	return buffer;
 }
 
-static const char* get_segment_data(struct canopen_msg* msg,
-				    struct can_frame* cf)
+static const char* get_segment_data(const struct node_state* state,
+				    const void* data, size_t size)
 {
-	struct node_state* state = get_node_state(msg->id);
-
-	void* data = &cf->data[SDO_SEGMENT_IDX];
-	size_t size = cf->can_dlc - SDO_SEGMENT_IDX;
-
 	if (state && sdo_dict_type(state->current_mux) == CANOPEN_VISIBLE_STRING)
 		return terminate_string(data, size);
 
@@ -166,14 +174,26 @@ static int dump_sdo_dl_seg_req(struct canopen_msg* msg, struct can_frame* cf)
 
 	int is_end = sdo_is_end_segment(cf);
 
+	const void* data = &cf->data[SDO_SEGMENT_IDX];
 	size_t size = cf->can_dlc - SDO_SEGMENT_IDX;
 
-	printf("RSDO %d download-segment%s size=%d,data=%s\n", msg->id,
-	       is_end ? "-end" : "", size, get_segment_data(msg, cf));
+	if (state)
+		vector_append(&state->sdo_data, data, size);
 
-	if (is_end)
+	printf("RSDO %d download-segment%s size=%d,data=%s", msg->id,
+	       is_end ? "-end" : "", size, get_segment_data(state, data, size));
+
+	if (state && is_end) {
+		const void* final_data = state->sdo_data.data;
+		size_t final_size = state->sdo_data.index;
+
+		printf(",final-size=%d,final-data=%s", final_size,
+		       get_segment_data(state, final_data, final_size));
+
 		state->current_mux = 0;
+	}
 
+	printf("\n");
 	return 0;
 }
 
@@ -244,7 +264,12 @@ static int dump_sdo_ul_init_res(struct canopen_msg* msg, struct can_frame* cf)
 	       is_expediated ? "expediated" : "segment", index, subindex);
 
 	if (!is_expediated && is_size_indicated && cf->can_dlc == CAN_MAX_DLC) {
-		printf(",size=%d\n", sdo_get_indicated_size(cf));
+		size_t size = sdo_get_indicated_size(cf);
+		printf(",size=%d\n", size);
+		if (state) {
+			vector_reserve(&state->sdo_data, size);
+			vector_clear(&state->sdo_data);
+		}
 	} else if (is_expediated) {
 		size_t size = get_expediated_size(cf);
 		printf(",size=%d,data=%s\n", size,
@@ -260,14 +285,24 @@ static int dump_sdo_ul_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 
 	int is_end = sdo_is_end_segment(cf);
 
+	const void* data = &cf->data[SDO_SEGMENT_IDX];
 	size_t size = cf->can_dlc - SDO_SEGMENT_IDX;
 
-	printf("TSDO %d upload-segment%s size=%d,data=%s\n", msg->id,
-	       is_end ? "-end" : "", size, get_segment_data(msg, cf));
+	if (state)
+		vector_append(&state->sdo_data, data, size);
 
-	if (state && is_end)
-		state->current_mux = 0;
+	printf("TSDO %d upload-segment%s size=%d,data=%s", msg->id,
+	       is_end ? "-end" : "", size, get_segment_data(state, data, size));
 
+	if (state && is_end) {
+		const void* final_data = state->sdo_data.data;
+		size_t final_size = state->sdo_data.index;
+
+		printf(",final-size=%d,final-data=%s", final_size,
+		       get_segment_data(state, final_data, final_size));
+	}
+
+	printf("\n");
 	return 0;
 }
 
@@ -378,6 +413,8 @@ static void run_dumper(struct sock* sock)
 __attribute__((visibility("default")))
 int co_dump(const char* addr, enum co_dump_options options)
 {
+	node_state_init();
+
 	struct sock sock;
 	enum sock_type type = options & CO_DUMP_TCP ? SOCK_TYPE_TCP
 						    : SOCK_TYPE_CAN;
