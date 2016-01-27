@@ -17,12 +17,7 @@
 #include "ini_parser.h"
 #include "conversions.h"
 #include "vnode.h"
-
-#define container_of(ptr, type, member) \
-({ \
-	const typeof( ((type *)0)->member ) *__mptr = (ptr); \
-	(type *)( (char *)__mptr - offsetof(type,member) ); \
-})
+#include "type-macros.h"
 
 #define SDO_MUX(index, subindex) ((index << 16) | subindex)
 #define HEARTBEAT_PERIOD SDO_MUX(0x1017, 0)
