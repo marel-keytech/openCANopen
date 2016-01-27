@@ -10,6 +10,7 @@
 
 #include "canopen/sdo_async.h"
 #include "canopen/sdo_req_enums.h"
+#include "type-macros.h"
 
 struct sdo_req;
 struct sock;
@@ -75,9 +76,7 @@ struct sdo_req* sdo_req_queue__dequeue(struct sdo_req_queue* self);
 static inline
 struct sdo_req_queue* sdo_req_queue__from_async(const struct sdo_async* async)
 {
-	size_t offset = offsetof(struct sdo_req_queue, sdo_client);
-	size_t addr = (size_t)async;
-	return (struct sdo_req_queue*)(addr - offset);
+	return container_of(async, struct sdo_req_queue, sdo_client);
 }
 
 ARC_PROTOTYPE(sdo_req)
