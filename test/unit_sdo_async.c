@@ -1,5 +1,7 @@
 #include <unistd.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include "canopen/sdo_async.h"
 #include "canopen/sdo_srv.h"
 #include "net-util.h"
@@ -98,13 +100,11 @@ static int on_srv_done(struct sdo_srv* srv)
 static void initialize_client()
 {
 	int fds[2];
-	pipe(fds);
+	socketpair(AF_LOCAL, SOCK_SEQPACKET, 0, fds);
 	crfd = fds[0];
 	cwfd = fds[1];
 	static struct sock sock = { .type = SOCK_TYPE_CAN };
 	sock.fd = cwfd;
-
-	net_dont_block(crfd);
 
 	sdo_async_init(&client, &sock, 42);
 }
@@ -112,13 +112,11 @@ static void initialize_client()
 static void initialize_server()
 {
 	int fds[2];
-	pipe(fds);
+	socketpair(AF_LOCAL, SOCK_SEQPACKET, 0, fds);
 	srfd = fds[0];
 	swfd = fds[1];
 	static struct sock sock = { .type = SOCK_TYPE_CAN };
 	sock.fd = swfd;
-
-	net_dont_block(crfd);
 
 	sdo_srv_init(&server, &sock, 42, on_srv_init, on_srv_done);
 }
@@ -145,8 +143,8 @@ static int feed_server(struct can_frame* cf);
 
 static int push_to_server()
 {
-	struct can_frame out;
-	ssize_t size = read(crfd, &out, sizeof(out));
+	struct can_frame out = { 0 };
+	ssize_t size = recv(crfd, &out, sizeof(out), MSG_DONTWAIT);
 	if (size != sizeof(out))
 		return 0;
 
@@ -163,8 +161,8 @@ static int feed_client(struct can_frame* cf)
 
 static int push_to_client()
 {
-	struct can_frame out;
-	ssize_t size = read(srfd, &out, sizeof(out));
+	struct can_frame out = { 0 };
+	ssize_t size = recv(srfd, &out, sizeof(out), MSG_DONTWAIT);
 	if (size != sizeof(out))
 		return 0;
 
