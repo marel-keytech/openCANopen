@@ -152,18 +152,21 @@ static int dump_sdo_dl_init_req(struct canopen_msg* msg, struct can_frame* cf)
 	return 0;
 }
 
-static inline const char* terminate_string(const char* str, size_t size)
+static struct vector string_buffer_;
+
+static char* make_string(const char* str, size_t size)
 {
-	static char buffer[256];
-	strlcpy(buffer, str, MIN(sizeof(buffer), size + 1));
-	return buffer;
+	vector_assign(&string_buffer_, "\"", 1);
+	vector_append(&string_buffer_, str, size);
+	vector_append(&string_buffer_, "\"", 2);
+	return string_buffer_.data;
 }
 
 static const char* get_segment_data(const struct node_state* state,
 				    const void* data, size_t size)
 {
 	if (state && sdo_dict_type(state->current_mux) == CANOPEN_VISIBLE_STRING)
-		return terminate_string(data, size);
+		return make_string(data, size);
 
 	return hexdump(data, size);
 }
@@ -413,6 +416,7 @@ static void run_dumper(struct sock* sock)
 __attribute__((visibility("default")))
 int co_dump(const char* addr, enum co_dump_options options)
 {
+	vector_init(&string_buffer_, 256);
 	node_state_init();
 
 	struct sock sock;
