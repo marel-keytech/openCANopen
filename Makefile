@@ -52,7 +52,6 @@ TEST_SRC := \
 	unit_conversions.c \
 	unit_http.c \
 	unit_init_parser.c \
-	unit_json_combi.c \
 	unit_network.c \
 	unit_sdo_req.c \
 	unit_string-utils.c \

@@ -16,8 +16,6 @@ Driver.cpp         Old CANopen master driver code.
 DriverManager.cpp  Same as above.
 eds.c              Contains functions to read EDS files and access the data
                    quickly after it has been loaded.
-fakenode.c         A program that creates a single process that behaves like
-                   a node on the network.
 http.c             HTTP request parser.
 ini_parser.c       INI file parser.
 legacy-driver.c    A C wrapper around the old C++ driver code.
@@ -49,7 +47,6 @@ canopen.h          Description of CANopen message types.
 co_atomic.h        Compatibility layer for atomic operations.
 fff.h              Fake function framework (contrib).
 string-utils.h     String manipulation utilities.
-thread-utils.h     Common thread utilities.
 time-utils.h       Common time conversion utilities.
 tst.h              Minimal unit-testing framework.
 vector.h           Dynamic buffers.
