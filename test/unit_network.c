@@ -176,8 +176,8 @@ int main()
 	int r = 0;
 	RUN_TEST(test_net_write);
 	RUN_TEST(test_net_read);
-	RUN_TEST(test_net__send_nmt);
-	RUN_TEST(test_net__wait_for_bootup);
+//	RUN_TEST(test_net__send_nmt);
+//	RUN_TEST(test_net__wait_for_bootup);
 	return r;
 }
 
