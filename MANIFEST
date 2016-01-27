@@ -10,12 +10,18 @@ canbridge.c        A small program that forwards traffic between CAN
 canopen.c          Functions to classify CANopen frames based on COB-IDs
 canopen-dump.c     A small program that interprets CANopen messages on the
                    bus as simple text messages.
+canopen_info.c     Shared memory map with node information.
+canopen-vnode.c    Main function for vnode.c.
+can-tcp.c          Implementation of canbridge.
 conversions.c      Functions to convert object dictionary entries to/from
                    strings.
+driver.c           New driver API.
 Driver.cpp         Old CANopen master driver code.
 DriverManager.cpp  Same as above.
+dump.c             Implementation of canopen-dump.
 eds.c              Contains functions to read EDS files and access the data
                    quickly after it has been loaded.
+hexdump.c          A simple hexdumper.
 http.c             HTTP request parser.
 ini_parser.c       INI file parser.
 legacy-driver.c    A C wrapper around the old C++ driver code.
@@ -27,15 +33,22 @@ rest.c             REST service.
 sdo_async.c        SDO client code. An sdo_async module is a machine that
                    eats CAN frames and spits out fully formed messages.
 sdo_common.c       Common SDO client/server utility functions.
+sdo-dict.c         Map between indices/subindices, types and dictionary entry
+                   names.
 sdo_req.c          Request-reply abstraction on top of sdo_async.
 sdo-rest.c         SDO REST service (mostly for configuring Lenze Inverters).
 sdo_sync.c         Synchronous (blocking) SDO functions.
-sdo_srv.c          SDO server code. Used in fakenode.
+sdo_srv.c          SDO server code. Used in vnode.
+sock.c             A layer to make the rest of the code socket type agnostic.
+                   Can be a socketcan socket or a TCP socket.
 socketcan.c        SocketCAN utilites.
+stream.c           A blocking stdio stream class.
+string-utils.c     String manipulation utilities.
 strlcpy.c          BSD's strlcpy() (contrib).
 types.c            Utilities and definitions that identify and describe
                    CANopen object dictionary types.
-canopen_info.c     Shared memory map with node information.
+vnode.c            Virtual CANopen nodes. This is used for testing and
+                   profiling.
 
 inc:
 arc.h              Atomic reference counting macros.
@@ -50,6 +63,7 @@ string-utils.h     String manipulation utilities.
 time-utils.h       Common time conversion utilities.
 tst.h              Minimal unit-testing framework.
 vector.h           Dynamic buffers.
+type-macros.h      Contains useful macros such as container_of().
 
 inc/canopen:
 emcy.h             EMCY message utility functions.
