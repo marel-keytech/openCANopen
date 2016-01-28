@@ -523,19 +523,17 @@ static void on_load_driver_done(struct mloop_work* self)
 
 	--n_scheduled_bootups;
 
-	if (master_state_ == MASTER_STATE_STARTUP)
-		return;
-
 	if (node->driver_type == CO_MASTER_DRIVER_NONE)
 		return;
 
 	if (initialize_driver(nodeid) < 0)
 		return;
 
-	start_nodeguarding(nodeid);
+	if (master_state_ == MASTER_STATE_STARTUP)
+		return;
 
-	if (master_state_ > MASTER_STATE_STARTUP)
-		co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
+	co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
+	start_nodeguarding(nodeid);
 }
 
 static int schedule_load_driver(int nodeid)
