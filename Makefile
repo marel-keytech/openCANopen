@@ -2,10 +2,10 @@ PRJ_NAME := canopen2
 PRJ_TYPE := SOLIB
 
 ADD_CFLAGS := -std=gnu99 -std=gnu++0x -D_GNU_SOURCE -Wextra -fexceptions \
-	      -fvisibility=hidden -pthread
+	      -fvisibility=hidden -pthread -flto
 
 ADD_LIBS := mloop appbase dl sharedmalloc plog
-ADD_LFLAGS := -pthread -Wl,-rpath=/usr/lib/mloop
+ADD_LFLAGS := -pthread -Wl,-rpath=/usr/lib/mloop -flto
 
 MAIN_SRC := \
 	canopen-master.c \
