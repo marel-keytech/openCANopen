@@ -358,6 +358,11 @@ static void apply_quirks(struct co_master_node* node)
 		node->quirks |= CO_NODE_QUIRK_ZERO_GUARD_STATUS;
 }
 
+static int load_any_driver(int nodeid)
+{
+	return load_new_driver(nodeid) < 0 && load_legacy_driver(nodeid) < 0;
+}
+
 static int load_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -412,12 +417,10 @@ static int load_driver(int nodeid)
 
 	apply_quirks(node);
 
-	if (load_new_driver(nodeid) < 0) {
-		if (load_legacy_driver(nodeid) < 0) {
-			plog(LOG_NOTICE, "load_driver: There is no driver available for \"%s\" at id %d",
-			     node->name, nodeid);
-			return -1;
-		}
+	if (load_any_driver(nodeid) < 0) {
+		plog(LOG_NOTICE, "load_driver: There is no driver available for \"%s\" at id %d",
+		     node->name, nodeid);
+		return -1;
 	}
 
 	plog(LOG_DEBUG, "load_driver: Successfully loaded %s for \"%s\" at id %d",
