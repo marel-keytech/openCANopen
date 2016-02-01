@@ -341,6 +341,18 @@ static void initialize_info_structure(int nodeid)
 	strlcpy(info->sw_version, node->sw_version, sizeof(info->sw_version));
 }
 
+static void load_error_register(int nodeid)
+{
+	struct canopen_info* info = canopen_info_get(nodeid);
+
+	errno = 0;
+	info->error_register = sdo_sync_read_u8(nodeid, 0x1001, 0);
+	if (info->error_register == 0 && errno != 0) {
+		plog(LOG_WARNING, "load_driver: Could not get/convert error register for node %d",
+		     nodeid);
+	}
+}
+
 static const char* driver_type_str(enum co_master_driver_type type)
 {
 	switch (type) {
@@ -414,6 +426,8 @@ static int load_driver(int nodeid)
 		sizeof(node->sw_version));
 
 	initialize_info_structure(nodeid);
+
+	load_error_register(nodeid);
 
 	apply_quirks(node);
 
@@ -588,9 +602,15 @@ static int handle_emcy(struct co_master_node* node,
 	if (frame->can_dlc != 8)
 		return -1;
 
+	uint32_t error_register = emcy_get_register(frame);
+
+	int nodeid = co_master_get_node_id(node);
+
+	canopen_info_get(nodeid)->error_register = error_register;
+
 	struct co_emcy emcy = {
 		.code = emcy_get_code(frame),
-		.reg = emcy_get_register(frame),
+		.reg = error_register,
 		.manufacturer_error = emcy_get_manufacturer_error(frame)
 	};
 
