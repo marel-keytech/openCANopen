@@ -147,6 +147,9 @@ static void on_sdo_rest_upload_done(struct sdo_req* req)
 	assert(context);
 	struct rest_client* client = context->client;
 
+	if (client->state == REST_CLIENT_DISCONNECTED)
+		goto done;
+
 	if (req->status != SDO_REQ_OK) {
 		sdo_rest_server_error(client, sdo_strerror(req->abort_code));
 		goto done;
@@ -177,6 +180,7 @@ static void on_sdo_rest_upload_done(struct sdo_req* req)
 	client->state = REST_CLIENT_DONE;
 
 done:
+	rest_client_unref(client);
 	free(context);
 }
 
@@ -223,10 +227,14 @@ static int sdo_rest__get(struct sdo_rest_context* context)
 		return -1;
 	}
 
+	rest_client_ref(client);
+
 	int rc = sdo_req_start(req, sdo_req_queue_get(path->nodeid));
 
-	if (sdo_req_unref(req) == 0)
+	if (sdo_req_unref(req) == 0) {
 		sdo_rest_server_error(client, "Failed to start sdo request\r\n");
+		rest_client_unref(client);
+	}
 
 	return rc;
 }
@@ -236,6 +244,9 @@ static void on_sdo_rest_download_done(struct sdo_req* req)
 	struct sdo_rest_context* context = req->context;
 	assert(context);
 	struct rest_client* client = context->client;
+
+	if (client->state == REST_CLIENT_DISCONNECTED)
+		goto done;
 
 	if (req->status != SDO_REQ_OK) {
 		sdo_rest_server_error(client, sdo_strerror(req->abort_code));
@@ -254,6 +265,7 @@ static void on_sdo_rest_download_done(struct sdo_req* req)
 	client->state = REST_CLIENT_DONE;
 
 done:
+	rest_client_unref(client);
 	free(context);
 }
 
@@ -314,10 +326,14 @@ static int sdo_rest__put(struct sdo_rest_context* context, const void* content)
 		return -1;
 	}
 
+	rest_client_ref(client);
+
 	int rc = sdo_req_start(req, sdo_req_queue_get(path->nodeid));
 
-	if (sdo_req_unref(req) == 0)
+	if (sdo_req_unref(req) == 0) {
 		sdo_rest_server_error(client, "Failed to start sdo request\r\n");
+		rest_client_unref(client);
+	}
 
 	return rc;
 }
