@@ -1,0 +1,44 @@
+#!/usr/bin/lua
+
+local iface = arg[1]
+
+if not iface then
+	print "ERROR: Missing interface argument"
+	print "Usage: canopen-ls <interface>"
+	return 1
+end
+
+local sm = require 'pluto.sharedmemory'
+
+local m = sm:read('canopen2.' .. iface)
+if not m then
+	print "Could not read shared memory."
+	return 1
+end
+
+local nodes = m.nodes
+
+function get_status_text(is_active)
+	if is_active then
+		return "online"
+	else
+		return "offline"
+	end
+end
+
+print "ID\tNAME\tHWVER\tSWVER\tERROR\tSTATUS"
+for i,n in ipairs(nodes) do
+	if (n.is_active or n.last_seen ~= 0) then
+		local id = i + 1
+		local row = {
+			id,
+			n.name,
+			n.hw_version,
+			n.sw_version,
+			n.error_register,
+			get_status_text(n.is_active)
+		}
+		print(table.concat(row, "\t"))
+	end
+end
+

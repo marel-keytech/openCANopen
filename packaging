@@ -15,6 +15,7 @@ Install: ##BUILDRELEASE##bin/canopen-dump usr/bin
 Install: ##BUILDRELEASE##bin/canopen-vnode usr/bin
 Install: canopen2.xml /var/marel/sharedmalloc/keys
 Install: vnodes /usr/share/canopen2
+Install: bin /usr
 PostInst: target.postinst
 PreRm: target.prerm
 
@@ -43,6 +44,7 @@ Install: ##BUILDDEBUG##bin/canopen-vnode usr/bin/debug
 Install: inc/canopen-driver.h usr/include
 Install: canopen2.xml /var/marel/sharedmalloc/keys
 Install: vnodes /usr/share/canopen2
+Install: bin /usr
 
 InstallTarget: ##BUILDRELEASE##lib/libcanopen2.so usr/lib
 InstallTarget: ##BUILDDEBUG##lib/libcanopen2.so usr/lib/debug
@@ -57,5 +59,6 @@ InstallTarget: ##BUILDDEBUG##bin/canopen-vnode usr/bin/debug
 InstallTarget: inc/canopen-driver.h usr/include
 InstallTarget: canopen2.xml /var/marel/sharedmalloc/keys
 InstallTarget: vnodes /usr/share/canopen2
+InstallTarget: bin /usr
 
 # vi: tw=0

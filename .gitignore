@@ -5,7 +5,6 @@ tst/test_*
 tst/fuzz_test_*
 fakenode
 mcv14.lua
-bin/*
 build-*
 *.deb
 .sconsign.dblite
