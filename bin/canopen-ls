@@ -27,7 +27,8 @@ function get_status_text(is_active)
 end
 
 print "ID\tNAME\tHWVER\tSWVER\tERROR\tSTATUS"
-for i,n in ipairs(nodes) do
+for i=0,#nodes do
+	local n = nodes[i]
 	if (n.is_active or n.last_seen ~= 0) then
 		local id = i + 1
 		local row = {
