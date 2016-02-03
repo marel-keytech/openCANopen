@@ -2,11 +2,15 @@ PRJ_NAME := canopen2
 PRJ_TYPE := SOLIB
 
 ADD_CFLAGS := -std=gnu99 -std=gnu++0x -D_GNU_SOURCE -Wextra -fexceptions \
-	      -fvisibility=hidden -pthread -flto
+	      -fvisibility=hidden -pthread
 
 ADD_LIBS := mloop appbase dl sharedmalloc plog
-ADD_LFLAGS := -pthread -Wl,-rpath=/usr/lib/mloop -flto
-TEST_LDFLAGS := -fno-lto
+ADD_LFLAGS := -pthread -Wl,-rpath=/usr/lib/mloop
+
+ifeq ($(shell marel_getcompilerprefix powerpc),powerpc-marel-linux-gnu)
+	ADD_CFLAGS += -flto
+	ADD_LFLAGS += -flto
+endif
 
 MAIN_SRC := \
 	canopen-master.c \
