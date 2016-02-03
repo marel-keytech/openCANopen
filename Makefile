@@ -6,6 +6,7 @@ ADD_CFLAGS := -std=gnu99 -std=gnu++0x -D_GNU_SOURCE -Wextra -fexceptions \
 
 ADD_LIBS := mloop appbase dl sharedmalloc plog
 ADD_LFLAGS := -pthread -Wl,-rpath=/usr/lib/mloop -flto
+TEST_LDFLAGS := -fno-lto
 
 MAIN_SRC := \
 	canopen-master.c \
