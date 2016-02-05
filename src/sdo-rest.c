@@ -399,7 +399,7 @@ static char* sdo_rest__escape_string(const char* str)
 	static __thread char buffer[256];
 	char* ptr = buffer;
 
-	while (ptr - buffer < sizeof(buffer) - 1)
+	while ((size_t)(ptr - buffer) < sizeof(buffer) - 1)
 		switch (*str) {
 		case '\\':
 			*ptr++ = '\\';
