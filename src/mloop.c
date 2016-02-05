@@ -196,7 +196,7 @@ static int mloop__debug_parse_expect(struct mloop__debug_parser* parser,
 		return 1;
 
 	if (str) {
-		if (strlen(str) != parser->tok_end - parser->tok_start)
+		if (strlen(str) != (size_t)(parser->tok_end - parser->tok_start))
 			return 0;
 
 		if (strncmp(str, parser->tok_start,
