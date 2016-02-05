@@ -2,7 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+
+#ifndef NO_MAREL_CODE
 #include <appcbase.h>
+#endif
 
 #include "socketcan.h"
 #include "canopen/master.h"
@@ -30,7 +33,10 @@ const char usage_[] =
 "    -p, --heartbeat-period    Set heartbeat period (default 10000ms).\n"
 "    -P, --heartbeat-timeout   Set heartbeat timeout (default 1000ms).\n"
 "    -x, --ntimeouts-max       Set maximum number of timeouts (default 0).\n"
-"\n"
+"\n";
+
+#ifndef NO_MAREL_CODE
+const char appbase_usage_[] =
 "Appbase Options:\n"
 "    -v, --version             Get version info.\n"
 "    -V, --longversion         Get more detailed version info.\n"
@@ -45,10 +51,16 @@ const char usage_[] =
 "    $ canopen-master can1 -i1 -R9192\n"
 "    $ canopen-master can0 -n65-127\n"
 "\n";
+#endif /* NO_MAREL_CODE */
 
 static inline int print_usage(FILE* output, int status)
 {
 	fprintf(output, "%s", usage_);
+
+#ifndef NO_MAREL_CODE
+	fprintf(output, "%s", appbase_usage_);
+#endif
+
 	return status;
 }
 
@@ -92,8 +104,10 @@ int main(int argc, char* argv[])
 	if (have_help_argument(argc, argv))
 		return print_usage(stdout, 0);
 
+#ifndef NO_MAREL_CODE
 	if (appbase_cmdline(&argc, argv) != 0)
 		return 1;
+#endif /* NO_MAREL_CODE */
 
 	struct co_master_options mopt = {
 		.nworkers = 4,

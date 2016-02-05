@@ -4,12 +4,11 @@
 #include <string.h>
 #include <stddef.h>
 #include <ctype.h>
-#include <appcbase.h>
 #include <errno.h>
-#include <plog.h>
+#include <pthread.h>
+#include "plog.h"
 
-#include <mloop.h>
-#include <eloop.h>
+#include "mloop.h"
 #include "socketcan.h"
 #include "canopen.h"
 #include "canopen/sdo.h"
@@ -23,14 +22,17 @@
 #include "canopen/sdo_sync.h"
 #include "rest.h"
 #include "sdo-rest.h"
-#include "canopen_info.h"
 #include "time-utils.h"
 #include "profiling.h"
 #include "string-utils.h"
 #include "net-util.h"
 #include "sock.h"
 
+#ifndef NO_MAREL_CODE
+#include <appcbase.h>
 #include "legacy-driver.h"
+#include "canopen_info.h"
+#endif /* NO_MAREL_CODE */
 
 #ifndef CAN_MAX_DLEN
 #define CAN_MAX_DLEN 8
@@ -153,6 +155,7 @@ static void stop_ping_timer(int nodeid)
 	mloop_timer_stop(timer);
 }
 
+#ifndef NO_MAREL_CODE
 static void unload_legacy_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -164,6 +167,7 @@ static void unload_legacy_driver(int nodeid)
 	node->driver = NULL;
 	node->master_iface = NULL;
 }
+#endif /* NO_MAREL_CODE */
 
 static void unload_driver(int nodeid)
 {
@@ -179,9 +183,11 @@ static void unload_driver(int nodeid)
 	sdo_req_queue_flush(sdo_req_queue_get(nodeid));
 
 	switch (node->driver_type) {
+#ifndef NO_MAREL_CODE
 	case CO_MASTER_DRIVER_LEGACY:
 		unload_legacy_driver(nodeid);
 		break;
+#endif /* NO_MAREL_CODE */
 	case CO_MASTER_DRIVER_NEW:
 		co_drv_unload(&node->ndrv);
 		break;
@@ -200,8 +206,10 @@ static void unload_driver(int nodeid)
 	else
 		co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 
+#ifndef NO_MAREL_CODE
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->is_active = 0;
+#endif /* NO_MAREL_CODE */
 }
 
 static void on_heartbeat_timeout(struct mloop_timer* timer)
@@ -269,6 +277,7 @@ static void start_nodeguarding(int nodeid)
 	start_heartbeat_timer(nodeid);
 }
 
+#ifndef NO_MAREL_CODE
 static void* load_legacy_module(const char* name, int device_type,
 				void* master_iface)
 {
@@ -287,6 +296,7 @@ static void unload_legacy_module(int device_type, void* driver)
 	legacy_driver_delete_handler(driver_manager_, device_type, driver);
 	pthread_mutex_unlock(&driver_manager_lock_);
 }
+#endif /* NO_MAREL_CODE */
 
 static int load_new_driver(int nodeid)
 {
@@ -300,6 +310,7 @@ static int load_new_driver(int nodeid)
 	return 0;
 }
 
+#ifndef NO_MAREL_CODE
 static int load_legacy_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -324,12 +335,14 @@ failure:
 	node->master_iface = NULL;
 	return -1;
 }
+#endif /* NO_MAREL_CODE */
 
 static int is_nodename_char(int c)
 {
 	return isalnum(c) || c == '-' || c == '_';
 }
 
+#ifndef NO_MAREL_CODE
 static void initialize_info_structure(int nodeid)
 {
 	struct canopen_info* info = canopen_info_get(nodeid);
@@ -352,6 +365,7 @@ static void load_error_register(int nodeid)
 		     nodeid);
 	}
 }
+#endif /* NO_MAREL_CODE */
 
 static const char* driver_type_str(enum co_master_driver_type type)
 {
@@ -372,7 +386,14 @@ static void apply_quirks(struct co_master_node* node)
 
 static int load_any_driver(int nodeid)
 {
-	return load_new_driver(nodeid) < 0 && load_legacy_driver(nodeid) < 0;
+	if (load_new_driver(nodeid) < 0)
+		return -1;
+#ifndef NO_MAREL_CODE
+	if (load_legacy_driver(nodeid) < 0)
+		return -1;
+#endif /* NO_MAREL_CODE */
+
+	return 0;
 }
 
 static int load_driver(int nodeid)
@@ -425,9 +446,11 @@ static int load_driver(int nodeid)
 	strlcpy(node->sw_version, string_trim(sw_version),
 		sizeof(node->sw_version));
 
+#ifndef NO_MAREL_CODE
 	initialize_info_structure(nodeid);
 
 	load_error_register(nodeid);
+#endif /* NO_MAREL_CODE */
 
 	apply_quirks(node);
 
@@ -444,6 +467,7 @@ static int load_driver(int nodeid)
 
 }
 
+#ifndef NO_MAREL_CODE
 static int initialize_legacy_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -467,16 +491,18 @@ static int initialize_legacy_driver(int nodeid)
 
 	return rc;
 }
+#endif /* NO_MAREL_CODE */
 
 static int initialize_new_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
-	struct canopen_info* info = canopen_info_get(nodeid);
-
 	int rc = co_drv_init(&node->ndrv);
 	if (rc >= 0) {
+#ifndef NO_MAREL_CODE
+		struct canopen_info* info = canopen_info_get(nodeid);
 		info->is_active = 1;
 		info->last_seen = time(NULL);
+#endif /* NO_MAREL_CODE */
 	} else {
 		plog(LOG_ERROR, "initialize_new_driver: Failed to initialize \"%s\" with id %d",
 		     node->name, nodeid);
@@ -495,8 +521,10 @@ static int initialize_driver(int nodeid)
 	switch (node->driver_type) {
 	case CO_MASTER_DRIVER_NEW:
 		return initialize_new_driver(nodeid);
+#ifndef NO_MAREL_CODE
 	case CO_MASTER_DRIVER_LEGACY:
 		return initialize_legacy_driver(nodeid);
+#endif /* NO_MAREL_CODE */
 	case CO_MASTER_DRIVER_NONE:
 		return -1;
 	default:
@@ -606,7 +634,9 @@ static int handle_emcy(struct co_master_node* node,
 
 	int nodeid = co_master_get_node_id(node);
 
+#ifndef NO_MAREL_CODE
 	canopen_info_get(nodeid)->error_register = error_register;
+#endif /* NO_MAREL_CODE */
 
 	struct co_emcy emcy = {
 		.code = emcy_get_code(frame),
@@ -617,11 +647,13 @@ static int handle_emcy(struct co_master_node* node,
 	switch (node->driver_type) {
 	case CO_MASTER_DRIVER_NONE:
 		return -1;
+#ifndef NO_MAREL_CODE
 	case CO_MASTER_DRIVER_LEGACY:
 		legacy_driver_iface_process_emr(node->driver, emcy.code,
 						emcy.reg,
 						emcy.manufacturer_error);
 		break;
+#endif /* NO_MAREL_CODE */
 	case CO_MASTER_DRIVER_NEW:
 		if (node->ndrv.emcy_fn)
 			node->ndrv.emcy_fn(&node->ndrv, &emcy);
@@ -655,8 +687,10 @@ static int handle_heartbeat(struct co_master_node* node,
 	if (heartbeat_get_state(frame) != NMT_STATE_OPERATIONAL)
 		co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
 
+#ifndef NO_MAREL_CODE
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->last_seen = time(NULL);
+#endif /* NO_MAREL_CODE */
 
 	return 0;
 }
@@ -690,6 +724,7 @@ static int handle_not_loaded(struct co_master_node* node,
 	return -1;
 }
 
+#ifndef NO_MAREL_CODE
 static int handle_with_legacy(struct co_master_node* node,
 			      const struct canopen_msg* msg,
 			      const struct can_frame* cf)
@@ -727,6 +762,7 @@ static int handle_with_legacy(struct co_master_node* node,
 
 	return -1;
 }
+#endif /* NO_MAREL_CODE */
 
 static int handle_with_new_driver(struct co_master_node* node,
 				  const struct canopen_msg* msg,
@@ -784,9 +820,11 @@ static void mux_on_frame(const struct can_frame* cf)
 	case CO_MASTER_DRIVER_NONE:
 		handle_not_loaded(node, &msg, cf);
 		break;
+#ifndef NO_MAREL_CODE
 	case CO_MASTER_DRIVER_LEGACY:
 		handle_with_legacy(node, &msg, cf);
 		break;
+#endif /* NO_MAREL_CODE */
 	case CO_MASTER_DRIVER_NEW:
 		handle_with_new_driver(node, &msg, cf);
 		break;
@@ -896,12 +934,13 @@ static void on_net_probe_done(struct mloop_work* self)
 	run_bootup();
 }
 
-static int appbase_dummy()
+static void set_priority(void)
 {
-	return 0;
+	struct sched_param prio = { .sched_priority = 25 };
+	sched_setscheduler(getpid(), SCHED_FIFO, &prio);
 }
 
-static int on_tickermaster_alive()
+static int start_bootup(void)
 {
 	struct mloop_work* work = mloop_work_new(mloop_default());
 	if (!work)
@@ -916,10 +955,15 @@ static int on_tickermaster_alive()
 	return rc;
 }
 
-static void set_priority(void)
+#ifndef NO_MAREL_CODE
+static int on_tickermaster_alive(void)
 {
-	struct sched_param prio = { .sched_priority = 25 };
-	sched_setscheduler(getpid(), SCHED_FIFO, &prio);
+	return start_bootup();
+}
+
+static int appbase_dummy()
+{
+	return 0;
 }
 
 static int run_appbase()
@@ -1021,6 +1065,7 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 	sdo_req_unref(req);
 	return rc;
 }
+#endif /* NO_MAREL_CODE */
 
 int co__rpdox(int nodeid, int type, const void* data, size_t size)
 {
@@ -1038,6 +1083,7 @@ int co__rpdox(int nodeid, int type, const void* data, size_t size)
 
 }
 
+#ifndef NO_MAREL_CODE
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size)
 {
 	switch (n) {
@@ -1062,6 +1108,7 @@ static void* master_iface_init(int nodeid)
 
 	return legacy_master_iface_new(&cb);
 }
+#endif /* NO_MAREL_CODE */
 
 static int init_heartbeat_timer(struct co_master_node* node)
 {
@@ -1194,10 +1241,12 @@ int co_master_run(const struct co_master_options* opt)
 		goto socketcan_open_failure;
 	}
 
+#ifndef NO_MAREL_CODE
 	if (canopen_info_init(opt->iface) < 0) {
 		perror("Could not initialize info structure");
 		goto info_failure;
 	}
+#endif /* NO_MAREL_CODE */
 
 	enum sdo_async_quirks_flags sdo_quirks;
 	sdo_quirks = opt->flags & CO_MASTER_OPTION_WITH_QUIRKS
@@ -1215,12 +1264,14 @@ int co_master_run(const struct co_master_options* opt)
 	if (sock_type == SOCK_TYPE_CAN)
 		net_fix_sndbuf(socket_.fd);
 
+#ifndef NO_MAREL_CODE
 	profile("Create legacy driver manager...\n");
 	driver_manager_ = legacy_driver_manager_new();
 	if (!driver_manager_) {
 		rc = 1;
 		goto driver_manager_failure;
 	}
+#endif /* NO_MAREL_CODE */
 
 	mloop_set_job_queue_size(opt->job_queue_length);
 	mloop_set_worker_stack_size(opt->job_queue_length);
@@ -1231,7 +1282,14 @@ int co_master_run(const struct co_master_options* opt)
 		goto worker_failure;
 	}
 
+#ifndef NO_MAREL_CODE
 	rc = run_appbase();
+#else
+	if (start_bootup() < 0)
+		goto bootup_failure;
+
+	rc = mloop_run(mloop_);
+#endif /* NO_MAREL_CODE */
 
 	master_state_ = MASTER_STATE_STOPPING;
 
@@ -1242,8 +1300,11 @@ int co_master_run(const struct co_master_options* opt)
 		mloop_socket_unref(mux_handler_);
 	}
 
+bootup_failure:
 worker_failure:
+#ifndef NO_MAREL_CODE
 	legacy_driver_manager_delete(driver_manager_);
+#endif /* NO_MAREL_CODE */
 
 driver_manager_failure:
 	destroy_all_node_structures();
@@ -1255,7 +1316,9 @@ sdo_req_queues_failure:
 	if (socket_.fd >= 0)
 		sock_close(&socket_);
 
+#ifndef NO_MAREL_CODE
 	canopen_info_cleanup();
+#endif /* NO_MAREL_CODE */
 info_failure:
 socketcan_open_failure:
 rest_service_failure:
