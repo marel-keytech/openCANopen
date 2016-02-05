@@ -1,7 +1,7 @@
 #include <unistd.h>
 #include <stdint.h>
 
-static inline const char nibble_to_char(int nibble)
+static inline char nibble_to_char(int nibble)
 {
 	static char map[] = {
 		'0', '1', '2', '3',
