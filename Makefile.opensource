@@ -1,0 +1,95 @@
+CC ?= gcc
+LD ?= ld
+DEBUG ?= 0
+BUILDDIR ?= build
+
+COMMON_CFLAGS = -std=gnu99 -D_GNU_SOURCE -Iinc/ -Iinc/compat -Wextra \
+		-fvisibility=hidden -pthread -fPIC -DNO_MAREL_CODE
+RELEASE_CFLAGS = -O2 -DNDEBUG
+DEBUG_CFLAGS = -O0 -g
+
+CFLAGS += $(COMMON_CFLAGS)
+LDFLAGS += -ldl -pthread -flto
+
+ifneq ($(DEBUG),0)
+	CFLAGS += $(DEBUG_CFLAGS)
+else
+	CFLAGS += $(RELEASE_CFLAGS)
+endif
+
+LIBDEPS = \
+	  master \
+	  sdo_common \
+	  sdo_req \
+	  byteorder \
+	  network \
+	  canopen \
+	  sdo_async \
+	  socketcan \
+	  rest \
+	  http \
+	  eds \
+	  ini_parser \
+	  types \
+	  sdo-rest \
+	  conversions \
+	  strlcpy \
+	  profiling \
+	  sdo_sync \
+	  sdo_srv \
+	  driver \
+	  net-util \
+	  sock \
+	  stream \
+	  dump \
+	  vnode \
+	  sdo-dict \
+	  hexdump \
+	  string-utils \
+	  can-tcp \
+	  mloop \
+	  prioq \
+
+LIBOBJS = $(foreach dep,$(LIBDEPS),$(BUILDDIR)/obj/$(dep).o)
+
+BINS = \
+	canopen-master \
+	canbridge \
+	canopen-dump \
+	canopen-vnode \
+
+BINBUILDS = $(foreach bin,$(BINS),$(BUILDDIR)/bin/$(bin))
+
+all: $(BUILDDIR)/lib/libcanopen2.so $(BINBUILDS)
+
+$(BUILDDIR)/stamp:
+	mkdir $(@D) && touch $@
+
+$(BUILDDIR)/bin/stamp: $(BUILDDIR)/stamp
+	mkdir $(@D) && touch $@
+
+$(BUILDDIR)/lib/stamp: $(BUILDDIR)/stamp
+	mkdir $(@D) && touch $@
+
+$(BUILDDIR)/obj/stamp: $(BUILDDIR)/stamp
+	mkdir $(@D) && touch $@
+
+$(BUILDDIR)/lib/libcanopen2.so: $(BUILDDIR)/lib/stamp $(LIBOBJS)
+	$(CC) -o $@ -shared $(LIBOBJS) $(LDFLAGS)
+
+$(BUILDDIR)/bin/%: $(BUILDDIR)/obj/%.o $(BUILDDIR)/bin/stamp \
+		   $(BUILDDIR)/lib/libcanopen2.so 
+	$(CC) -o $@ $< -L$(BUILDDIR)/lib \
+		-Wl,--rpath=$(BUILDDIR)/lib -lcanopen2 -pthread
+
+$(BUILDDIR)/obj/%.o: src/%.c $(BUILDDIR)/obj/stamp
+	$(CC) -c $(CFLAGS) -o $@ $< -MMD -MP -MF $@.deps
+
+.PHONY: clean
+clean:
+	rm -rf build
+
+-include $(BUILDDIR)/obj/*.deps
+
+.SUFFIXES:
+.SECONDARY:
