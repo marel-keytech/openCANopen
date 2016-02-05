@@ -1,3 +1,6 @@
+#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
+#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -8,9 +11,9 @@
 static ssize_t stream__write(void* cookie, const char* buf, size_t size)
 {
 	ssize_t wsize = -1;
-	size_t total = 0;
+	ssize_t total = 0;
 
-	while (total < size) {
+	while (total < (ssize_t)size) {
 		wsize = net_write((int)cookie, buf + total, size - total, -1);
 		if (wsize < 0)
 			break;
@@ -37,7 +40,7 @@ static int stream__close(void* cookie)
 	return close((int)cookie);
 }
 
-const static cookie_io_functions_t stream_funcs_ = {
+static cookie_io_functions_t stream_funcs_ = {
 	.read = stream__read,
 	.write = stream__write,
 	.seek = stream__seek,
