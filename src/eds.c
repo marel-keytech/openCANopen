@@ -78,7 +78,7 @@ size_t eds_db_length(void)
 const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 {
 	ssize_t best_match = -1;
-	uint32_t diff = ULONG_MAX;
+	uint32_t diff = UINT32_MAX;
 
 	for (size_t i = 0; i < eds_db_length(); ++i)
 	{
