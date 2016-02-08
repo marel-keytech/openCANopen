@@ -2,6 +2,8 @@ CC ?= gcc
 LD ?= ld
 DEBUG ?= 0
 BUILDDIR ?= build
+PREFIX ?= /usr/local
+DESTDIR ?=
 
 COMMON_CFLAGS = -std=gnu99 -D_GNU_SOURCE -Iinc/ -Iinc/compat -Wextra \
 		-fvisibility=hidden -pthread -fPIC -DNO_MAREL_CODE
@@ -59,9 +61,13 @@ BINS = \
 	canopen-dump \
 	canopen-vnode \
 
+LIBBUILD = $(BUILDDIR)/lib/libcanopen2.so
 BINBUILDS = $(foreach bin,$(BINS),$(BUILDDIR)/bin/$(bin))
 
-all: $(BUILDDIR)/lib/libcanopen2.so $(BINBUILDS)
+INSTALLDEPS = $(LIBBUILD) $(BINBUILDS)
+
+.PHONY: all
+all: $(LIBBUILD) $(BINBUILDS)
 
 $(BUILDDIR)/stamp:
 	mkdir $(@D) && touch $@
@@ -84,6 +90,13 @@ $(BUILDDIR)/bin/%: $(BUILDDIR)/obj/%.o $(BUILDDIR)/bin/stamp \
 
 $(BUILDDIR)/obj/%.o: src/%.c $(BUILDDIR)/obj/stamp
 	$(CC) -c $(CFLAGS) -o $@ $< -MMD -MP -MF $@.deps
+
+.PHONY: install
+install: $(INSTALLDEPS)
+	mkdir -p $(DESTDIR)$(PREFIX)/lib
+	cp -r $(LIBBUILD) $(DESTDIR)$(PREFIX)/lib
+	mkdir -p $(DESTDIR)$(PREFIX)/bin
+	cp -r $(BINBUILDS) $(DESTDIR)$(PREFIX)/bin
 
 .PHONY: clean
 clean:
