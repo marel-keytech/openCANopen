@@ -386,14 +386,15 @@ static void apply_quirks(struct co_master_node* node)
 
 static int load_any_driver(int nodeid)
 {
-	if (load_new_driver(nodeid) < 0)
-		return -1;
+	if (load_new_driver(nodeid) >= 0)
+		return 0;
+
 #ifndef NO_MAREL_CODE
-	if (load_legacy_driver(nodeid) < 0)
-		return -1;
+	if (load_legacy_driver(nodeid) >= 0)
+		return 0;
 #endif /* NO_MAREL_CODE */
 
-	return 0;
+	return -1;
 }
 
 static int load_driver(int nodeid)
