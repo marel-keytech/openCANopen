@@ -5,11 +5,12 @@ BUILDDIR ?= build
 
 COMMON_CFLAGS = -std=gnu99 -D_GNU_SOURCE -Iinc/ -Iinc/compat -Wextra \
 		-fvisibility=hidden -pthread -fPIC -DNO_MAREL_CODE
-RELEASE_CFLAGS = -O2 -DNDEBUG
+RELEASE_CFLAGS = -O2 -DNDEBUG -flto
 DEBUG_CFLAGS = -O0 -g
-
 CFLAGS += $(COMMON_CFLAGS)
-LDFLAGS += -ldl -pthread -flto
+LDFLAGS += -ldl -lrt -pthread -flto
+
+BIN_LDFLAGS = -L$(BUILDDIR)/lib -Wl,--rpath=$(BUILDDIR)/lib -lcanopen2 -pthread
 
 ifneq ($(DEBUG),0)
 	CFLAGS += $(DEBUG_CFLAGS)
@@ -78,16 +79,15 @@ $(BUILDDIR)/lib/libcanopen2.so: $(BUILDDIR)/lib/stamp $(LIBOBJS)
 	$(CC) -o $@ -shared $(LIBOBJS) $(LDFLAGS)
 
 $(BUILDDIR)/bin/%: $(BUILDDIR)/obj/%.o $(BUILDDIR)/bin/stamp \
-		   $(BUILDDIR)/lib/libcanopen2.so 
-	$(CC) -o $@ $< -L$(BUILDDIR)/lib \
-		-Wl,--rpath=$(BUILDDIR)/lib -lcanopen2 -pthread
+		   $(BUILDDIR)/lib/libcanopen2.so
+	$(CC) -o $@ $< $(BIN_LDFLAGS)
 
 $(BUILDDIR)/obj/%.o: src/%.c $(BUILDDIR)/obj/stamp
 	$(CC) -c $(CFLAGS) -o $@ $< -MMD -MP -MF $@.deps
 
 .PHONY: clean
 clean:
-	rm -rf build
+	rm -rf $(BUILDDIR)
 
 -include $(BUILDDIR)/obj/*.deps
 
