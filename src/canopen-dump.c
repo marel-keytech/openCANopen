@@ -17,6 +17,7 @@ const char usage_[] =
 "    -e, --emcy                 Show EMCY.\n"
 "    -p, --pdo[=mask]           Show PDO.\n"
 "    -s, --sdo                  Show SDO.\n"
+"    -H, --heartbeat            Show heartbeat.\n"
 "\n"
 "Examples:\n"
 "    $ canopen-dump can0\n"
@@ -39,20 +40,21 @@ unsigned int apply_pdo_option(const char* arg)
 int main(int argc, char* argv[])
 {
 	static const struct option long_options[] = {
-		{ "help", no_argument,       0, 'h' },
-		{ "tcp",  no_argument,       0, 'T' },
-		{ "nmt",  no_argument,       0, 'n' },
-		{ "sync", no_argument,       0, 'S' },
-		{ "emcy", no_argument,       0, 'e' },
-		{ "pdo",  optional_argument, 0, 'p' },
-		{ "sdo",  no_argument,       0, 's' },
+		{ "help",      no_argument,       0, 'h' },
+		{ "tcp",       no_argument,       0, 'T' },
+		{ "nmt",       no_argument,       0, 'n' },
+		{ "sync",      no_argument,       0, 'S' },
+		{ "emcy",      no_argument,       0, 'e' },
+		{ "pdo",       optional_argument, 0, 'p' },
+		{ "sdo",       no_argument,       0, 's' },
+		{ "heartbeat", no_argument,       0, 'H' },
 		{ 0, 0, 0, 0 }
 	};
 
 	enum co_dump_options opt = 0;
 
 	while (1) {
-		int c = getopt_long(argc, argv, "hTnSepsi", long_options, NULL);
+		int c = getopt_long(argc, argv, "hTnSepsiH", long_options, NULL);
 		if (c < 0)
 			break;
 
@@ -64,6 +66,7 @@ int main(int argc, char* argv[])
 		case 'e': opt |= CO_DUMP_FILTER_EMCY; break;
 		case 'p': opt |= apply_pdo_option(optarg); break;
 		case 's': opt |= CO_DUMP_FILTER_SDO; break;
+		case 'H': opt |= CO_DUMP_FILTER_HEARTBEAT; break;
 		default: return print_usage(stderr, 1);
 		}
 	}
