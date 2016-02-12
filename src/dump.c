@@ -25,6 +25,7 @@ struct node_state {
 	struct vector sdo_data;
 };
 
+static enum co_dump_options options_ = 0;
 static struct node_state node_state_[127] = { 0 };
 
 char* strlcpy(char* dst, const char* src, size_t size);
@@ -58,6 +59,9 @@ static const char* nmt_cs_str(enum nmt_cs cs)
 
 static int dump_nmt(struct can_frame* cf)
 {
+	if (!(options_ & CO_DUMP_FILTER_NMT))
+		return 0;
+
 	int nodeid = nmt_get_nodeid(cf);
 	enum nmt_cs cs = nmt_get_cs(cf);
 
@@ -71,6 +75,9 @@ static int dump_nmt(struct can_frame* cf)
 
 static int dump_sync(struct can_frame* cf)
 {
+	if (!(options_ & CO_DUMP_FILTER_SYNC))
+		return 0;
+
 	(void)cf;
 	printf("SYNC TODO\n");
 	return 0;
@@ -78,6 +85,9 @@ static int dump_sync(struct can_frame* cf)
 
 static int dump_timestamp(struct can_frame* cf)
 {
+	if (!(options_ & CO_DUMP_FILTER_TIMESTAMP))
+		return 0;
+
 	(void)cf;
 	printf("TIMESTAMP TODO\n");
 	return 0;
@@ -85,6 +95,9 @@ static int dump_timestamp(struct can_frame* cf)
 
 static int dump_emcy(struct canopen_msg* msg, struct can_frame* cf)
 {
+	if (!(options_ & CO_DUMP_FILTER_EMCY))
+		return 0;
+
 	if (cf->can_dlc == 0) {
 		printf("EMCY %d EMPTY\n", msg->id);
 		return 0;
@@ -102,9 +115,17 @@ static int dump_emcy(struct canopen_msg* msg, struct can_frame* cf)
 	return -1;
 }
 
+static int is_pdo_in_filter(int n)
+{
+	return options_ & (1 << (n + CO_DUMP_PDO_FILTER_SHIFT - 1));
+}
+
 static int dump_pdo(int type, int n, struct canopen_msg* msg,
 		    struct can_frame* cf)
 {
+	if (is_pdo_in_filter(n))
+		return 0;
+
 	uint64_t data;
 	byteorder(&data, cf->data, sizeof(data));
 	printf("%cPDO%d %d length=%d,data=%#llx\n", type, n, msg->id,
@@ -234,6 +255,9 @@ static int dump_sdo_abort(int type, struct canopen_msg* msg,
 
 static int dump_rsdo(struct canopen_msg* msg, struct can_frame* cf)
 {
+	if (!(options_ & CO_DUMP_FILTER_SDO))
+		return 0;
+
 	enum sdo_ccs cs = sdo_get_cs(cf);
 
 	switch (cs)
@@ -328,10 +352,12 @@ static int dump_sdo_dl_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 
 static int dump_tsdo(struct canopen_msg* msg, struct can_frame* cf)
 {
+	if (!(options_ & CO_DUMP_FILTER_SDO))
+		return 0;
+
 	enum sdo_scs cs = sdo_get_cs(cf);
 
-	switch (cs)
-	{
+	switch (cs) {
 	case SDO_SCS_DL_INIT_RES: return dump_sdo_dl_init_res(msg, cf);
 	case SDO_SCS_DL_SEG_RES: return dump_sdo_dl_seg_res(msg, cf);
 	case SDO_SCS_UL_INIT_RES: return dump_sdo_ul_init_res(msg, cf);
@@ -359,6 +385,9 @@ static const char* state_str(enum nmt_state state)
 
 static int dump_heartbeat(struct canopen_msg* msg, struct can_frame* cf)
 {
+	if (!(options_ & CO_DUMP_FILTER_HEARTBEAT))
+		return 0;
+
 	enum nmt_state state = heartbeat_get_state(cf);
 	int is_rtr = cf->can_id & CAN_RTR_FLAG;
 
@@ -381,8 +410,7 @@ static int multiplex(struct can_frame* cf)
 	if (canopen_get_object_type(&msg, cf) != 0)
 		return -1;
 
-	switch (msg.object)
-	{
+	switch (msg.object) {
 	case CANOPEN_NMT: return dump_nmt(cf);
 	case CANOPEN_SYNC: return dump_sync(cf);
 	case CANOPEN_TIMESTAMP: return dump_timestamp(cf);
@@ -413,11 +441,22 @@ static void run_dumper(struct sock* sock)
 		multiplex(&cf);
 }
 
+static void resolve_filters(enum co_dump_options options)
+{
+	options_ |= options & ~CO_DUMP_FILTER_MASK;
+
+	options_ |= options & CO_DUMP_FILTER_MASK
+		  ? options & CO_DUMP_FILTER_MASK
+		  : CO_DUMP_FILTER_MASK;
+}
+
 __attribute__((visibility("default")))
 int co_dump(const char* addr, enum co_dump_options options)
 {
 	vector_init(&string_buffer_, 256);
 	node_state_init();
+
+	resolve_filters(options);
 
 	struct sock sock;
 	enum sock_type type = options & CO_DUMP_TCP ? SOCK_TYPE_TCP
