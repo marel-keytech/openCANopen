@@ -123,7 +123,7 @@ static int is_pdo_in_filter(int n)
 static int dump_pdo(int type, int n, struct canopen_msg* msg,
 		    struct can_frame* cf)
 {
-	if (is_pdo_in_filter(n))
+	if (!is_pdo_in_filter(n))
 		return 0;
 
 	uint64_t data;
