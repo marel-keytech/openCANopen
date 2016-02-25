@@ -53,6 +53,9 @@ static const struct canopen_eds* sdo_rest__find_eds(int nodeid)
 
 	const struct canopen_eds* eds;
 
+	if (node->vendor_id == 0)
+		return eds_db_find_by_name(node->name);
+
 	eds = eds_db_find(node->vendor_id, node->product_code,
 			  node->revision_number);
 	if (eds)
