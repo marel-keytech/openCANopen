@@ -104,6 +104,19 @@ const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 	return NULL;
 }
 
+const struct canopen_eds* eds_db_find_by_name(const char* name)
+{
+	for (size_t i = 0; i < eds_db_length(); ++i)
+	{
+		const struct canopen_eds* eds = eds_db_get(i);
+
+		if (strncmp(name, eds->name, sizeof(eds->name)) == 0)
+			return eds;
+	}
+
+	return NULL;
+}
+
 struct eds_obj_node* eds__obj_new(size_t buffer_size)
 {
 	struct eds_obj_node* obj;

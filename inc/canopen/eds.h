@@ -40,6 +40,7 @@ int eds_db_load(void);
 void eds_db_unload(void);
 
 const struct canopen_eds* eds_db_find(int vendor, int product, int revision);
+const struct canopen_eds* eds_db_find_by_name(const char* name);
 
 const struct eds_obj* eds_obj_find(const struct canopen_eds* eds,
 				   int index, int subindex);
