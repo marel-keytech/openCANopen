@@ -106,15 +106,25 @@ const struct canopen_eds* eds_db_find(int vendor, int product, int revision)
 
 const struct canopen_eds* eds_db_find_by_name(const char* name)
 {
+	const struct canopen_eds* best_match = NULL;
+	size_t best_length = 0;
+
 	for (size_t i = 0; i < eds_db_length(); ++i)
 	{
 		const struct canopen_eds* eds = eds_db_get(i);
+		size_t current_len = strlen(eds->name);
 
-		if (strncmp(name, eds->name, sizeof(eds->name)) == 0)
-			return eds;
+		if (current_len < best_length)
+			continue;
+
+		if (strncmp(name, eds->name, current_len) != 0)
+			continue;
+
+		best_length = current_len;
+		best_match = eds;
 	}
 
-	return NULL;
+	return best_match;
 }
 
 struct eds_obj_node* eds__obj_new(size_t buffer_size)
