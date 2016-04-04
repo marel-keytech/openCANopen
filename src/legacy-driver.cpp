@@ -1,4 +1,6 @@
+#include <exception>
 #include <stdlib.h>
+#include "plog.h"
 
 extern "C" {
 #include "legacy-driver.h"
@@ -8,6 +10,13 @@ extern "C" {
 #include "DriverManager.h"
 #include "CanMasterInterface.h"
 #include "CanIOHandlerInterface.h"
+
+#define STR(x) #x
+
+#define plogx(level, fmt, ...) \
+	plog(level, fmt, STR(__func__) ": " fmt, ## __VA_ARGS__)
+
+using std::exception;
 
 class LegacyMasterInterface: public CanMasterInterface {
 public:
@@ -68,7 +77,8 @@ void* legacy_master_iface_new(struct legacy_master_iface* callbacks)
 {
 	try {
 		return new LegacyMasterInterface(callbacks);
-	} catch (...) {
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
 		return NULL;
 	}
 }
@@ -82,7 +92,8 @@ void* legacy_driver_manager_new()
 {
 	try {
 		return new DriverManager;
-	} catch (...) {
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
 		return NULL;
 	}
 }
@@ -102,8 +113,9 @@ int legacy_driver_manager_create_handler(void* obj, const char* name,
 		return man->createHandler(name, profile_number,
 					  (CanMasterInterface*)master_iface,
 					  (CanIOHandlerInterface**)driver_iface);
-	} catch (...) {
-		return -1;
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
+		return NULL;
 	}
 }
 
@@ -114,8 +126,9 @@ int legacy_driver_delete_handler(void* obj, int profile_number,
 	auto iface = (CanIOHandlerInterface*)driver_interface;
 	try {
 		return man->deleteHandler(profile_number, iface);
-	} catch (...) {
-		return -1;
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
+		return NULL;
 	}
 }
 
@@ -124,8 +137,9 @@ int legacy_driver_iface_initialize(void* obj)
 	auto iface = (CanIOHandlerInterface*)obj;
 	try {
 		return iface->initialize();
-	} catch (...) {
-		return -1;
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
+		return NULL;
 	}
 }
 
@@ -135,8 +149,9 @@ int legacy_driver_iface_process_emr(void* obj, int code, int reg,
 	auto iface = (CanIOHandlerInterface*)obj;
 	try {
 		return iface->processEmr(code, reg, manufacturer_error);
-	} catch (...) {
-		return -1;
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
+		return NULL;
 	}
 }
 
@@ -146,8 +161,9 @@ int legacy_driver_iface_process_sdo(void* obj, int index, int subindex,
 	auto iface = (CanIOHandlerInterface*)obj;
 	try {
 		return iface->processSdo(index, subindex, data, size);
-	} catch (...) {
-		return -1;
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
+		return NULL;
 	}
 }
 
@@ -163,8 +179,9 @@ int legacy_driver_iface_process_pdo(void* obj, int n, const unsigned char* data,
 		case 3: return iface->processPdo3((unsigned char*)data, size);
 		case 4: return iface->processPdo4((unsigned char*)data, size);
 		}
-	} catch (...) {
-		return -1;
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
+		return NULL;
 	}
 
 	abort();
@@ -176,8 +193,9 @@ int legacy_driver_iface_process_node_state(void* obj, int state)
 	auto iface = (CanIOHandlerInterface*)obj;
 	try {
 		return iface->processNodeState(state);
-	} catch (...) {
-		return -1;
+	} catch (exception& e) {
+		plogx(LOG_ERROR, "Caught exception: %s", e.what());
+		return NULL;
 	}
 }
 
