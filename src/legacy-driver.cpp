@@ -115,7 +115,7 @@ int legacy_driver_manager_create_handler(void* obj, const char* name,
 					  (CanIOHandlerInterface**)driver_iface);
 	} catch (exception& e) {
 		plogx(LOG_ERROR, "Caught exception: %s", e.what());
-		return NULL;
+		return -1;
 	}
 }
 
@@ -128,7 +128,7 @@ int legacy_driver_delete_handler(void* obj, int profile_number,
 		return man->deleteHandler(profile_number, iface);
 	} catch (exception& e) {
 		plogx(LOG_ERROR, "Caught exception: %s", e.what());
-		return NULL;
+		return -1;
 	}
 }
 
@@ -139,7 +139,7 @@ int legacy_driver_iface_initialize(void* obj)
 		return iface->initialize();
 	} catch (exception& e) {
 		plogx(LOG_ERROR, "Caught exception: %s", e.what());
-		return NULL;
+		return -1;
 	}
 }
 
@@ -151,7 +151,7 @@ int legacy_driver_iface_process_emr(void* obj, int code, int reg,
 		return iface->processEmr(code, reg, manufacturer_error);
 	} catch (exception& e) {
 		plogx(LOG_ERROR, "Caught exception: %s", e.what());
-		return NULL;
+		return -1;
 	}
 }
 
@@ -163,7 +163,7 @@ int legacy_driver_iface_process_sdo(void* obj, int index, int subindex,
 		return iface->processSdo(index, subindex, data, size);
 	} catch (exception& e) {
 		plogx(LOG_ERROR, "Caught exception: %s", e.what());
-		return NULL;
+		return -1;
 	}
 }
 
@@ -181,7 +181,7 @@ int legacy_driver_iface_process_pdo(void* obj, int n, const unsigned char* data,
 		}
 	} catch (exception& e) {
 		plogx(LOG_ERROR, "Caught exception: %s", e.what());
-		return NULL;
+		return -1;
 	}
 
 	abort();
@@ -195,7 +195,7 @@ int legacy_driver_iface_process_node_state(void* obj, int state)
 		return iface->processNodeState(state);
 	} catch (exception& e) {
 		plogx(LOG_ERROR, "Caught exception: %s", e.what());
-		return NULL;
+		return -1;
 	}
 }
 
