@@ -10,6 +10,7 @@ ADD_LFLAGS := -pthread -Wl,-rpath=/usr/lib/mloop
 ifeq ($(shell marel_getcompilerprefix powerpc),powerpc-marel-linux-gnu)
 	ADD_CFLAGS += -flto
 	ADD_LFLAGS += -flto
+	TEST_LDFLAGS += -flto=n
 endif
 
 MAIN_SRC := \
