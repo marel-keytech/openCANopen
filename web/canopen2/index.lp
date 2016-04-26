@@ -1,1 +1,0 @@
-<% dofile(FRAMEWORK.default_index_file) %>
