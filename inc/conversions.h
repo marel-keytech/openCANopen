@@ -9,6 +9,7 @@ struct canopen_data {
 	void* data;
 	size_t size;
 	uint64_t value;
+	int is_size_unknown;
 };
 
 char* canopen_data_tostring(char* dst, size_t size, struct canopen_data* src);

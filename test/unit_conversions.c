@@ -16,6 +16,35 @@ static int test_bool_tostring()
 	return 0;
 }
 
+static int test_bool_tostring__with_unknown_size()
+{
+	char buf[256];
+	char value = 0;
+	struct canopen_data data = {
+		.type = CANOPEN_BOOLEAN,
+		.data = &value,
+		.size = 4,
+		.is_size_unknown = 1
+	};
+	ASSERT_STR_EQ("false", canopen_data_tostring(buf, sizeof(buf), &data));
+	value = 1;
+	ASSERT_STR_EQ("true", canopen_data_tostring(buf, sizeof(buf), &data));
+	return 0;
+}
+
+static int test_bool_tostring__too_long()
+{
+	char buf[256];
+	char value = 0;
+	struct canopen_data data = {
+		.type = CANOPEN_BOOLEAN,
+		.data = &value,
+		.size = 4
+	};
+	ASSERT_PTR_EQ(NULL, canopen_data_tostring(buf, sizeof(buf), &data));
+	return 0;
+}
+
 static int test_uint_tostring()
 {
 	char buf[256];
@@ -193,6 +222,8 @@ int main()
 {
 	int r = 0;
 	RUN_TEST(test_bool_tostring);
+	RUN_TEST(test_bool_tostring__with_unknown_size);
+	RUN_TEST(test_bool_tostring__too_long);
 	RUN_TEST(test_uint_tostring);
 	RUN_TEST(test_negative_int_tostring);
 	RUN_TEST(test_positive_int_tostring);

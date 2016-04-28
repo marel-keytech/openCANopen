@@ -11,7 +11,7 @@ size_t strlcpy(char* dst, const char* src, size_t dsize);
 char* canopen_ ## name ## _tostring(char* dst, size_t dst_size, \
 				    struct canopen_data* src) \
 { \
-	if (src->size > canopen_type_size(src->type)) \
+	if (!src->is_size_unknown && src->size > canopen_type_size(src->type)) \
 		return NULL; \
 	type_ value = 0; \
 	byteorder2(&value, src->data, sizeof(value), src->size); \
@@ -28,7 +28,7 @@ char* canopen_int_tostring(char* dst, size_t dst_size, struct canopen_data* src)
 {
 	size_t size = canopen_type_size(src->type);
 
-	if (src->size > size)
+	if (!src->is_size_unknown && src->size > size)
 		return NULL;
 
 	/* The CAN bus network-order is little-endian */
@@ -52,7 +52,7 @@ char* canopen_int_tostring(char* dst, size_t dst_size, struct canopen_data* src)
 char* canopen_bool_tostring(char* dst, size_t dst_size,
 			    struct canopen_data* src)
 {
-	if (src->size != 1)
+	if (!src->is_size_unknown && src->size != 1)
 		return NULL;
 
 	char* byte = src->data;
