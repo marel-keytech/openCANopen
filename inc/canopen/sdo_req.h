@@ -39,6 +39,7 @@ struct sdo_req {
 	sdo_req_fn on_done;
 	struct sdo_req_queue* parent;
 	void* context;
+	int is_size_indicated;
 };
 
 TAILQ_HEAD(sdo_req_list, sdo_req);

@@ -304,6 +304,7 @@ void sdo_req__on_done(struct sdo_async* async)
 	assert(async->status != SDO_REQ_PENDING);
 	req->status = async->status;
 	req->abort_code = async->abort_code;
+	req->is_size_indicated = async->is_size_indicated;
 
 	if (req->type == SDO_REQ_UPLOAD)
 		if (vector_copy(&req->data, &async->buffer) < 0)
