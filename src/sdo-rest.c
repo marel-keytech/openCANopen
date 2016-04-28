@@ -161,7 +161,8 @@ static void on_sdo_rest_upload_done(struct sdo_req* req)
 	struct canopen_data data = {
 		.type = context->type,
 		.data = req->data.data,
-		.size = req->data.index
+		.size = req->data.index,
+		.is_size_unknown = !req->is_size_indicated
 	};
 
 	char buffer[256];
@@ -380,7 +381,8 @@ ssize_t sdo_rest__read_value(FILE* out, unsigned int nodeid, int index,
 	struct canopen_data data = {
 		.type = type,
 		.data = req->data.data,
-		.size = req->data.index
+		.size = req->data.index,
+		.is_size_unknown = !req->is_size_indicated
 	};
 
 	char buffer[256];
