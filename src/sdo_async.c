@@ -183,6 +183,7 @@ int sdo_async_start(struct sdo_async* self, const struct sdo_async_info* info)
 	self->on_done = info->on_done;
 	self->index = info->index;
 	self->subindex = info->subindex;
+	self->is_size_indicated = 0;
 	mloop_timer_set_time(self->timer, info->timeout * 1000000ULL);
 
 	if (info->type == SDO_REQ_DOWNLOAD)
@@ -260,7 +261,8 @@ int sdo_async__feed_init_dl_response(struct sdo_async* self,
 int sdo_async__handle_expediated_ul(struct sdo_async* self,
 				    const struct can_frame* cf)
 {
-	size_t size = sdo_is_size_indicated(cf)
+	self->is_size_indicated = sdo_is_size_indicated(cf);
+	size_t size = self->is_size_indicated
 		    ? sdo_get_expediated_size(cf)
 		    : SDO_EXPEDIATED_DATA_SIZE;
 	assert(size <= SDO_EXPEDIATED_DATA_SIZE);
@@ -286,7 +288,8 @@ int sdo_async__request_ul_segment(struct sdo_async* self)
 int sdo_async__handle_init_segmented_ul(struct sdo_async* self,
 					const struct can_frame* cf)
 {
-	if (sdo_is_size_indicated(cf) && cf->can_dlc == CAN_MAX_DLC)
+	self->is_size_indicated = sdo_is_size_indicated(cf);
+	if (self->is_size_indicated && cf->can_dlc == CAN_MAX_DLC)
 		if (vector_reserve(&self->buffer, sdo_get_indicated_size(cf)) < 0)
 			return sdo_async__abort(self, SDO_ABORT_NOMEM);
 

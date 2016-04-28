@@ -42,6 +42,7 @@ struct sdo_async {
 	enum sdo_async_quirks_flags quirks;
 	void* context;
 	sdo_async_free_fn free_fn;
+	int is_size_indicated;
 };
 
 struct sdo_async_info {
