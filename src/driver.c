@@ -182,8 +182,6 @@ static void co__sdo_req_on_done(struct sdo_req* req)
 	co_sdo_done_fn on_done = self->on_done;
 	if (on_done)
 		on_done(self->drv, self);
-
-	co_sdo_req_unref(self);
 }
 
 struct co_sdo_req* co_sdo_req_new(struct co_drv* drv)
