@@ -64,6 +64,9 @@ failure:
 
 void sdo_req_free(struct sdo_req* self)
 {
+	if (self->context && self->context_free_fn)
+		self->context_free_fn(self->context);
+
 	vector_destroy(&self->data);
 	free(self);
 }

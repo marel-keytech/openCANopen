@@ -16,6 +16,7 @@ struct sdo_req;
 struct sock;
 
 typedef void (*sdo_req_fn)(struct sdo_req*);
+typedef void (*sdo_req_free_fn)(void*);
 
 struct sdo_req_info {
 	enum sdo_req_type type;
@@ -39,6 +40,7 @@ struct sdo_req {
 	sdo_req_fn on_done;
 	struct sdo_req_queue* parent;
 	void* context;
+	sdo_req_free_fn context_free_fn;
 	int is_size_indicated;
 };
 
