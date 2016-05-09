@@ -15,8 +15,6 @@ struct co_sdo_req {
 	struct sdo_req req;
 	struct co_drv* drv;
 	co_sdo_done_fn on_done;
-	void* context;
-	co_free_fn context_free_fn;
 };
 
 const char* co__drv_find_dso(const char* name)
@@ -174,10 +172,7 @@ void co_sdo_req_ref(struct co_sdo_req* self)
 
 int co_sdo_req_unref(struct co_sdo_req* self)
 {
-	int rc = sdo_req_unref(&self->req);
-	if (rc == 0 && self->context && self->context_free_fn)
-		self->context_free_fn(self->context);
-	return rc;
+	return sdo_req_unref(&self->req);
 }
 
 static void co__sdo_req_on_done(struct sdo_req* req)
@@ -241,13 +236,13 @@ void co_sdo_req_set_done_fn(struct co_sdo_req* self, co_sdo_done_fn fn)
 void co_sdo_req_set_context(struct co_sdo_req* self, void* context,
 			    co_free_fn free_fn)
 {
-	self->context = context;
-	self->context_free_fn = free_fn;
+	self->req.context = context;
+	self->req.context_free_fn = free_fn;
 }
 
 void* co_sdo_req_get_context(const struct co_sdo_req* self)
 {
-	return self->context;
+	return self->req.context;
 }
 
 int co_sdo_req_start(struct co_sdo_req* self)
