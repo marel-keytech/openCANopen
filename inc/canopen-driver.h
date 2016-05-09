@@ -41,7 +41,7 @@ uint32_t co_get_revision_number(const struct co_drv* self);
 const char* co_get_name(const struct co_drv* self);
 
 void co_set_context(struct co_drv* self, void* context, co_free_fn fn);
-void* co_get_context(struct co_drv* self);
+void* co_get_context(const struct co_drv* self);
 
 void co_set_pdo1_fn(struct co_drv* self, co_pdo_fn fn);
 void co_set_pdo2_fn(struct co_drv* self, co_pdo_fn fn);

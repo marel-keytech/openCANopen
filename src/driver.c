@@ -112,7 +112,7 @@ void co_set_context(struct co_drv* self, void* context, co_free_fn fn)
 	self->free_fn = fn;
 }
 
-void* co_get_context(struct co_drv* self)
+void* co_get_context(const struct co_drv* self)
 {
 	return self->context;
 }
