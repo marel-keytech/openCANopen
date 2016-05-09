@@ -291,4 +291,9 @@ enum co_sdo_status co_sdo_req_get_status(const struct co_sdo_req* self)
 	return -1;
 }
 
+void co_byteorder(void* dst, const void* src, size_t dst_size, size_t src_size)
+{
+	return byteorder2(dst, src, dst_size, src_size);
+}
+
 #pragma GCC visibility pop
