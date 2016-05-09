@@ -284,6 +284,7 @@ enum co_sdo_status co_sdo_req_get_status(const struct co_sdo_req* self)
 	case SDO_REQ_LOCAL_ABORT: return CO_SDO_REQ_LOCAL_ABORT;
 	case SDO_REQ_REMOTE_ABORT: return CO_SDO_REQ_REMOTE_ABORT;
 	case SDO_REQ_CANCELLED: return CO_SDO_REQ_CANCELLED;
+	case SDO_REQ_NOMEM: return CO_SDO_REQ_NOMEM;
 	}
 
 	abort();

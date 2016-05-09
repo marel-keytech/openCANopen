@@ -18,6 +18,7 @@ enum co_sdo_status {
 	CO_SDO_REQ_LOCAL_ABORT,
 	CO_SDO_REQ_REMOTE_ABORT,
 	CO_SDO_REQ_CANCELLED,
+	CO_SDO_REQ_NOMEM,
 };
 
 struct co_emcy {
