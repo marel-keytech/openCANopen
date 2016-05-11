@@ -169,6 +169,25 @@ static void unload_legacy_driver(int nodeid)
 }
 #endif /* NO_MAREL_CODE */
 
+/* This is an expediated fire-and-forget SDO message to tell buggy Marel
+ * CANopen nodes that don't have a driver to shut up.
+ *
+ * The sdo_req interface is not used for this because we're not interested in
+ * the response and it would require more complicated code.
+ */
+static void turn_off_heartbeat(int nodeid)
+{
+	struct can_frame cf = { .can_id = R_RSDO + nodeid };
+	sdo_set_cs(&cf, SDO_CCS_DL_INIT_REQ);
+	sdo_set_index(&cf, 0x1017);
+	sdo_set_subindex(&cf, 0);
+	sdo_indicate_size(&cf);
+	sdo_expediate(&cf);
+	sdo_set_expediated_size(&cf, sizeof(uint16_t));
+	cf.can_dlc = SDO_EXPEDIATED_DATA_IDX + sizeof(uint16_t);
+	sock_send(&socket_, &cf, 0);
+}
+
 static void unload_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
@@ -177,8 +196,8 @@ static void unload_driver(int nodeid)
 
 	if (!node->is_heartbeat_supported)
 		stop_ping_timer(nodeid);
-
-	/* TODO: somehow turn off heartbeat in a way that doesn't hang */
+	else
+		turn_off_heartbeat(nodeid);
 
 	sdo_req_queue_flush(sdo_req_queue_get(nodeid));
 
@@ -456,6 +475,9 @@ static int load_driver(int nodeid)
 	apply_quirks(node);
 
 	if (load_any_driver(nodeid) < 0) {
+		if (node->is_heartbeat_supported)
+			turn_off_heartbeat(nodeid);
+
 		co_net_send_nmt(&socket_, NMT_CS_STOP, nodeid);
 		plog(LOG_NOTICE, "load_driver: There is no driver available for \"%s\" at id %d",
 		     node->name, nodeid);
@@ -481,6 +503,9 @@ static int initialize_legacy_driver(int nodeid)
 		info->is_active = 1;
 		info->last_seen = time(NULL);
 	} else {
+		if (node->is_heartbeat_supported)
+			turn_off_heartbeat(nodeid);
+
 		co_net_send_nmt(&socket_, NMT_CS_STOP, nodeid);
 
 		plog(LOG_ERROR, "initialize_legacy_driver: Failed to initialize \"%s\" with id %d",
@@ -508,6 +533,9 @@ static int initialize_new_driver(int nodeid)
 		info->last_seen = time(NULL);
 #endif /* NO_MAREL_CODE */
 	} else {
+		if (node->is_heartbeat_supported)
+			turn_off_heartbeat(nodeid);
+
 		co_net_send_nmt(&socket_, NMT_CS_STOP, nodeid);
 
 		plog(LOG_ERROR, "initialize_new_driver: Failed to initialize \"%s\" with id %d",
