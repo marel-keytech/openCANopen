@@ -191,6 +191,8 @@ enum eds_obj_access eds__get_access_type(const char* str)
 	if (strcmp(str, "ro") == 0) return EDS_OBJ_R;
 	if (strcmp(str, "wo") == 0) return EDS_OBJ_W;
 	if (strcmp(str, "rw") == 0) return EDS_OBJ_RW;
+	if (strcmp(str, "rwr") == 0) return EDS_OBJ_RW;
+	if (strcmp(str, "rww") == 0) return EDS_OBJ_RW;
 	if (strcmp(str, "const") == 0) return EDS_OBJ_CONST;
 	return 0;
 }
