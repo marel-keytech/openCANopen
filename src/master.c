@@ -456,6 +456,7 @@ static int load_driver(int nodeid)
 	apply_quirks(node);
 
 	if (load_any_driver(nodeid) < 0) {
+		co_net_send_nmt(&socket_, NMT_CS_STOP, nodeid);
 		plog(LOG_NOTICE, "load_driver: There is no driver available for \"%s\" at id %d",
 		     node->name, nodeid);
 		return -1;
@@ -480,6 +481,8 @@ static int initialize_legacy_driver(int nodeid)
 		info->is_active = 1;
 		info->last_seen = time(NULL);
 	} else {
+		co_net_send_nmt(&socket_, NMT_CS_STOP, nodeid);
+
 		plog(LOG_ERROR, "initialize_legacy_driver: Failed to initialize \"%s\" with id %d",
 		     node->name, nodeid);
 
@@ -505,6 +508,8 @@ static int initialize_new_driver(int nodeid)
 		info->last_seen = time(NULL);
 #endif /* NO_MAREL_CODE */
 	} else {
+		co_net_send_nmt(&socket_, NMT_CS_STOP, nodeid);
+
 		plog(LOG_ERROR, "initialize_new_driver: Failed to initialize \"%s\" with id %d",
 		     node->name, nodeid);
 
@@ -683,7 +688,10 @@ static int handle_heartbeat(struct co_master_node* node,
 	 * the node. We reset communication to refresh the state.
 	 */
 	if (node->driver_type == CO_MASTER_DRIVER_NONE) {
-		co_net_send_nmt(&socket_, NMT_CS_RESET_COMMUNICATION, nodeid);
+		if (heartbeat_get_state(frame) != NMT_STATE_STOPPED)
+			co_net_send_nmt(&socket_, NMT_CS_RESET_COMMUNICATION,
+					nodeid);
+
 		return 0;
 	}
 
