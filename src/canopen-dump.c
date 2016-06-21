@@ -79,5 +79,7 @@ int main(int argc, char* argv[])
 
 	const char* iface = args[0];
 
+	setvbuf(stdout, NULL, _IOLBF, 0);
+
 	return co_dump(iface, opt);
 }
