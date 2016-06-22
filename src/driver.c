@@ -9,6 +9,10 @@
 #include "canopen-driver.h"
 #include "string-utils.h"
 
+#ifndef DRIVER_PATH
+#define DRIVER_PATH "/usr/lib/canopen"
+#endif
+
 size_t strlcpy(char*, const char*, size_t);
 
 struct co_sdo_req {
@@ -24,7 +28,7 @@ const char* co__drv_find_dso(const char* name)
 	char name_buffer[256];
 	strlcpy(name_buffer, name, 256);
 
-	snprintf(result, sizeof(result), "/usr/lib/canopen/co_drv_%s.so",
+	snprintf(result, sizeof(result), DRIVER_PATH "/co_drv_%s.so",
 		 string_tolower(name_buffer));
 	result[sizeof(result) - 1] = '\0';
 
