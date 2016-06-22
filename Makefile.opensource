@@ -4,9 +4,12 @@ DEBUG ?= 0
 BUILDDIR ?= build
 PREFIX ?= /usr/local
 DESTDIR ?=
+EDS_PATH ?= /var/canopen/eds
+DRIVER_PATH ?= /usr/lib/canopen
 
 COMMON_CFLAGS = -std=gnu99 -D_GNU_SOURCE -Iinc/ -Iinc/compat -Wextra \
-		-fvisibility=hidden -pthread -fPIC -DNO_MAREL_CODE
+		-fvisibility=hidden -pthread -fPIC -DNO_MAREL_CODE \
+		-DEDS_PATH=\"$(EDS_PATH)\" -DDRIVER_PATH=\"$(DRIVER_PATH)\"
 RELEASE_CFLAGS = -O2 -DNDEBUG -flto
 DEBUG_CFLAGS = -O0 -g
 CFLAGS += $(COMMON_CFLAGS)
