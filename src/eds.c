@@ -20,6 +20,10 @@
 #define ABS(a) ((a) > 0 ? (a) : -(a))
 #endif
 
+#ifndef EDS_PATH
+#define EDS_PATH "/var/marel/canmaster/eds.d"
+#endif
+
 struct eds_obj_node {
 	struct eds_obj obj;
 
@@ -374,7 +378,7 @@ static inline int eds__get_maxfiles(void)
 
 static inline const char* eds__get_path(void)
 {
-	return "/var/marel/canmaster/eds.d";
+	return EDS_PATH;
 }
 
 static inline int eds__load_all_files(void)
