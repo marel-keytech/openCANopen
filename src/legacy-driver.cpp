@@ -14,7 +14,7 @@ extern "C" {
 #define STR(x) #x
 
 #define plogx(level, fmt, ...) \
-	plog(level, fmt, STR(__func__) ": " fmt, ## __VA_ARGS__)
+	plog(level, "%s: " fmt, __func__, ## __VA_ARGS__)
 
 using std::exception;
 
