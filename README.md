@@ -25,11 +25,13 @@ Non-blocking tasks are handled in a single main loop. The main loop sends blocki
 ## Writing Drivers
 The API can be found in inc/canopen-driver.h. It lacks documentation but the names should be quite revealing.
 
-A driver's DSO file should be named co_drv_name.so where "name" is the name of the node according to the object dictionary. It can also be a prefix. The master picks the driver with the longest prefix in the name. Place the DSO under /usr/lib/canopen.
+A driver's DSO file should be named co_drv_name.so where "name" is the lower case name of the node according to the object dictionary. Place the DSO under /usr/lib/canopen.
 
 The driver needs to implement the function `int co_drv_init(struct co_drv*)`. The function shall return a number less than 0 on error and 0 on success. Use the init function to initialise event handlers for PDO, EMCY, etc. and set up the node via SDO.
 
 The SDO interface is asynchronous and follows a request-reply pattern. A callback function must be set for each request.
+
+See example-driver.c
 
 #### Building
 `# make -f Makefile.opensource`
