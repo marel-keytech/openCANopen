@@ -196,7 +196,7 @@ static int mloop__debug_parse_expect(struct mloop__debug_parser* parser,
 		return 1;
 
 	if (str) {
-		if (strlen(str) != (size_t)(parser->tok_end - parser->tok_start))
+		if (strlen(str) != parser->tok_end - parser->tok_start)
 			return 0;
 
 		if (strncmp(str, parser->tok_start,
@@ -838,6 +838,8 @@ static struct mloop_core* mloop_core__new(struct mloop* mloop)
 	if (mloop__start_socket(mloop, break_out_socket) < 0)
 		goto break_out_socket_add_failure;
 
+	break_out_socket->state = MLOOP_STARTED;
+
 	if (prioq_init(&self->async_jobs, 64) < 0)
 		goto async_job_queue_failure;
 
@@ -1195,6 +1197,7 @@ void mloop__process_timer(struct mloop_socket* socket)
 	assert(rc == 0);
 }
 
+EXPORT
 enum mloop_socket_event
 mloop_socket_get_event(const struct mloop_socket* socket)
 {
@@ -1255,7 +1258,7 @@ void mloop__process_events(struct mloop* self, struct epoll_event* events,
 		socket->revents = mloop__get_socket_event(event->events);
 
 		mloop_socket_fn callback_fn = socket->callback_fn;
-		if (callback_fn)
+		if (callback_fn && mloop_socket_is_started(socket))
 			callback_fn(socket);
 
 		if (socket->type == MLOOP_TIMER)
