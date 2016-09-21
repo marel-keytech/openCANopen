@@ -44,6 +44,9 @@
 
 static int sdo_async__send(struct sdo_async* self, struct can_frame* cf)
 {
+	if (self->quirks & SDO_ASYNC_QUIRK_NEEDS_FULL_FRAME)
+		cf->can_dlc = CAN_MAX_DLC;
+
 	return sock_send(&self->sock, cf, 0);
 }
 

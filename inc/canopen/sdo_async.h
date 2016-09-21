@@ -37,6 +37,7 @@ enum sdo_async_comm_state {
 enum sdo_async_quirks_flags {
 	SDO_ASYNC_QUIRK_NONE = 0,
 	SDO_ASYNC_QUIRK_IGNORE_MULTIPLEXER = 1,
+	SDO_ASYNC_QUIRK_NEEDS_FULL_FRAME = 2,
 	SDO_ASYNC_QUIRK_ALL = 0xff,
 };
 
