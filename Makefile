@@ -52,7 +52,8 @@ SRC := \
 	sdo-dict.c \
 	hexdump.c \
 	string-utils.c \
-	can-tcp.c
+	can-tcp.c \
+	cfg.c \
 
 TEST_SRC := \
 	unit_arc.c \
@@ -67,7 +68,8 @@ TEST_SRC := \
 	unit_rest.c \
 	unit_types.c \
 	unit_sdo-dict.c \
-	sdo_async_fuzz_test.c
+	sdo_async_fuzz_test.c \
+	unit_cfg.c \
 
 include $(MDEV)/make/make.main
 
