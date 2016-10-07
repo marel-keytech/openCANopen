@@ -42,6 +42,7 @@
 #include "string-utils.h"
 #include "net-util.h"
 #include "sock.h"
+#include "cfg.h"
 
 #ifndef NO_MAREL_CODE
 #include <appcbase.h>
@@ -414,8 +415,27 @@ static const char* driver_type_str(enum co_master_driver_type type)
 
 static void apply_quirks(struct co_master_node* node)
 {
-	if (string_begins_with("MWS2", node->name))
+	int nodeid = co_master_get_node_id(node);
+
+	if (cfg_get_bool(nodeid, "has_zero_node_quarding_status", 0))
 		node->quirks |= CO_NODE_QUIRK_ZERO_GUARD_STATUS;
+	else
+		node->quirks &= ~CO_NODE_QUIRK_ZERO_GUARD_STATUS;
+
+	struct sdo_req_queue* sdo_queue = sdo_req_queue_get(nodeid);
+	struct sdo_async* sdo_client = &sdo_queue->sdo_client;
+
+	if (cfg_get_bool(nodeid, "ignore_sdo_multiplexer", 1))
+		sdo_client->quirks |= SDO_ASYNC_QUIRK_IGNORE_MULTIPLEXER;
+	else
+		sdo_client->quirks &= ~SDO_ASYNC_QUIRK_IGNORE_MULTIPLEXER;
+
+	if (cfg_get_bool(nodeid, "send_full_sdo_frame", 0))
+		sdo_client->quirks |= SDO_ASYNC_QUIRK_NEEDS_FULL_FRAME;
+	else
+		sdo_client->quirks &= ~SDO_ASYNC_QUIRK_NEEDS_FULL_FRAME;
+
+
 }
 
 static int load_any_driver(int nodeid)
@@ -1273,6 +1293,9 @@ int co_master_run(const struct co_master_options* opt)
 	mloop_ = mloop_default();
 	mloop_ref(mloop_);
 
+	profile("Load configuration...\n");
+	cfg_load();
+
 	profile("Load EDS database...\n");
 	eds_db_load();
 
@@ -1379,6 +1402,7 @@ rest_service_failure:
 
 rest_init_failure:
 	eds_db_unload();
+	cfg_unload();
 
 	mloop_unref(mloop_);
 	return rc;
