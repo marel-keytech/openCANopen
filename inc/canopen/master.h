@@ -22,29 +22,10 @@
 #include "canopen-driver.h"
 #include "type-macros.h"
 
-enum co_master_options_flags {
-	CO_MASTER_OPTION_WITH_QUIRKS = 1,
-	CO_MASTER_OPTION_USE_TCP     = 1 << 1,
-};
-
 enum co_master_driver_type {
 	CO_MASTER_DRIVER_NONE = 0,
 	CO_MASTER_DRIVER_LEGACY,
 	CO_MASTER_DRIVER_NEW
-};
-
-struct co_master_options {
-	const char* iface;
-	int nworkers;
-	size_t worker_stack_size;
-	size_t job_queue_length;
-	size_t sdo_queue_length;
-	int rest_port;
-	size_t flags;
-	uint32_t heartbeat_period;
-	uint32_t heartbeat_timeout;
-	uint32_t ntimeouts_max;
-	struct { int start, stop; } range;
 };
 
 typedef int (*co_drv_init_fn)(struct co_drv*);
@@ -110,7 +91,7 @@ static inline struct co_master_node* co_master_get_node(int nodeid)
 	return &co_master_node_[nodeid];
 }
 
-int co_master_run(const struct co_master_options* options);
+int co_master_run(void);
 
 int co_drv_load(struct co_drv* drv, const char* name);
 int co_drv_init(struct co_drv* drv);

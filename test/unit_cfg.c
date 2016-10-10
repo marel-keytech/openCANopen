@@ -30,15 +30,15 @@ static int test_priority_order(void)
 	cfg__load_stream(stream);
 	fclose(stream);
 
-	ASSERT_UINT_EQ(1, cfg_get_uint(23, "a", 0));
-	ASSERT_UINT_EQ(2, cfg_get_uint(23, "b", 0));
-	ASSERT_UINT_EQ(3, cfg_get_uint(23, "c", 0));
+	ASSERT_STR_EQ("1", cfg__file_read(23, "a"));
+	ASSERT_STR_EQ("2", cfg__file_read(23, "b"));
+	ASSERT_STR_EQ("3", cfg__file_read(23, "c"));
 
-	ASSERT_UINT_EQ(6, cfg_get_uint(42, "a", 0));
-	ASSERT_UINT_EQ(5, cfg_get_uint(42, "b", 0));
-	ASSERT_UINT_EQ(3, cfg_get_uint(42, "c", 0));
+	ASSERT_STR_EQ("6", cfg__file_read(42, "a"));
+	ASSERT_STR_EQ("5", cfg__file_read(42, "b"));
+	ASSERT_STR_EQ("3", cfg__file_read(42, "c"));
 
-	cfg_unload();
+	cfg_unload_file();
 	return 0;
 }
 

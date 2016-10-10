@@ -24,13 +24,15 @@
 
 #include "socketcan.h"
 #include "canopen/master.h"
+#include "cfg.h"
 
-#define SDO_FIFO_MAX_LENGTH 1024
-#define REST_DEFAULT_PORT 9191
-#define HEARTBEAT_PERIOD 10000 /* ms */
-#define HEARTBEAT_TIMEOUT 1000 /* ms */
+#ifndef CFG_FILE_PATH
+#define CFG_FILE_PATH "/etc/canopen.cfg"
+#endif
 
 #define is_in_range(x, min, max) ((min) <= (x) && (x) <= (max))
+
+size_t strlcpy(char*, const char*, size_t);
 
 const char usage_[] =
 "Usage: canopen-master [options] <interface>\n"
@@ -89,7 +91,7 @@ static inline int have_help_argument(int argc, char* argv[])
 	return 0;
 }
 
-static int parse_range(struct co_master_options* opt, char* range)
+static int parse_range(char* range)
 {
 	char* start = range;
 	char* stop = strchr(range, '-');
@@ -101,11 +103,11 @@ static int parse_range(struct co_master_options* opt, char* range)
 	if (!*stop)
 		return -1;
 
-	opt->range.start = strtoul(start, NULL, 0);
-	opt->range.stop = strtoul(stop, NULL, 0);
+	cfg.range_start = strtoul(start, NULL, 0);
+	cfg.range_stop = strtoul(stop, NULL, 0);
 
-	if (!is_in_range(opt->range.start, 1, 127)
-	 || !is_in_range(opt->range.stop, 1, 127))
+	if (!is_in_range(cfg.range_start, 1, 127)
+	 || !is_in_range(cfg.range_stop, 1, 127))
 		return -1;
 
 	return 0;
@@ -113,7 +115,10 @@ static int parse_range(struct co_master_options* opt, char* range)
 
 int main(int argc, char* argv[])
 {
-	int rc = 0;
+	cfg_load_defaults();
+
+	if (cfg_load_file(CFG_FILE_PATH) >= 0)
+		cfg_load_globals();
 
 	/* Override appbase help */
 	if (have_help_argument(argc, argv))
@@ -123,17 +128,6 @@ int main(int argc, char* argv[])
 	if (appbase_cmdline(&argc, argv) != 0)
 		return 1;
 #endif /* NO_MAREL_CODE */
-
-	struct co_master_options mopt = {
-		.nworkers = 4,
-		.worker_stack_size = 0,
-		.job_queue_length = 256,
-		.sdo_queue_length = SDO_FIFO_MAX_LENGTH,
-		.rest_port = REST_DEFAULT_PORT,
-		.heartbeat_period = HEARTBEAT_PERIOD,
-		.heartbeat_timeout = HEARTBEAT_TIMEOUT,
-		.flags = CO_MASTER_OPTION_WITH_QUIRKS
-	};
 
 	static const struct option long_options[] = {
 		{ "worker-threads",    required_argument, 0, 'W' },
@@ -157,22 +151,22 @@ int main(int argc, char* argv[])
 			break;
 
 		switch (c) {
-		case 'W': mopt.nworkers = atoi(optarg); break;
-		case 's': mopt.worker_stack_size = strtoul(optarg, NULL, 0);
+		case 'W': cfg.n_workers = atoi(optarg); break;
+		case 's': cfg.worker_stack_size = strtoul(optarg, NULL, 0);
 			  break;
-		case 'j': mopt.job_queue_length = strtoul(optarg, NULL, 0);
+		case 'j': cfg.job_queue_length = strtoul(optarg, NULL, 0);
 			  break;
-		case 'S': mopt.sdo_queue_length = strtoul(optarg, NULL, 0);
+		case 'S': cfg.sdo_queue_length = strtoul(optarg, NULL, 0);
 			  break;
-		case 'p': mopt.heartbeat_period = strtoul(optarg, NULL, 0);
+		case 'p': cfg.heartbeat_period = strtoul(optarg, NULL, 0);
 			  break;
-		case 'P': mopt.heartbeat_timeout = strtoul(optarg, NULL, 0);
+		case 'P': cfg.heartbeat_timeout = strtoul(optarg, NULL, 0);
 			  break;
-		case 'x': mopt.ntimeouts_max = strtoul(optarg, NULL, 0); break;
-		case 'R': mopt.rest_port = atoi(optarg); break;
-		case 'f': mopt.flags &= ~CO_MASTER_OPTION_WITH_QUIRKS; break;
-		case 'T': mopt.flags |= CO_MASTER_OPTION_USE_TCP; break;
-		case 'n': if (parse_range(&mopt, optarg) < 0)
+		case 'x': cfg.n_timeouts_max = strtoul(optarg, NULL, 0); break;
+		case 'R': cfg.rest_port = atoi(optarg); break;
+		case 'f': cfg.be_strict = 1; break;
+		case 'T': cfg.use_tcp = 1; break;
+		case 'n': if (parse_range(optarg) < 0)
 				  return print_usage(stderr, 1);
 			  break;
 		case 'h': return print_usage(stdout, 0);
@@ -187,7 +181,11 @@ int main(int argc, char* argv[])
 	if (nargs < 1)
 		return print_usage(stderr, 1);
 
-	mopt.iface = args[0];
+	strlcpy(cfg.iface, args[0], sizeof(cfg.iface));
 
-	return co_master_run(&mopt) == 0 ? 0 : 1;
+	int r = co_master_run();
+
+	cfg_unload_file();
+
+	return r == 0 ? 0 : 1;
 }

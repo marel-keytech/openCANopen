@@ -17,12 +17,84 @@
 #include "ini_parser.h"
 #include "canopen/master.h"
 
-#ifndef CFG_PATH
-#define CFG_PATH "/etc/canopen.cfg"
-#endif
+#define EXPORT __attribute__((visibility("default")))
+
+#define XSTR(s) STR(s)
+#define STR(s) #s
 
 static int cfg__is_initialised = 0;
 static struct ini_file ini;
+
+size_t strlcpy(char*, const char*, size_t);
+
+EXPORT
+struct cfg cfg;
+
+EXPORT
+void cfg_load_defaults(void)
+{
+#define X(type, name, default_) CFG__SET_(type, cfg.name, default_);
+	CFG__PARAMETERS
+#undef X
+
+}
+
+void cfg__load_node_defaults(int id)
+{
+#define X(type, name, default_) CFG__SET_(type, cfg.node[id].name, default_);
+	CFG__NODE_PARAMETERS
+#undef X
+}
+
+void cfg__load_node_config(int id)
+{
+	const char* v;
+#define X(type, name, default_) \
+		v = cfg__file_read(id, XSTR(name)); \
+		if (v) { \
+			CFG__SET_(type, cfg.node[id].name, CFG__STRTO_(type, v)); \
+		}
+
+	CFG__NODE_PARAMETERS
+#undef X
+}
+
+void cfg_load_node(int id)
+{
+	cfg__load_node_defaults(id);
+	cfg__load_node_config(id);
+
+	if (cfg.be_strict)
+		cfg.node[id].ignore_sdo_multiplexer = 0;
+
+	if (cfg.heartbeat_period)
+		cfg.node[id].heartbeat_period = cfg.heartbeat_period;
+
+	if (cfg.heartbeat_timeout)
+		cfg.node[id].heartbeat_timeout = cfg.heartbeat_timeout;
+
+	if (cfg.n_timeouts_max)
+		cfg.node[id].n_timeouts_max = cfg.n_timeouts_max;
+}
+
+EXPORT
+void cfg_load_globals(void)
+{
+	const char* v;
+
+	const struct ini_section* section = ini_find_section(&ini, "master");
+	if (!section)
+		return;
+
+#define X(type, name, default_) \
+		v = ini_find_key(section, XSTR(name)); \
+		if (v) { \
+			CFG__SET_(type, cfg.name, CFG__STRTO_(type, v)); \
+		}
+
+	CFG__PARAMETERS
+#undef X
+}
 
 int cfg__load_stream(FILE* stream)
 {
@@ -32,7 +104,8 @@ int cfg__load_stream(FILE* stream)
 	return r;
 }
 
-int cfg__load_file(const char* path)
+EXPORT
+int cfg_load_file(const char* path)
 {
 	int r = -1;
 
@@ -49,12 +122,8 @@ failure:
 	return r;
 }
 
-int cfg_load(void)
-{
-	return cfg__load_file(CFG_PATH);
-}
-
-void cfg_unload(void)
+EXPORT
+void cfg_unload_file(void)
 {
 	if (!cfg__is_initialised)
 		return;
@@ -85,7 +154,7 @@ const char* cfg__get_by_name(int nodeid, const char* key)
 	return ini_find(&ini, section, key);
 }
 
-const char* cfg__get_string(int nodeid, const char* key)
+const char* cfg__file_read(int nodeid, const char* key)
 {
 	if (!cfg__is_initialised)
 		return NULL;

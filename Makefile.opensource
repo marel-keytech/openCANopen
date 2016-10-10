@@ -69,6 +69,7 @@ LIBDEPS = \
 	  can-tcp \
 	  mloop \
 	  prioq \
+	  cfg \
 
 LIBOBJS = $(foreach dep,$(LIBDEPS),$(BUILDDIR)/obj/$(dep).o)
 

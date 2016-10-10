@@ -86,7 +86,6 @@ pthread_mutex_t driver_manager_lock_ = PTHREAD_MUTEX_INITIALIZER;
 
 static struct mloop* mloop_ = NULL;
 static struct mloop_socket* mux_handler_ = NULL;
-static struct co_master_options options_;
 
 static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
@@ -101,14 +100,12 @@ struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 
 static inline int nodeid_min(void)
 {
-	return options_.range.start == 0 ? CANOPEN_NODEID_MIN
-					 : options_.range.start;
+	return cfg.range_start == 0 ? CANOPEN_NODEID_MIN : cfg.range_start;
 }
 
 static inline int nodeid_max(void)
 {
-	return options_.range.stop == 0 ? CANOPEN_NODEID_MAX
-					: options_.range.stop;
+	return cfg.range_stop == 0 ? CANOPEN_NODEID_MAX : cfg.range_stop;
 }
 
 static inline uint32_t get_device_type(int nodeid)
@@ -257,7 +254,7 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 	plog(LOG_DEBUG, "Node \"%s\" with id %d has missed %u heartbeats",
 	     node->name, nodeid, node->ntimeouts);
 
-	if (node->ntimeouts <= options_.ntimeouts_max)
+	if (node->ntimeouts <= cfg.node[nodeid].n_timeouts_max)
 		return;
 
 	plog(LOG_NOTICE, "Node \"%s\" with id %d has timed out; unloading...",
@@ -417,7 +414,7 @@ static void apply_quirks(struct co_master_node* node)
 {
 	int nodeid = co_master_get_node_id(node);
 
-	if (cfg_get_bool(nodeid, "has_zero_node_quarding_status", 0))
+	if (cfg.node[nodeid].has_zero_guard_status)
 		node->quirks |= CO_NODE_QUIRK_ZERO_GUARD_STATUS;
 	else
 		node->quirks &= ~CO_NODE_QUIRK_ZERO_GUARD_STATUS;
@@ -425,12 +422,12 @@ static void apply_quirks(struct co_master_node* node)
 	struct sdo_req_queue* sdo_queue = sdo_req_queue_get(nodeid);
 	struct sdo_async* sdo_client = &sdo_queue->sdo_client;
 
-	if (cfg_get_bool(nodeid, "ignore_sdo_multiplexer", 1))
+	if (cfg.node[nodeid].ignore_sdo_multiplexer)
 		sdo_client->quirks |= SDO_ASYNC_QUIRK_IGNORE_MULTIPLEXER;
 	else
 		sdo_client->quirks &= ~SDO_ASYNC_QUIRK_IGNORE_MULTIPLEXER;
 
-	if (cfg_get_bool(nodeid, "send_full_sdo_frame", 0))
+	if (cfg.node[nodeid].send_full_sdo_frame)
 		sdo_client->quirks |= SDO_ASYNC_QUIRK_NEEDS_FULL_FRAME;
 	else
 		sdo_client->quirks &= ~SDO_ASYNC_QUIRK_NEEDS_FULL_FRAME;
@@ -484,8 +481,10 @@ static int load_driver(int nodeid)
 		node->revision_number = get_revision_number(nodeid);
 	}
 
+	cfg_load_node(nodeid);
+
 	node->is_heartbeat_supported =
-		set_heartbeat_period(nodeid, options_.heartbeat_period) >= 0;
+		set_heartbeat_period(nodeid, cfg.node[nodeid].heartbeat_period) >= 0;
 
 	char* hw_version = get_string(nodeid, 0x1009, 0);
 	if (!hw_version)
@@ -610,11 +609,11 @@ static void run_net_probe(struct mloop_work* self)
 
 	int start = CANOPEN_NODEID_MIN, stop = CANOPEN_NODEID_MAX;
 
-	if (options_.range.start == 0 && options_.range.stop == 0) {
+	if (cfg.range_start == 0 && cfg.range_stop == 0) {
 		co_net_reset(&socket_, nodes_seen_, 100);
 	} else  {
-		start = options_.range.start;
-		stop = options_.range.stop;
+		start = cfg.range_start;
+		stop = cfg.range_stop;
 		co_net_reset_range(&socket_, nodes_seen_, start, stop,
 				   100 * (start - stop + 1));
 	}
@@ -1185,14 +1184,16 @@ static void* master_iface_init(int nodeid)
 
 static int init_heartbeat_timer(struct co_master_node* node)
 {
+	int nodeid = co_master_get_node_id(node);
+
 	struct mloop_timer* timer = mloop_timer_new(mloop_default());
 	if (!timer)
 		return -1;
 
-	uint64_t period = options_.heartbeat_period
-			+ options_.heartbeat_timeout;
+	uint64_t period = cfg.node[nodeid].heartbeat_period
+			+ cfg.node[nodeid].heartbeat_timeout;
 
-	if (options_.ntimeouts_max > 0)
+	if (cfg.node[nodeid].n_timeouts_max > 0)
 		mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
 
 	mloop_timer_set_context(timer, node, NULL);
@@ -1205,13 +1206,15 @@ static int init_heartbeat_timer(struct co_master_node* node)
 
 static int init_ping_timer(struct co_master_node* node)
 {
+	int nodeid = co_master_get_node_id(node);
+
 	struct mloop_timer* timer = mloop_timer_new(mloop_default());
 	if (!timer)
 		return -1;
 
 	mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
 	mloop_timer_set_context(timer, node, NULL);
-	mloop_timer_set_time(timer, options_.heartbeat_period * 1000000LL);
+	mloop_timer_set_time(timer, cfg.node[nodeid].heartbeat_period * 1000000LL);
 	mloop_timer_set_callback(timer, on_ping_timeout);
 	node->ping_timer = timer;
 
@@ -1277,11 +1280,9 @@ static void unload_all_drivers()
 }
 
 __attribute__((visibility("default")))
-int co_master_run(const struct co_master_options* opt)
+int co_master_run(void)
 {
 	int rc = 0;
-
-	memcpy(&options_, opt, sizeof(options_));
 
 	profiling_reset();
 	profile("Starting up canopen-master...\n");
@@ -1293,14 +1294,11 @@ int co_master_run(const struct co_master_options* opt)
 	mloop_ = mloop_default();
 	mloop_ref(mloop_);
 
-	profile("Load configuration...\n");
-	cfg_load();
-
 	profile("Load EDS database...\n");
 	eds_db_load();
 
 	profile("Initialize and register SDO REST service...\n");
-	if (rest_init(opt->rest_port) < 0) {
+	if (rest_init(cfg.rest_port) < 0) {
 		perror("Could not initialize rest service");
 		goto rest_init_failure;
 	}
@@ -1310,26 +1308,24 @@ int co_master_run(const struct co_master_options* opt)
 		goto rest_service_failure;
 
 	profile("Open interface...\n");
-	enum sock_type sock_type = opt->flags & CO_MASTER_OPTION_USE_TCP
-				 ? SOCK_TYPE_TCP : SOCK_TYPE_CAN;
-	if (sock_open(&socket_, sock_type, opt->iface) < 0) {
+	enum sock_type sock_type = cfg.use_tcp ? SOCK_TYPE_TCP : SOCK_TYPE_CAN;
+	if (sock_open(&socket_, sock_type, cfg.iface) < 0) {
 		perror("Could not open CAN bus");
 		goto socketcan_open_failure;
 	}
 
 #ifndef NO_MAREL_CODE
-	if (canopen_info_init(opt->iface) < 0) {
+	if (canopen_info_init(cfg.iface) < 0) {
 		perror("Could not initialize info structure");
 		goto info_failure;
 	}
 #endif /* NO_MAREL_CODE */
 
 	enum sdo_async_quirks_flags sdo_quirks;
-	sdo_quirks = opt->flags & CO_MASTER_OPTION_WITH_QUIRKS
-		   ? SDO_ASYNC_QUIRK_ALL : SDO_ASYNC_QUIRK_NONE;
+	sdo_quirks = cfg.be_strict ? SDO_ASYNC_QUIRK_NONE : SDO_ASYNC_QUIRK_ALL;
 
 	profile("Initialize SDO queues...\n");
-	if (sdo_req_queues_init(&socket_, opt->sdo_queue_length, sdo_quirks)
+	if (sdo_req_queues_init(&socket_, cfg.sdo_queue_length, sdo_quirks)
 			< 0)
 		goto sdo_req_queues_failure;
 
@@ -1349,11 +1345,11 @@ int co_master_run(const struct co_master_options* opt)
 	}
 #endif /* NO_MAREL_CODE */
 
-	mloop_set_job_queue_size(opt->job_queue_length);
-	mloop_set_worker_stack_size(opt->job_queue_length);
+	mloop_set_job_queue_size(cfg.job_queue_length);
+	mloop_set_worker_stack_size(cfg.job_queue_length);
 
 	profile("Start worker threads...\n");
-	if (mloop_require_workers(opt->nworkers) != 0) {
+	if (mloop_require_workers(cfg.n_workers) != 0) {
 		rc = 1;
 		goto worker_failure;
 	}
@@ -1402,7 +1398,6 @@ rest_service_failure:
 
 rest_init_failure:
 	eds_db_unload();
-	cfg_unload();
 
 	mloop_unref(mloop_);
 	return rc;
