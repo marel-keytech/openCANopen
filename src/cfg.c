@@ -144,7 +144,7 @@ const char* cfg__get_by_nodeid(int nodeid, const char* key)
 const char* cfg__get_by_name(int nodeid, const char* key)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
-	if (!node)
+	if (!node || !*node->name)
 		return NULL;
 
 	char section[256];

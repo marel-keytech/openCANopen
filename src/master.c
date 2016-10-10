@@ -451,6 +451,11 @@ static int load_any_driver(int nodeid)
 static int load_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
+
+	node->name[0] = '\0';
+	cfg_load_node(nodeid);
+	apply_quirks(node);
+
 	if (node->driver_type != CO_MASTER_DRIVER_NONE) {
 		plog(LOG_ERROR, "load_driver: A driver is already loaded for node %d",
 		     nodeid);
@@ -475,13 +480,15 @@ static int load_driver(int nodeid)
 	string_keep_if(is_nodename_char, name);
 	strlcpy(node->name, name, sizeof(node->name));
 
+	/* Reload config when we have the name of the node */
+	cfg_load_node(nodeid);
+	apply_quirks(node);
+
 	if (node_has_identity(nodeid)) {
 		node->vendor_id = get_vendor_id(nodeid);
 		node->product_code = get_product_code(nodeid);
 		node->revision_number = get_revision_number(nodeid);
 	}
-
-	cfg_load_node(nodeid);
 
 	node->is_heartbeat_supported =
 		set_heartbeat_period(nodeid, cfg.node[nodeid].heartbeat_period) >= 0;
@@ -505,8 +512,6 @@ static int load_driver(int nodeid)
 
 	load_error_register(nodeid);
 #endif /* NO_MAREL_CODE */
-
-	apply_quirks(node);
 
 	if (load_any_driver(nodeid) < 0) {
 		if (node->is_heartbeat_supported)
