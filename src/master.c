@@ -438,11 +438,6 @@ static void apply_quirks(struct co_master_node* node)
 {
 	int nodeid = co_master_get_node_id(node);
 
-	if (cfg.node[nodeid].has_zero_guard_status)
-		node->quirks |= CO_NODE_QUIRK_ZERO_GUARD_STATUS;
-	else
-		node->quirks &= ~CO_NODE_QUIRK_ZERO_GUARD_STATUS;
-
 	struct sdo_req_queue* sdo_queue = sdo_req_queue_get(nodeid);
 	struct sdo_async* sdo_client = &sdo_queue->sdo_client;
 
@@ -763,17 +758,17 @@ static int handle_emcy(struct co_master_node* node,
 static int handle_heartbeat(struct co_master_node* node,
 			     const struct can_frame* frame)
 {
+	int nodeid = co_master_get_node_id(node);
+
 	if (!heartbeat_is_valid(frame))
 		return -1;
 
 	if (heartbeat_is_bootup(frame)
-	 && !(node->quirks & CO_NODE_QUIRK_ZERO_GUARD_STATUS))
+	 && !cfg.node[nodeid].has_zero_guard_status)
 		return handle_bootup(node);
 
 	if (master_state_ == MASTER_STATE_STARTUP)
 		return 0;
-
-	int nodeid = co_master_get_node_id(node);
 
 	/* This can happen if the CAN bus is disconnected but not the power to
 	 * the node. We reset communication to refresh the state.

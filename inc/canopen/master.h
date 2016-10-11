@@ -45,11 +45,6 @@ struct co_drv {
 	char iface[256];
 };
 
-enum co_master_node_quirks {
-	CO_NODE_QUIRK_NONE = 0,
-	CO_NODE_QUIRK_ZERO_GUARD_STATUS = 1,
-};
-
 struct co_master_node {
 	enum co_master_driver_type driver_type;
 
@@ -73,8 +68,6 @@ struct co_master_node {
 	int is_loading;
 
 	uint32_t ntimeouts;
-
-	enum co_master_node_quirks quirks;
 };
 
 extern struct co_master_node co_master_node_[];
