@@ -94,6 +94,8 @@ static int master_send_sdo(int nodeid, int index, int subindex,
 static int master_send_pdo(int nodeid, int n, unsigned char* data, size_t size);
 static void unload_legacy_module(int device_type, void* driver);
 static void on_bootup_done(struct mloop_work* self);
+static int init_heartbeat_timer(struct co_master_node* node);
+static int init_ping_timer(struct co_master_node* node);
 
 struct co_master_node co_master_node_[CANOPEN_NODEID_MAX + 1];
 /* Note: node_[0] is unused */
@@ -159,6 +161,8 @@ static void stop_heartbeat_timer(int nodeid)
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->heartbeat_timer;
 	mloop_timer_stop(timer);
+	if (mloop_timer_unref(timer) == 0)
+		node->heartbeat_timer = NULL;
 }
 
 static void stop_ping_timer(int nodeid)
@@ -166,6 +170,8 @@ static void stop_ping_timer(int nodeid)
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->ping_timer;
 	mloop_timer_stop(timer);
+	if (mloop_timer_unref(timer) == 0)
+		node->ping_timer = NULL;
 }
 
 #ifndef NO_MAREL_CODE
@@ -263,16 +269,34 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 	unload_driver(co_master_get_node_id(node));
 }
 
+static struct mloop_timer* get_heartbeat_timer(struct co_master_node* node)
+{
+	if (!node->heartbeat_timer)
+		init_heartbeat_timer(node);
+
+	return node->heartbeat_timer;
+}
+
+static struct mloop_timer* get_ping_timer(struct co_master_node* node)
+{
+	if (!node->ping_timer)
+		init_ping_timer(node);
+
+	return node->ping_timer;
+}
+
 static int start_heartbeat_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
-	struct mloop_timer* timer = node->heartbeat_timer;
+	struct mloop_timer* timer = get_heartbeat_timer(node);
 	node->ntimeouts = 0;
 	return mloop_timer_start(timer);
 }
 
 static int restart_heartbeat_timer(int nodeid)
 {
+	struct co_master_node* node = co_master_get_node(nodeid);
+	mloop_timer_ref(node->heartbeat_timer);
 	stop_heartbeat_timer(nodeid);
 	return start_heartbeat_timer(nodeid);
 }
@@ -295,7 +319,7 @@ static void on_ping_timeout(struct mloop_timer* timer)
 static int start_ping_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
-	struct mloop_timer* timer = node->ping_timer;
+	struct mloop_timer* timer = get_ping_timer(node);
 	return mloop_timer_start(timer);
 }
 
@@ -1226,54 +1250,12 @@ static int init_ping_timer(struct co_master_node* node)
 	return 0;
 }
 
-static int init_node_structure(int nodeid)
-{
-	struct co_master_node* node = co_master_get_node(nodeid);
-
-	memset(node, 0, sizeof(*node));
-
-	if (init_heartbeat_timer(node) < 0)
-		return -1;;
-
-	if (init_ping_timer(node) < 0)
-		goto ping_timer_failure;
-
-	return 0;
-
-ping_timer_failure:
-	mloop_timer_unref(node->heartbeat_timer);
-	return -1;
-}
-
 static void destroy_node_structure(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 
 	mloop_timer_unref(node->ping_timer);
 	mloop_timer_unref(node->heartbeat_timer);
-}
-
-static int init_all_node_structures()
-{
-	int i;
-	for_each_node(i)
-		if (init_node_structure(i) < 0)
-			goto failure;
-
-	return 0;
-
-failure:
-	for (; i > 0; --i)
-		destroy_node_structure(i);
-
-	return -1;
-}
-
-static void destroy_all_node_structures()
-{
-	int i;
-	for_each_node(i)
-		destroy_node_structure(i);
 }
 
 static void unload_all_drivers()
@@ -1334,10 +1316,6 @@ int co_master_run(void)
 			< 0)
 		goto sdo_req_queues_failure;
 
-	profile("Initialize node structure...\n");
-	if (init_all_node_structures() < 0)
-		goto node_init_failure;
-
 	if (sock_type == SOCK_TYPE_CAN)
 		net_fix_sndbuf(socket_.fd);
 
@@ -1384,9 +1362,6 @@ worker_failure:
 #endif /* NO_MAREL_CODE */
 
 driver_manager_failure:
-	destroy_all_node_structures();
-
-node_init_failure:
 	sdo_req_queues_cleanup();
 
 sdo_req_queues_failure:
