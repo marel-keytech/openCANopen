@@ -207,9 +207,12 @@ static void turn_off_heartbeat(int nodeid)
 	sock_send(&socket_, &cf, 0);
 }
 
-static void unload_driver(int nodeid)
+static void stop_node_guarding(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
+
+	if (!cfg.node[nodeid].enable_node_guarding)
+		return;
 
 	stop_heartbeat_timer(nodeid);
 
@@ -217,6 +220,13 @@ static void unload_driver(int nodeid)
 		stop_ping_timer(nodeid);
 	else
 		turn_off_heartbeat(nodeid);
+}
+
+static void unload_driver(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	stop_node_guarding(nodeid);
 
 	sdo_req_queue_flush(sdo_req_queue_get(nodeid));
 
@@ -296,8 +306,13 @@ static int start_heartbeat_timer(int nodeid)
 static int restart_heartbeat_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
+
+	if (!cfg.node[nodeid].enable_node_guarding)
+		return 0;
+
 	mloop_timer_ref(node->heartbeat_timer);
 	stop_heartbeat_timer(nodeid);
+
 	return start_heartbeat_timer(nodeid);
 }
 
@@ -326,6 +341,9 @@ static int start_ping_timer(int nodeid)
 static void start_nodeguarding(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
+
+	if (!cfg.node[nodeid].enable_node_guarding)
+		return;
 
 	if (!node->is_heartbeat_supported)
 		start_ping_timer(nodeid);
@@ -509,8 +527,9 @@ static int load_driver(int nodeid)
 		node->revision_number = get_revision_number(nodeid);
 	}
 
-	node->is_heartbeat_supported =
-		set_heartbeat_period(nodeid, cfg.node[nodeid].heartbeat_period) >= 0;
+	uint64_t heartbeat_period = cfg.node[nodeid].heartbeat_period;
+	if (cfg.node[nodeid].enable_node_guarding)
+		node->is_heartbeat_supported = set_heartbeat_period(nodeid, heartbeat_period) >= 0;
 
 	char* hw_version = get_string(nodeid, 0x1009, 0);
 	if (!hw_version)

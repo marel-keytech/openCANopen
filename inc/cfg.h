@@ -42,6 +42,7 @@
 	X(uint, heartbeat_period, 10000 /* ms */) \
 	X(uint, heartbeat_timeout, 1000 /* ms */) \
 	X(uint, n_timeouts_max, 0) \
+	X(bool, enable_node_guarding, 1) \
 
 #define CFG__DEFINE_bool(name) int name
 #define CFG__DEFINE_uint(name) uint64_t name
