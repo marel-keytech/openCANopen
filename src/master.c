@@ -251,8 +251,6 @@ static void unload_driver(int nodeid)
 
 	if (master_state_ == MASTER_STATE_STOPPING)
 		co_net_send_nmt(&socket_, NMT_CS_STOP, nodeid);
-	else
-		co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 
 #ifndef NO_MAREL_CODE
 	struct canopen_info* info = canopen_info_get(nodeid);
@@ -276,6 +274,7 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 	plog(LOG_NOTICE, "Node \"%s\" with id %d has timed out; unloading...",
 	     node->name, nodeid);
 
+	co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 	unload_driver(co_master_get_node_id(node));
 }
 
