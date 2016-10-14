@@ -218,8 +218,6 @@ static void stop_node_guarding(int nodeid)
 
 	if (!node->is_heartbeat_supported)
 		stop_ping_timer(nodeid);
-	else
-		turn_off_heartbeat(nodeid);
 }
 
 static void unload_driver(int nodeid)
