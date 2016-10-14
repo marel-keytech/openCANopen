@@ -66,6 +66,7 @@ struct co_master_node {
 	char sw_version[64];
 
 	int is_loading;
+	int is_initialized;
 
 	uint32_t ntimeouts;
 };

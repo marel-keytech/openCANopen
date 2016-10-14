@@ -226,6 +226,8 @@ static void unload_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 
+	node->is_initialized = 0;
+
 	stop_node_guarding(nodeid);
 
 	sdo_req_queue_flush(sdo_req_queue_get(nodeid));
@@ -685,6 +687,8 @@ static void on_load_driver_done(struct mloop_work* self)
 	if (initialize_driver(nodeid) < 0)
 		return;
 
+	node->is_initialized = 1;
+
 	if (master_state_ == MASTER_STATE_STARTUP)
 		return;
 
@@ -930,6 +934,11 @@ static void mux_on_frame(const struct can_frame* cf)
 		return;
 
 	struct co_master_node* node = co_master_get_node(msg.id);
+
+	if (!node->is_initialized) {
+		handle_not_loaded(node, &msg, cf);
+		return;
+	}
 
 	switch (node->driver_type) {
 	case CO_MASTER_DRIVER_NONE:
