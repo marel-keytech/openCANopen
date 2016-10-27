@@ -353,8 +353,10 @@ static int eds__load_file(const char* path)
 
 	struct ini_file ini;
 
-	if (ini_parse(&ini, file) < 0) {
-		plog(LOG_DEBUG, "Failed to parse EDS %s", path);
+	int lineno = ini_parse(&ini, file);
+	if (lineno < 0) {
+		plog(LOG_DEBUG, "Failed to parse EDS %s, line %d", path,
+		     -lineno);
 		goto failure;
 	}
 
