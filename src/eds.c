@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include <limits.h>
+#include "plog.h"
 
 #include "vector.h"
 #include "sys/tree.h"
@@ -352,11 +353,17 @@ static int eds__load_file(const char* path)
 
 	struct ini_file ini;
 
-	if (ini_parse(&ini, file) < 0)
+	if (ini_parse(&ini, file) < 0) {
+		plog(LOG_DEBUG, "Failed to parse EDS %s", path);
 		goto failure;
+	}
 
-	if (eds__convert_ini(&ini) < 0)
+	if (eds__convert_ini(&ini) < 0) {
+		plog(LOG_DEBUG, "Failed to convert EDS %s", path);
 		goto failure;
+	}
+
+	plog(LOG_DEBUG, "Loaded EDS %s", path);
 
 	fclose(file);
 	ini_destroy(&ini);
