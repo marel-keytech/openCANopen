@@ -230,9 +230,9 @@ static inline void ini__sort(struct ini_file* self)
 
 int ini_parse(struct ini_file* self, FILE* stream)
 {
-	int rc = -1;
 	char* line = NULL;
 	size_t size = 0;
+	int lineno = 0;
 
 	memset(self, 0, sizeof(*self));
 
@@ -241,16 +241,19 @@ int ini_parse(struct ini_file* self, FILE* stream)
 	if (ini__append_new_section(self, "(root)") < 0)
 		return -1;
 
-	while (getline(&line, &size, stream) >= 0)
+	while (getline(&line, &size, stream) >= 0) {
+		--lineno;
+
 		if (ini__parse_line(self, line) < 0)
 			goto done;
+	}
 
 	ini__sort(self);
 
-	rc = 0;
+	lineno = 0;
 done:
 	free(line);
-	return rc;
+	return lineno;
 }
 
 void ini_destroy(struct ini_file* file)
