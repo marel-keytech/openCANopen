@@ -371,12 +371,25 @@ static void unload_legacy_module(int device_type, void* driver)
 }
 #endif /* NO_MAREL_CODE */
 
+static int load_profile_driver(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	char buffer[256];
+	unsigned int profile = co_master_get_device_profile(node);
+	snprintf(buffer, sizeof(buffer), "cia%u", profile);
+	buffer[sizeof(buffer) - 1] = '\0';
+
+	return co_drv_load(&node->ndrv, buffer);
+}
+
 static int load_new_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 
 	if (co_drv_load(&node->ndrv, node->name) < 0)
-		return -1;
+		if (load_profile_driver(nodeid) < 0)
+			return -1;
 
 	node->driver_type = CO_MASTER_DRIVER_NEW;
 

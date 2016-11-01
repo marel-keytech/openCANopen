@@ -53,7 +53,7 @@ struct co_master_node {
 
 	struct co_drv ndrv;
 
-	int device_type;
+	uint32_t device_type;
 	int is_heartbeat_supported;
 
 	uint32_t vendor_id, product_code, revision_number;
@@ -96,6 +96,12 @@ int co__rpdox(int nodeid, int type, const void* data, size_t size);
 static inline struct co_master_node* co_drv_node(const struct co_drv* drv)
 {
 	return container_of(drv, struct co_master_node, ndrv);
+}
+
+static inline uint16_t
+co_master_get_device_profile(const struct co_master_node* node)
+{
+	return node->device_type & 0xffff;
 }
 
 #endif /* CANOPEN_MASTER_H_ */
