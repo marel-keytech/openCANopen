@@ -198,7 +198,7 @@ static int ini__section_cmp(const void* p1, const void* p2)
 	const struct ini_section* s1 = *sp1;
 	const struct ini_section* s2 = *sp2;
 
-	return strcmp(s1->section, s2->section);
+	return strcasecmp(s1->section, s2->section);
 }
 
 static int ini__key_cmp(const void* p1, const void* p2)
@@ -209,7 +209,7 @@ static int ini__key_cmp(const void* p1, const void* p2)
 	const struct ini_key_value* kv1 = *kvp1;
 	const struct ini_key_value* kv2 = *kvp2;
 
-	return strcmp(kv1->key, kv2->key);
+	return strcasecmp(kv1->key, kv2->key);
 }
 
 static inline void ini__sort(struct ini_file* self)
