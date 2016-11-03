@@ -1,5 +1,6 @@
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "tst.h"
 #include "fff.h"
@@ -220,6 +221,7 @@ static int test_read__empty(void)
 {
 	reset_fakes();
 	read_fake.return_val = -1;
+	errno = EAGAIN;
 	struct vector vec;
 	ASSERT_INT_LT(0, rest__read(&vec, 42));
 	return 0;
@@ -239,7 +241,9 @@ static ssize_t read_test_custom(int fd, void* buf, size_t count)
 	switch (read_fake.call_count) {
 	case 1: strcpy(buf, "foo"); return 3;
 	case 2: strcpy(buf, "bar"); return 4;
-	default: return -1;
+	default:
+		errno = EAGAIN;
+		return -1;
 	}
 }
 
@@ -249,7 +253,7 @@ static int test_read__twice(void)
 	read_fake.custom_fake = read_test_custom;
 	struct vector vec;
 	vector_init(&vec, 16);
-	ASSERT_INT_EQ(-1, rest__read(&vec, 42));
+	ASSERT_INT_EQ(0, rest__read(&vec, 42));
 	ASSERT_INT_EQ(3, read_fake.call_count);
 	ASSERT_UINT_EQ(7, vec.index);
 	ASSERT_STR_EQ("foobar", vec.data);

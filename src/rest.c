@@ -88,8 +88,11 @@ int rest__read(struct vector* buffer, int fd)
 	errno = 0;
 	char input[256];
 	ssize_t size = read(fd, &input, sizeof(input));
-	if (size <= 0)
-		return size;
+	if (size == 0)
+		return -1;
+
+	if (size < 0)
+		return (errno == EWOULDBLOCK || errno == EAGAIN) ? 0 : -1;
 
 	if (vector_append(buffer, input, size) < 0)
 		return -1;
@@ -100,14 +103,11 @@ int rest__read(struct vector* buffer, int fd)
 int rest__read_head(struct vector* buffer, int fd)
 {
 	int rc = rest__read(buffer, fd);
-	if (rc == 0)
-		return 0;
-
-	if (rc < 0 && errno != EWOULDBLOCK && errno != EAGAIN)
+	if (rc < 0)
 		return -1;
 
 	vector_append(buffer, "", 1);
-	rc = strstr(buffer->data, "\r\n\r\n") ? 1 : -1;
+	rc = !!strstr(buffer->data, "\r\n\r\n");
 	buffer->index--;
 
 	return rc;
@@ -287,6 +287,9 @@ static inline int rest__have_full_content(struct rest_client* client)
 
 void rest__process_content(struct rest_client* client)
 {
+	size_t full_length = client->req.header_length
+			   + client->req.content_length;
+
 	if (!rest__have_full_content(client))
 		return;
 
@@ -345,12 +348,10 @@ void rest__handle_header(int fd, struct rest_client* client,
 			 struct mloop_socket* socket)
 {
 	int rc = rest__read_head(&client->buffer, fd);
-	if (rc == 0) {
-		mloop_socket_stop(socket);
-		return;
-	}
-
 	if (rc < 0)
+		mloop_socket_stop(socket);
+
+	if (rc <= 0)
 		return;
 
 	if (http_req_parse(&client->req, client->buffer.data) < 0)
@@ -374,13 +375,12 @@ void rest__handle_content(int fd, struct rest_client* client,
 			  struct mloop_socket* socket)
 {
 	int rc = rest__read(&client->buffer, fd);
-	if (rc == 0) {
+	if (rc < 0) {
 		mloop_socket_stop(socket);
 		return;
 	}
 
-	if (rc > 0)
-		rest__process_content(client);
+	rest__process_content(client);
 }
 
 void rest__handle_junk(int fd, struct rest_client* client,
