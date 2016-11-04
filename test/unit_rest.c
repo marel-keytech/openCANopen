@@ -232,7 +232,7 @@ static int test_read__closed(void)
 	reset_fakes();
 	read_fake.return_val = 0;
 	struct vector vec;
-	ASSERT_INT_EQ(0, rest__read(&vec, 42));
+	ASSERT_INT_EQ(-1, rest__read(&vec, 42));
 	return 0;
 }
 
@@ -257,6 +257,7 @@ static int test_read__twice(void)
 	ASSERT_INT_EQ(3, read_fake.call_count);
 	ASSERT_UINT_EQ(7, vec.index);
 	ASSERT_STR_EQ("foobar", vec.data);
+	vector_destroy(&vec);
 	return 0;
 }
 
