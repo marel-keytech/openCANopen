@@ -22,6 +22,11 @@ The system is mostly asynchronous but some things are implemented synchronously 
 
 Non-blocking tasks are handled in a single main loop. The main loop sends blocking tasks to a single work queue. The work queue is a stable priority queue implemented using a heap. When a worker is ready (which is most of the time), it grabs a job from the queue. When it's done, it sends the result back to the main loop.
 
+## Using the Code
+Currently, the internals of the CANopen master are not available as a library, but they are fairly independent of each other so they can be used in isolation. Some components require a main loop library. The one that is provided with the project can be run within another main loop using `mloop_get_pollfd(struct mloop*)` and `mloop_run_once(struct mloop*)`. Mloop is implemented using epoll, so it would have to be implemented using a different method when porting to other platforms.
+
+All components can be executed in an asynchronous fashion. Some components, such as SDO requests, can be executed synchronously.
+
 ## Writing Drivers
 The API can be found in inc/canopen-driver.h. It lacks documentation but the names should be quite revealing.
 
