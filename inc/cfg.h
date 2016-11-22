@@ -34,6 +34,7 @@
 	X(uint, n_timeouts_max, 0) \
 	X(uint, range_start, 0) \
 	X(uint, range_stop, 0) \
+	X(uint, sync_interval, 0 /* us */) \
 
 #define CFG__NODE_PARAMETERS \
 	X(bool, has_zero_guard_status, 0) \

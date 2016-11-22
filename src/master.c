@@ -1035,6 +1035,36 @@ static void load_late_nodes(void)
 		}
 }
 
+static void on_sync(struct mloop_timer* self)
+{
+	(void)self;
+
+	struct can_frame cf = {
+		.can_id = R_SYNC,
+		.can_dlc = 0,
+	};
+
+	sock_send(&socket_, &cf, 0);
+}
+
+static int start_sync_timer(void)
+{
+	if (cfg.sync_interval == 0)
+		return 0;
+
+	struct mloop_timer* timer = mloop_timer_new(mloop_default());
+	if (!timer)
+		return -1;
+
+	mloop_timer_set_callback(timer, on_sync);
+	mloop_timer_set_type(timer, MLOOP_TIMER_PERIODIC);
+	mloop_timer_set_time(timer, cfg.sync_interval * 1000ULL);
+
+	int rc = mloop_timer_start(timer);
+	mloop_timer_unref(timer);
+	return rc;
+}
+
 static void on_bootup_done(struct mloop_work* self)
 {
 	int i;
@@ -1057,6 +1087,8 @@ static void on_bootup_done(struct mloop_work* self)
 	master_state_ = MASTER_STATE_RUNNING;
 
 	load_late_nodes();
+
+	start_sync_timer();
 }
 
 static void on_net_probe_done(struct mloop_work* self)
