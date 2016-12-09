@@ -49,7 +49,7 @@ const char usage_[] =
 "    -n, --range               Set node id range (inclusive) to be managed.\n"
 "    -p, --heartbeat-period    Set heartbeat period (default 10000ms).\n"
 "    -P, --heartbeat-timeout   Set heartbeat timeout (default 1000ms).\n"
-"    -x, --ntimeouts-max       Set maximum number of timeouts (default 0).\n"
+"    -x, --ntimeouts-max       Set maximum number of timeouts (default 2).\n"
 "\n";
 
 #ifndef NO_MAREL_CODE

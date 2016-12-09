@@ -31,7 +31,7 @@
 	X(bool, use_tcp, 0) \
 	X(uint, heartbeat_period, 0 /* ms */) \
 	X(uint, heartbeat_timeout, 0 /* ms */) \
-	X(uint, n_timeouts_max, 0) \
+	X(uint, n_timeouts_max, 2) \
 	X(uint, range_start, 0) \
 	X(uint, range_stop, 0) \
 	X(uint, sync_interval, 0 /* us */) \
