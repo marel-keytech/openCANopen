@@ -24,6 +24,7 @@ struct canopen_info {
 	uint32_t device_type;
 	uint32_t last_seen;
 	uint32_t error_register;
+	uint32_t skipped_heartbeats;
 	char name[64];
 	char hw_version[64];
 	char sw_version[64];

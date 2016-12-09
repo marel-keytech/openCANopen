@@ -9,6 +9,8 @@
 			  help="Unix time stamp indicating when the node last sent a heartbeat message"/>
 		<variable type="uint32_t" name="error_register"
 			  help="Last known value of the error register"/>
+		<variable type="uint32_t" name="skipped_heartbeats"
+			  help="Number of skipped heartbeats"/>
 		<variable type="string" bytesize="64" name="name"
 			  help="Name according to object dictionary entry 1008:0"/>
 		<variable type="string" bytesize="64" name="hw_version"

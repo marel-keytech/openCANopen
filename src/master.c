@@ -265,6 +265,11 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 
 	node->ntimeouts++;
 
+#ifndef NO_MAREL_CODE
+	struct canopen_info* info = canopen_info_get(nodeid);
+	info->skipped_heartbeats++;
+#endif /* NO_MAREL_CODE */
+
 	plog(LOG_DEBUG, "Node \"%s\" with id %d has missed %u heartbeats",
 	     node->name, nodeid, node->ntimeouts);
 
@@ -823,6 +828,7 @@ static int handle_heartbeat(struct co_master_node* node,
 #ifndef NO_MAREL_CODE
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->last_seen = time(NULL);
+	info->skipped_heartbeats = 0;
 #endif /* NO_MAREL_CODE */
 
 	return 0;
