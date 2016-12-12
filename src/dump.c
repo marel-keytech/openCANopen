@@ -94,7 +94,7 @@ static int dump_sync(struct can_frame* cf)
 		return 0;
 
 	(void)cf;
-	printf("SYNC TODO\n");
+	printf("SYNC\n");
 	return 0;
 }
 
