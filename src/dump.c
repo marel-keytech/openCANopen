@@ -35,6 +35,9 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+#define printx(cf, fmt, ...) \
+	printf(fmt "%s\n", ## __VA_ARGS__, (cf)->can_id & CAN_RTR_FLAG ? " [RTR]" : "")
+
 struct node_state {
 	uint32_t current_mux;
 	struct vector sdo_data;
@@ -81,9 +84,9 @@ static int dump_nmt(struct can_frame* cf)
 	enum nmt_cs cs = nmt_get_cs(cf);
 
 	if (nodeid == 0)
-		printf("NMT ALL %s\n", nmt_cs_str(cs));
+		printx(cf, "NMT ALL %s", nmt_cs_str(cs));
 	else
-		printf("NMT %d %s\n", nodeid, nmt_cs_str(cs));
+		printx(cf, "NMT %d %s", nodeid, nmt_cs_str(cs));
 
 	return 0;
 }
@@ -94,7 +97,7 @@ static int dump_sync(struct can_frame* cf)
 		return 0;
 
 	(void)cf;
-	printf("SYNC\n");
+	printx(cf, "SYNC");
 	return 0;
 }
 
@@ -104,7 +107,7 @@ static int dump_timestamp(struct can_frame* cf)
 		return 0;
 
 	(void)cf;
-	printf("TIMESTAMP TODO\n");
+	printx(cf, "TIMESTAMP TODO");
 	return 0;
 }
 
@@ -114,7 +117,7 @@ static int dump_emcy(struct canopen_msg* msg, struct can_frame* cf)
 		return 0;
 
 	if (cf->can_dlc == 0) {
-		printf("EMCY %d EMPTY\n", msg->id);
+		printx(cf, "EMCY %d EMPTY", msg->id);
 		return 0;
 	}
 
@@ -122,7 +125,7 @@ static int dump_emcy(struct canopen_msg* msg, struct can_frame* cf)
 		unsigned int code = emcy_get_code(cf);
 		unsigned int register_ = emcy_get_register(cf);
 		uint64_t manufacturer_error = emcy_get_manufacturer_error(cf);
-		printf("EMCY %d code=%#x,register=%#x,manufacturer-error=%#llx\n",
+		printx(cf, "EMCY %d code=%#x,register=%#x,manufacturer-error=%#llx",
 		       msg->id, code, register_, manufacturer_error);
 		return 0;
 	}
@@ -143,7 +146,7 @@ static int dump_pdo(int type, int n, struct canopen_msg* msg,
 
 	uint64_t data;
 	byteorder(&data, cf->data, sizeof(data));
-	printf("%cPDO%d %d length=%d,data=%#llx\n", type, n, msg->id,
+	printx(cf, "%cPDO%d %d length=%d,data=%#llx", type, n, msg->id,
 	       cf->can_dlc, data);
 	return 0;
 }
@@ -174,14 +177,14 @@ static int dump_sdo_dl_init_req(struct canopen_msg* msg, struct can_frame* cf)
 
 	if (!is_expediated && is_size_indicated && cf->can_dlc == CAN_MAX_DLC) {
 		size_t size = sdo_get_indicated_size(cf);
-		printf(",size=%d\n", size);
+		printx(cf, ",size=%d", size);
 		if (state) {
 			vector_reserve(&state->sdo_data, size);
 			vector_clear(&state->sdo_data);
 		}
 	} else if (is_expediated) {
 		size_t size = get_expediated_size(cf);
-		printf(",size=%d,data=%s\n", size,
+		printx(cf, ",size=%d,data=%s", size,
 		       hexdump(&cf->data[SDO_EXPEDIATED_DATA_IDX], size));
 	}
 
@@ -232,7 +235,7 @@ static int dump_sdo_dl_seg_req(struct canopen_msg* msg, struct can_frame* cf)
 		state->current_mux = 0;
 	}
 
-	printf("\n");
+	printx(cf, "");
 	return 0;
 }
 
@@ -241,7 +244,7 @@ static int dump_sdo_ul_init_req(struct canopen_msg* msg, struct can_frame* cf)
 	int index = sdo_get_index(cf);
 	int subindex = sdo_get_subindex(cf);
 
-	printf("RSDO %d init-upload-segment index=%x,subindex=%d\n", msg->id,
+	printx(cf, "RSDO %d init-upload-segment index=%x,subindex=%d", msg->id,
 	       index, subindex);
 
 	return 0;
@@ -250,7 +253,7 @@ static int dump_sdo_ul_init_req(struct canopen_msg* msg, struct can_frame* cf)
 
 static int dump_sdo_ul_seg_req(struct canopen_msg* msg, struct can_frame* cf)
 {
-	printf("RSDO %d upload-segment\n", msg->id);
+	printx(cf, "RSDO %d upload-segment", msg->id);
 
 	return 0;
 }
@@ -263,7 +266,7 @@ static int dump_sdo_abort(int type, struct canopen_msg* msg,
 
 	const char* reason = sdo_strerror(sdo_get_abort_code(cf));
 
-	printf("%cSDO %d abort index=%x,subindex=%d,reason=\"%s\"\n", type,
+	printx(cf, "%cSDO %d abort index=%x,subindex=%d,reason=\"%s\"", type,
 	       msg->id, index, subindex, reason);
 	return 0;
 }
@@ -283,7 +286,7 @@ static int dump_rsdo(struct canopen_msg* msg, struct can_frame* cf)
 	case SDO_CCS_UL_SEG_REQ: return dump_sdo_ul_seg_req(msg, cf);
 	case SDO_CCS_ABORT: return dump_sdo_abort('R', msg, cf);
 	default:
-		printf("RSDO %d unknown-command-specifier\n", msg->id);
+		printx(cf, "RSDO %d unknown-command-specifier", msg->id);
 	}
 
 	return 0;
@@ -307,14 +310,14 @@ static int dump_sdo_ul_init_res(struct canopen_msg* msg, struct can_frame* cf)
 
 	if (!is_expediated && is_size_indicated && cf->can_dlc == CAN_MAX_DLC) {
 		size_t size = sdo_get_indicated_size(cf);
-		printf(",size=%d\n", size);
+		printx(cf, ",size=%d", size);
 		if (state) {
 			vector_reserve(&state->sdo_data, size);
 			vector_clear(&state->sdo_data);
 		}
 	} else if (is_expediated) {
 		size_t size = get_expediated_size(cf);
-		printf(",size=%d,data=%s\n", size,
+		printx(cf, ",size=%d,data=%s", size,
 		       hexdump(&cf->data[SDO_EXPEDIATED_DATA_IDX], size));
 	}
 
@@ -344,13 +347,13 @@ static int dump_sdo_ul_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 		       get_segment_data(state, final_data, final_size));
 	}
 
-	printf("\n");
+	printx(cf, "");
 	return 0;
 }
 
 static int dump_sdo_dl_init_res(struct canopen_msg* msg, struct can_frame* cf)
 {
-	printf("TSDO %d init-download-segment\n", msg->id);
+	printx(cf, "TSDO %d init-download-segment", msg->id);
 
 	return 0;
 
@@ -360,7 +363,7 @@ static int dump_sdo_dl_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 {
 	int is_end = sdo_is_end_segment(cf);
 
-	printf("TSDO %d download-segment%s\n", msg->id, is_end ? "-end" : "");
+	printx(cf, "TSDO %d download-segment%s", msg->id, is_end ? "-end" : "");
 
 	return 0;
 }
@@ -379,7 +382,7 @@ static int dump_tsdo(struct canopen_msg* msg, struct can_frame* cf)
 	case SDO_SCS_UL_SEG_RES: return dump_sdo_ul_seg_res(msg, cf);
 	case SDO_SCS_ABORT: return dump_sdo_abort('T', msg, cf);
 	default:
-		printf("TSDO %d unknown-command-specifier\n", msg->id);
+		printx(cf, "TSDO %d unknown-command-specifier", msg->id);
 	}
 
 	return 0;
@@ -404,15 +407,13 @@ static int dump_heartbeat(struct canopen_msg* msg, struct can_frame* cf)
 		return 0;
 
 	enum nmt_state state = heartbeat_get_state(cf);
-	int is_rtr = cf->can_id & CAN_RTR_FLAG;
 
 	if (heartbeat_is_bootup(cf)) {
-		printf("HEARTBEAT %d bootup\n", msg->id);
+		printx(cf, "HEARTBEAT %d bootup", msg->id);
 	} else if (state == 1) {
-		printf("HEARTBEAT %d poll%s\n", msg->id,
-		       is_rtr ? " [RTR]" : "");
+		printx(cf, "HEARTBEAT %d poll", msg->id);
 	} else {
-		printf("HEARTBEAT %d state=%s\n", msg->id, state_str(state));
+		printx(cf, "HEARTBEAT %d state=%s", msg->id, state_str(state));
 	}
 
 	return 0;
