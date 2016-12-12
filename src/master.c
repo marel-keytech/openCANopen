@@ -1337,6 +1337,24 @@ static void unload_all_drivers()
 			unload_driver(i);
 }
 
+static void apply_filters(int fd)
+{
+	struct can_filter filter[] = {
+		{
+			.can_id = CAN_INV_FILTER | CAN_EFF_FLAG,
+			.can_mask = CAN_EFF_FLAG
+		}, {
+			.can_id = CAN_INV_FILTER | CAN_RTR_FLAG,
+			.can_mask = CAN_RTR_FLAG
+		}, {
+			.can_id = CAN_INV_FILTER | CAN_ERR_FLAG,
+			.can_mask = CAN_ERR_FLAG
+		}
+	};
+
+	socketcan_apply_filters(fd, filter, 3);
+}
+
 __attribute__((visibility("default")))
 int co_master_run(void)
 {
@@ -1371,6 +1389,9 @@ int co_master_run(void)
 		perror("Could not open CAN bus");
 		goto socketcan_open_failure;
 	}
+
+	if (sock_type == SOCK_TYPE_CAN)
+		apply_filters(socket_.fd);
 
 #ifndef NO_MAREL_CODE
 	if (canopen_info_init(cfg.iface) < 0) {
