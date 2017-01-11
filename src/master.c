@@ -938,6 +938,9 @@ static void mux_on_frame(const struct can_frame* cf)
 {
 	struct canopen_msg msg;
 
+	if (cf->can_id & (CAN_RTR_FLAG | CAN_EFF_FLAG | CAN_ERR_FLAG))
+		return;
+
 	if (canopen_get_object_type(&msg, cf) < 0)
 		return;
 
