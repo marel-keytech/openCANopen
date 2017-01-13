@@ -811,7 +811,7 @@ static int handle_heartbeat(struct co_master_node* node,
 	/* This can happen if the CAN bus is disconnected but not the power to
 	 * the node. We reset communication to refresh the state.
 	 */
-	if (node->driver_type == CO_MASTER_DRIVER_NONE) {
+	if (node->driver_type == CO_MASTER_DRIVER_NONE && !node->is_loading) {
 		if (heartbeat_get_state(frame) != NMT_STATE_STOPPED)
 			co_net_send_nmt(&socket_, NMT_CS_RESET_COMMUNICATION,
 					nodeid);
