@@ -161,8 +161,8 @@ static void stop_heartbeat_timer(int nodeid)
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->heartbeat_timer;
 	mloop_timer_stop(timer);
-	if (mloop_timer_unref(timer) == 0)
-		node->heartbeat_timer = NULL;
+	mloop_timer_unref(timer);
+	node->heartbeat_timer = NULL;
 }
 
 static void stop_ping_timer(int nodeid)
@@ -170,8 +170,8 @@ static void stop_ping_timer(int nodeid)
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->ping_timer;
 	mloop_timer_stop(timer);
-	if (mloop_timer_unref(timer) == 0)
-		node->ping_timer = NULL;
+	mloop_timer_unref(timer);
+	node->ping_timer = NULL;
 }
 
 #ifndef NO_MAREL_CODE
@@ -310,14 +310,15 @@ static int start_heartbeat_timer(int nodeid)
 static int restart_heartbeat_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
+	struct mloop_timer* timer = node->heartbeat_timer;
+	assert(timer);
 
 	if (!cfg.node[nodeid].enable_node_guarding)
 		return 0;
 
-	mloop_timer_ref(node->heartbeat_timer);
-	stop_heartbeat_timer(nodeid);
+	mloop_timer_stop(timer);
 
-	return start_heartbeat_timer(nodeid);
+	return mloop_timer_start(timer);
 }
 
 static void on_ping_timeout(struct mloop_timer* timer)
