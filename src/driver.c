@@ -308,4 +308,14 @@ void co_byteorder(void* dst, const void* src, size_t dst_size, size_t src_size)
 	return byteorder2(dst, src, dst_size, src_size);
 }
 
+void co_setopt(struct co_drv* self, enum co_options opt)
+{
+	self->options = opt;
+}
+
+void co_start(struct co_drv* self)
+{
+	co__start(co_get_nodeid(self));
+}
+
 #pragma GCC visibility pop

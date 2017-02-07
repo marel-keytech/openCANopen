@@ -72,6 +72,7 @@ static char nodes_seen_late_[CANOPEN_NODEID_MAX + 1];
 /* Note: nodes_seen_[0] is unused */
 
 static unsigned int n_scheduled_bootups = 0;
+static unsigned int n_inhibited_starts = 0;
 
 enum master_state {
 	MASTER_STATE_STARTUP = 0,
@@ -627,6 +628,10 @@ static int initialize_new_driver(int nodeid)
 		info->is_active = 1;
 		info->last_seen = time(NULL);
 #endif /* NO_MAREL_CODE */
+
+		if (master_state_ == MASTER_STATE_STARTUP
+		 && node->ndrv.options & CO_OPT_INHIBIT_START)
+			++n_inhibited_starts;
 	} else {
 		if (node->is_heartbeat_supported)
 			turn_off_heartbeat(nodeid);
@@ -1076,7 +1081,7 @@ static int start_sync_timer(void)
 	return rc;
 }
 
-static void on_bootup_done(struct mloop_work* self)
+static void start_all_nodes(void)
 {
 	int i;
 
@@ -1100,6 +1105,14 @@ static void on_bootup_done(struct mloop_work* self)
 	load_late_nodes();
 
 	start_sync_timer();
+}
+
+static void on_bootup_done(struct mloop_work* self)
+{
+	(void)self;
+
+	if (n_inhibited_starts == 0)
+		start_all_nodes();
 }
 
 static void on_net_probe_done(struct mloop_work* self)
@@ -1258,6 +1271,25 @@ int co__rpdox(int nodeid, int type, const void* data, size_t size)
 
 	return sock_send(&socket_, &cf, 0);
 
+}
+
+int co__start(int nodeid)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+	assert(node);
+
+	if (!(node->ndrv.options & CO_OPT_INHIBIT_START))
+		return -1;
+
+	node->ndrv.options &= ~CO_OPT_INHIBIT_START;
+
+	if (master_state_ != MASTER_STATE_STARTUP)
+		return 0;
+
+	if (--n_inhibited_starts == 0)
+		start_all_nodes();
+
+	return 0;
 }
 
 #ifndef NO_MAREL_CODE

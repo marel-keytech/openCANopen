@@ -41,6 +41,7 @@ struct co_drv {
 
 	co_pdo_fn pdo1_fn, pdo2_fn, pdo3_fn, pdo4_fn;
 	co_emcy_fn emcy_fn;
+	enum co_options options;
 
 	char iface[256];
 };
@@ -92,6 +93,7 @@ int co_drv_init(struct co_drv* drv);
 void co_drv_unload(struct co_drv* drv);
 
 int co__rpdox(int nodeid, int type, const void* data, size_t size);
+int co__start(int nodeid);
 
 static inline struct co_master_node* co_drv_node(const struct co_drv* drv)
 {

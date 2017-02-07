@@ -36,6 +36,11 @@ enum co_sdo_status {
 	CO_SDO_REQ_NOMEM,
 };
 
+enum co_options {
+	CO_OPT_UNSPEC = 0,
+	CO_OPT_INHIBIT_START = 1,
+};
+
 struct co_emcy {
 	uint16_t code;
 	uint8_t reg;
@@ -68,6 +73,9 @@ int co_rpdo1(struct co_drv* self, const void* data, size_t size);
 int co_rpdo2(struct co_drv* self, const void* data, size_t size);
 int co_rpdo3(struct co_drv* self, const void* data, size_t size);
 int co_rpdo4(struct co_drv* self, const void* data, size_t size);
+
+void co_setopt(struct co_drv* self, enum co_options opt);
+void co_start(struct co_drv* self);
 
 struct co_sdo_req* co_sdo_req_new(struct co_drv* drv);
 void co_sdo_req_ref(struct co_sdo_req* self);
