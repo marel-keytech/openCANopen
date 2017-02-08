@@ -23,6 +23,7 @@
 #include "canopen/emcy.h"
 #include "canopen-driver.h"
 #include "string-utils.h"
+#include "plog.h"
 
 #ifndef DRIVER_PATH
 #define DRIVER_PATH "/usr/lib/canopen"
@@ -62,14 +63,20 @@ int co_drv_load(struct co_drv* drv, const char* name)
 		return -1;
 
 	drv->dso = dlopen(path, RTLD_NOW | RTLD_LOCAL);
-	dlerror();
-	if (!drv->dso)
+	const char* err = dlerror();
+	if (!drv->dso) {
+		plog(LOG_ERROR, "driver: Failed to load driver for '%s': %s",
+		     name, err);
 		return -1;
+	}
 
 	drv->init_fn = dlsym(drv->dso, "co_drv_init");
 	dlerror();
 	if (drv->init_fn)
 		return 0;
+
+	plog(LOG_ERROR, "driver: DSO for '%s' does not export an 'init' function",
+	     name);
 
 	dlclose(drv->dso);
 	memset(drv, 0, sizeof(*drv));
