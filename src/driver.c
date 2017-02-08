@@ -186,6 +186,11 @@ void co_set_emcy_fn(struct co_drv* self, co_emcy_fn fn)
 	self->emcy_fn = fn;
 }
 
+void co_set_start_fn(struct co_drv* self, co_start_fn fn)
+{
+	self->start_fn = fn;
+}
+
 const char* co_get_network_name(const struct co_drv* self)
 {
 	return self->iface;

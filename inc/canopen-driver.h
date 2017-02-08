@@ -51,6 +51,7 @@ typedef void (*co_free_fn)(void*);
 typedef void (*co_pdo_fn)(struct co_drv*, const void* data, size_t size);
 typedef void (*co_sdo_done_fn)(struct co_drv*, struct co_sdo_req* req);
 typedef void (*co_emcy_fn)(struct co_drv*, struct co_emcy*);
+typedef void (*co_start_fn)(struct co_drv*);
 
 const char* co_get_network_name(const struct co_drv* self);
 int co_get_nodeid(const struct co_drv* self);
@@ -68,6 +69,7 @@ void co_set_pdo2_fn(struct co_drv* self, co_pdo_fn fn);
 void co_set_pdo3_fn(struct co_drv* self, co_pdo_fn fn);
 void co_set_pdo4_fn(struct co_drv* self, co_pdo_fn fn);
 void co_set_emcy_fn(struct co_drv* self, co_emcy_fn fn);
+void co_set_start_fn(struct co_drv* self, co_start_fn fn);
 
 int co_rpdo1(struct co_drv* self, const void* data, size_t size);
 int co_rpdo2(struct co_drv* self, const void* data, size_t size);

@@ -41,6 +41,8 @@ struct co_drv {
 
 	co_pdo_fn pdo1_fn, pdo2_fn, pdo3_fn, pdo4_fn;
 	co_emcy_fn emcy_fn;
+	co_start_fn start_fn;
+
 	enum co_options options;
 
 	char iface[256];

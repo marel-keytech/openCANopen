@@ -715,6 +715,12 @@ static void on_load_driver_done(struct mloop_work* self)
 
 	co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
 	start_nodeguarding(nodeid);
+
+	if (node->driver_type == CO_MASTER_DRIVER_NEW) {
+		co_start_fn start_fn = node->ndrv.start_fn;
+		if (start_fn)
+			start_fn(&node->ndrv);
+	}
 }
 
 static int schedule_load_driver(int nodeid)
@@ -1097,6 +1103,18 @@ static void start_all_nodes(void)
 	for_each_node(i)
 		if (co_master_get_node(i)->driver_type != CO_MASTER_DRIVER_NONE)
 			start_nodeguarding(i);
+
+	profile("Notify drivers about start...\n");
+	for_each_node(i) {
+		struct co_master_node* node = co_master_get_node(i);
+
+		if (node->driver_type != CO_MASTER_DRIVER_NEW)
+			continue;
+
+		co_start_fn start_fn = node->ndrv.start_fn;
+		if (start_fn)
+			start_fn(&node->ndrv);
+	}
 
 	profile("Boot-up finished!\n");
 
