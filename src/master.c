@@ -695,6 +695,19 @@ static void run_load_driver(struct mloop_work* self)
 	node->is_loading = 0;
 }
 
+static void start_single_node(struct co_master_node* node)
+{
+	int nodeid = co_master_get_node_id(node);
+	co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
+	start_nodeguarding(nodeid);
+
+	if (node->driver_type == CO_MASTER_DRIVER_NEW) {
+		co_start_fn start_fn = node->ndrv.start_fn;
+		if (start_fn)
+			start_fn(&node->ndrv);
+	}
+}
+
 static void on_load_driver_done(struct mloop_work* self)
 {
 	struct co_master_node* node = mloop_work_get_context(self);
@@ -713,14 +726,11 @@ static void on_load_driver_done(struct mloop_work* self)
 	if (master_state_ == MASTER_STATE_STARTUP)
 		return;
 
-	co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
-	start_nodeguarding(nodeid);
+	if (node->driver_type == CO_MASTER_DRIVER_NEW
+	 && node->ndrv.options & CO_OPT_INHIBIT_START)
+		return;
 
-	if (node->driver_type == CO_MASTER_DRIVER_NEW) {
-		co_start_fn start_fn = node->ndrv.start_fn;
-		if (start_fn)
-			start_fn(&node->ndrv);
-	}
+	start_single_node(node);
 }
 
 static int schedule_load_driver(int nodeid)
@@ -1302,9 +1312,8 @@ int co__start(int nodeid)
 	node->ndrv.options &= ~CO_OPT_INHIBIT_START;
 
 	if (master_state_ != MASTER_STATE_STARTUP)
-		return 0;
-
-	if (--n_inhibited_starts == 0)
+		start_single_node(node);
+	else if (--n_inhibited_starts == 0)
 		start_all_nodes();
 
 	return 0;
