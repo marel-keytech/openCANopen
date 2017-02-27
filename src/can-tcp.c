@@ -208,6 +208,8 @@ int can_tcp_open(const char* address, int port)
 	if (connect(fd, &addr, sizeof(addr)) < 0)
 		goto failure;
 
+	net_dont_delay(fd);
+
 	return fd;
 
 failure:
@@ -226,6 +228,8 @@ static void can_tcp__on_connection(struct mloop_socket* socket)
 		perror("Could not accept connection");
 		return;
 	}
+
+	net_dont_delay(connfd);
 
 	struct sock sock = { .fd = connfd, .type = SOCK_TYPE_TCP };
 
