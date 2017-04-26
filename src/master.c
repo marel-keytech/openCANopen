@@ -35,6 +35,7 @@
 #include "canopen/eds.h"
 #include "canopen/master.h"
 #include "canopen/sdo_sync.h"
+#include "canopen/error.h"
 #include "rest.h"
 #include "sdo-rest.h"
 #include "time-utils.h"
@@ -773,6 +774,15 @@ static int handle_bootup(struct co_master_node* node)
 	return schedule_load_driver(nodeid);
 }
 
+static void log_emcy(struct co_master_node* node, struct co_emcy* emcy)
+{
+	int level = emcy->code != 0 ? LOG_EMERG : LOG_NOTICE;
+
+	plog(level, "Node %d: Code 0x%04x: %s",
+	     co_master_get_node_id(node), emcy->code,
+	     error_code_to_string(emcy->code, node->device_type));
+}
+
 static int handle_emcy(struct co_master_node* node,
 		       const struct can_frame* frame)
 {
@@ -795,6 +805,9 @@ static int handle_emcy(struct co_master_node* node,
 		.reg = error_register,
 		.manufacturer_error = emcy_get_manufacturer_error(frame)
 	};
+
+	if (node->driver_type != CO_MASTER_DRIVER_NONE)
+		log_emcy(node, &emcy);
 
 	switch (node->driver_type) {
 	case CO_MASTER_DRIVER_NONE:

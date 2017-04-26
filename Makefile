@@ -54,6 +54,7 @@ SRC := \
 	string-utils.c \
 	can-tcp.c \
 	cfg.c \
+	error.c \
 
 TEST_SRC := \
 	unit_arc.c \

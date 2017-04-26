@@ -70,6 +70,7 @@ LIBDEPS = \
 	  mloop \
 	  prioq \
 	  cfg \
+	  error \
 
 LIBOBJS = $(foreach dep,$(LIBDEPS),$(BUILDDIR)/obj/$(dep).o)
 
