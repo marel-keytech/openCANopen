@@ -789,9 +789,6 @@ static int handle_emcy(struct co_master_node* node,
 	if (frame->can_dlc == 0)
 		return handle_bootup(node);
 
-	if (frame->can_dlc != 8)
-		return -1;
-
 	uint32_t error_register = emcy_get_register(frame);
 
 	int nodeid = co_master_get_node_id(node);
@@ -1015,6 +1012,8 @@ static void mux_handler_fn(struct mloop_socket* self)
 	struct can_frame cf;
 
 	while (1) {
+		memset(&cf, 0, sizeof(cf));
+
 		ssize_t rsize = sock_recv(&socket_, &cf, MSG_DONTWAIT);
 		if (rsize == 0)
 			mloop_socket_stop(self);
