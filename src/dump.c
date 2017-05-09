@@ -121,14 +121,12 @@ static int dump_emcy(struct canopen_msg* msg, struct can_frame* cf)
 		return 0;
 	}
 
-	if (cf->can_dlc == 8) {
-		unsigned int code = emcy_get_code(cf);
-		unsigned int register_ = emcy_get_register(cf);
-		uint64_t manufacturer_error = emcy_get_manufacturer_error(cf);
-		printx(cf, "EMCY %d code=%#x,register=%#x,manufacturer-error=%#llx",
-		       msg->id, code, register_, manufacturer_error);
-		return 0;
-	}
+	unsigned int code = emcy_get_code(cf);
+	unsigned int register_ = emcy_get_register(cf);
+	uint64_t manufacturer_error = emcy_get_manufacturer_error(cf);
+	printx(cf, "EMCY %d code=%#x,register=%#x,manufacturer-error=%#llx,dlc=%d",
+	       msg->id, code, register_, manufacturer_error, cf->can_dlc);
+	return 0;
 
 	return -1;
 }
@@ -452,8 +450,15 @@ static int multiplex(struct can_frame* cf)
 static void run_dumper(struct sock* sock)
 {
 	struct can_frame cf;
-	while (sock_recv(sock, &cf, MSG_WAITALL) > 0)
+
+	while (1) {
+		memset(&cf, 0, sizeof(cf));
+
+		if (sock_recv(sock, &cf, MSG_WAITALL) < 0)
+			break;
+
 		multiplex(&cf);
+	}
 }
 
 static void resolve_filters(enum co_dump_options options)
