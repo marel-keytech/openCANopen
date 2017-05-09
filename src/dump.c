@@ -144,10 +144,9 @@ static int dump_pdo(int type, int n, struct canopen_msg* msg,
 	if (!is_pdo_in_filter(n))
 		return 0;
 
-	uint64_t data;
-	byteorder(&data, cf->data, sizeof(data));
-	printx(cf, "%cPDO%d %d length=%d,data=%#llx", type, n, msg->id,
-	       cf->can_dlc, data);
+	printx(cf, "%cPDO%d %d length=%d,data=%s", type, n, msg->id,
+	       cf->can_dlc, hexdump(cf->data, cf->can_dlc));
+
 	return 0;
 }
 
