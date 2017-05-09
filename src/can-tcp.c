@@ -155,17 +155,6 @@ failure:
 	return NULL;
 }
 
-static int open_can(const char* iface)
-{
-	int fd = socketcan_open(iface);
-	if (fd < 0)
-		return -1;
-
-	net_fix_sndbuf(fd);
-
-	return fd;
-}
-
 static int open_tcp_server(int port)
 {
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
