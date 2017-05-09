@@ -454,7 +454,7 @@ static void run_dumper(struct sock* sock)
 	while (1) {
 		memset(&cf, 0, sizeof(cf));
 
-		if (sock_recv(sock, &cf, MSG_WAITALL) < 0)
+		if (sock_recv(sock, &cf, MSG_WAITALL) <= 0)
 			break;
 
 		multiplex(&cf);
