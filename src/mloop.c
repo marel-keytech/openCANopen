@@ -211,7 +211,7 @@ static int mloop__debug_parse_expect(struct mloop__debug_parser* parser,
 		return 1;
 
 	if (str) {
-		if (strlen(str) != parser->tok_end - parser->tok_start)
+		if (strlen(str) != (size_t)(parser->tok_end - parser->tok_start))
 			return 0;
 
 		if (strncmp(str, parser->tok_start,
@@ -359,7 +359,7 @@ static inline void mloop__do_exit(struct mloop* self)
 static inline void mloop__break_out(struct mloop* self)
 {
 	uint64_t one = 1;
-	write(self->core->break_out_socket.fd, &one, sizeof(one));
+	(void)write(self->core->break_out_socket.fd, &one, sizeof(one));
 }
 
 static inline int mloop__change_state(void* obj_ptr, enum mloop_state expected,
@@ -822,7 +822,7 @@ thread_start_failure:
 void mloop__on_break_out_event(struct mloop_socket* socket)
 {
 	uint64_t count = 0;
-	read(socket->fd, &count, sizeof(count));
+	(void)read(socket->fd, &count, sizeof(count));
 }
 
 static struct mloop_core* mloop_core__new(struct mloop* mloop)
@@ -1190,7 +1190,7 @@ void mloop_idle_free(struct mloop_idle* self)
 void mloop__read_timer(struct mloop_socket* timer)
 {
 	uint64_t dummy;
-	read(timer->fd, &dummy, sizeof(dummy));
+	(void)read(timer->fd, &dummy, sizeof(dummy));
 }
 
 void mloop__process_timer(struct mloop_socket* socket)
@@ -1266,8 +1266,8 @@ void mloop__process_events(struct mloop* self, struct epoll_event* events,
 		struct epoll_event* event = &events[i];
 		struct mloop_socket* socket = event->data.ptr;
 
-		/* Let's not process this if it's already freed */
-		if (mloop_socket_unref(socket) == 0)
+		/* Let's not process freed sockets */
+		if (mloop__atomic_load(&socket->ref) <= 1)
 			continue;
 
 		socket->revents = mloop__get_socket_event(event->events);
@@ -1279,6 +1279,9 @@ void mloop__process_events(struct mloop* self, struct epoll_event* events,
 		if (socket->type == MLOOP_TIMER)
 			mloop__process_timer(socket);
 	}
+
+	for (i = 0; i < nfds; ++i)
+		mloop__unref_any(events[i].data.ptr);
 }
 
 void mloop__process_async_jobs(struct mloop* self)

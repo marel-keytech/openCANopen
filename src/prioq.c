@@ -133,7 +133,7 @@ int prioq_insert(struct prioq* self, unsigned long priority, void* data)
 	prioq__lock(self);
 
 	if (self->index >= self->size)
-		if (prioq_grow(self, self->size*2))
+		if (prioq_grow(self, self->size*2) < 0)
 			goto done;
 
 	struct prioq_elem* elem = &self->head[self->index++];
