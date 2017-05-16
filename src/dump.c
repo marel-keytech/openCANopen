@@ -28,6 +28,7 @@
 #include "sock.h"
 #include "canopen/sdo-dict.h"
 #include "vector.h"
+#include "canopen/error.h"
 
 #ifndef CAN_MAX_DLC
 #define CAN_MAX_DLC 8
@@ -41,6 +42,7 @@
 struct node_state {
 	uint32_t current_mux;
 	struct vector sdo_data;
+	int device_type;
 };
 
 static enum co_dump_options options_ = 0;
@@ -121,14 +123,16 @@ static int dump_emcy(struct canopen_msg* msg, struct can_frame* cf)
 		return 0;
 	}
 
+	struct node_state* state = get_node_state(msg->id);
+
 	unsigned int code = emcy_get_code(cf);
 	unsigned int register_ = emcy_get_register(cf);
 	uint64_t manufacturer_error = emcy_get_manufacturer_error(cf);
-	printx(cf, "EMCY %d code=%#x,register=%#x,manufacturer-error=%#llx,dlc=%d",
-	       msg->id, code, register_, manufacturer_error, cf->can_dlc);
-	return 0;
+	printx(cf, "EMCY %d code=%#x,register=%#x,manufacturer-error=%#llx,dlc=%d,text=\"%s\"",
+	       msg->id, code, register_, manufacturer_error, cf->can_dlc,
+	       error_code_to_string(code, state->device_type & 0xffff));
 
-	return -1;
+	return 0;
 }
 
 static int is_pdo_in_filter(int n)
@@ -314,8 +318,14 @@ static int dump_sdo_ul_init_res(struct canopen_msg* msg, struct can_frame* cf)
 		}
 	} else if (is_expediated) {
 		size_t size = get_expediated_size(cf);
-		printx(cf, ",size=%d,data=%s", size,
-		       hexdump(&cf->data[SDO_EXPEDIATED_DATA_IDX], size));
+		const void* payload = &cf->data[SDO_EXPEDIATED_DATA_IDX];
+
+		if (index == 0x1000 && subindex == 0)
+			byteorder2(&state->device_type, payload,
+				   sizeof(state->device_type),
+				   MIN(sizeof(state->device_type), size));
+
+		printx(cf, ",size=%d,data=%s", size, hexdump(payload, size));
 	}
 
 	return 0;
