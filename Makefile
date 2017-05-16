@@ -71,6 +71,7 @@ TEST_SRC := \
 	unit_sdo-dict.c \
 	sdo_async_fuzz_test.c \
 	unit_cfg.c \
+	unit_error.c \
 
 include $(MDEV)/make/make.main
 

@@ -28,24 +28,37 @@ static const char* cia402_lookup(uint16_t code)
 	return cia302_lookup(code);
 }
 
+static inline void
+append_code(char* dst, uint16_t code, const char* (*lookup)(uint16_t))
+{
+	const char* s = lookup(code);
+
+	if (s) {
+		if (dst[0]) strcat(dst, ": ");
+		strcat(dst, s);
+	}
+}
+
 static const char*
 convert_to_string(uint16_t code, const char* (*lookup)(uint16_t))
 {
 	static char buf[256];
+	uint16_t current_code, last_code = 0;
 
 	memset(buf, 0, sizeof(buf));
 
-	for (uint16_t mask = 0xf000; mask != 0xffff; mask |= mask >> 4) {
-		if (mask != 0xf000 && (code & mask) == (code & (mask << 4)))
-			continue;
+#define X(mask) \
+	current_code = code & mask; \
+	if (current_code != last_code) \
+		append_code(buf, current_code, lookup); \
+	last_code = current_code;
 
-		const char* s = lookup(code & mask);
+	X(0xf000)
+	X(0xff00)
+	X(0xfff0)
+	X(0xffff)
 
-		if (s) {
-			if (buf[0]) strcat(buf, ": ");
-			strcat(buf, s);
-		}
-	}
+#undef X
 
 	return buf;
 }
