@@ -777,10 +777,11 @@ static int handle_bootup(struct co_master_node* node)
 static void log_emcy(struct co_master_node* node, struct co_emcy* emcy)
 {
 	int level = emcy->code != 0 ? LOG_EMERG : LOG_NOTICE;
+	int profile = co_master_get_device_profile(node);
 
 	plog(level, "Node %d: Code 0x%04x: %s",
 	     co_master_get_node_id(node), emcy->code,
-	     error_code_to_string(emcy->code, node->device_type));
+	     error_code_to_string(emcy->code, profile));
 }
 
 static int handle_emcy(struct co_master_node* node,
