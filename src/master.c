@@ -859,6 +859,17 @@ static int handle_heartbeat(struct co_master_node* node,
 	if (heartbeat_get_state(frame) != NMT_STATE_OPERATIONAL)
 		co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
 
+    switch (node->driver_type) {
+        case CO_MASTER_DRIVER_NONE:
+            return -1;
+        case CO_MASTER_DRIVER_LEGACY:
+            legacy_driver_iface_process_node_state(node->driver, heartbeat_get_state(frame));
+            break;
+        case CO_MASTER_DRIVER_NEW:
+            // TODO New driver does not support node state callback
+            break;
+    }
+    
 #ifndef NO_MAREL_CODE
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->last_seen = time(NULL);
@@ -1156,7 +1167,7 @@ static void on_bootup_done(struct mloop_work* self)
 		start_all_nodes();
 }
 
-static void on_net_probe_done(struct mloop_work* self)
+static void on_net_probe_done(struct mloop_work* self M_UU)
 {
 	profile("Initialize multiplexer...\n");
 	int __unused rc = init_multiplexer();
@@ -1218,7 +1229,7 @@ static int run_appbase()
 	return 0;
 }
 
-static int master_set_node_state(int nodeid, int state)
+static int master_set_node_state(int nodeid M_UU, int state M_UU)
 {
 	/* not allowed */
 	return 0;
@@ -1398,14 +1409,6 @@ static int init_ping_timer(struct co_master_node* node)
 	return 0;
 }
 
-static void destroy_node_structure(int nodeid)
-{
-	struct co_master_node* node = co_master_get_node(nodeid);
-
-	mloop_timer_unref(node->ping_timer);
-	mloop_timer_unref(node->heartbeat_timer);
-}
-
 static void unload_all_drivers()
 {
 	int i;
@@ -1503,7 +1506,6 @@ int co_master_run(void)
 		mloop_socket_unref(mux_handler_);
 	}
 
-bootup_failure:
 worker_failure:
 #ifndef NO_MAREL_CODE
 	legacy_driver_manager_delete(driver_manager_);
