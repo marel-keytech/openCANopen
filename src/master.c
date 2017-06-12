@@ -596,7 +596,6 @@ static int initialize_legacy_driver(int nodeid)
 
 	int rc = legacy_driver_iface_initialize(node->driver);
 	if (rc >= 0) {
-		legacy_driver_iface_process_node_state(node->driver, 1);
 		info->is_active = 1;
 		info->last_seen = time(NULL);
 	} else {
@@ -696,17 +695,32 @@ static void run_load_driver(struct mloop_work* self)
 	node->is_loading = 0;
 }
 
+static void call_start_fn(struct co_master_node* node)
+{
+	co_start_fn start_fn;
+
+	switch (node->driver_type) {
+	case CO_MASTER_DRIVER_NEW:
+		start_fn = node->ndrv.start_fn;
+		if (start_fn)
+			start_fn(&node->ndrv);
+		break;
+#ifndef NO_MAREL_CODE
+	case CO_MASTER_DRIVER_LEGACY:
+		legacy_driver_iface_process_node_state(node->driver, 1);
+		break;
+#endif /* NO_MAREL_CODE */
+	case CO_MASTER_DRIVER_NONE:
+		break;
+	}
+}
+
 static void start_single_node(struct co_master_node* node)
 {
 	int nodeid = co_master_get_node_id(node);
 	co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
 	start_nodeguarding(nodeid);
-
-	if (node->driver_type == CO_MASTER_DRIVER_NEW) {
-		co_start_fn start_fn = node->ndrv.start_fn;
-		if (start_fn)
-			start_fn(&node->ndrv);
-	}
+	call_start_fn(node);
 }
 
 static void on_load_driver_done(struct mloop_work* self)
@@ -860,11 +874,6 @@ static int handle_heartbeat(struct co_master_node* node,
 		co_net_send_nmt(&socket_, NMT_CS_START, nodeid);
 
 #ifndef NO_MAREL_CODE
-	if (node->driver_type == CO_MASTER_DRIVER_LEGACY) {
-		enum nmt_state state = heartbeat_get_state(frame);
-		legacy_driver_iface_process_node_state(node->driver, state);
-	}
-
 	struct canopen_info* info = canopen_info_get(nodeid);
 	info->last_seen = time(NULL);
 	info->skipped_heartbeats = 0;
@@ -1133,16 +1142,8 @@ static void start_all_nodes(void)
 			start_nodeguarding(i);
 
 	profile("Notify drivers about start...\n");
-	for_each_node(i) {
-		struct co_master_node* node = co_master_get_node(i);
-
-		if (node->driver_type != CO_MASTER_DRIVER_NEW)
-			continue;
-
-		co_start_fn start_fn = node->ndrv.start_fn;
-		if (start_fn)
-			start_fn(&node->ndrv);
-	}
+	for_each_node(i)
+		call_start_fn(co_master_get_node(i));
 
 	profile("Boot-up finished!\n");
 
