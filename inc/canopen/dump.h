@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, Marel
+/* Copyright (c) 2014-2017, Marel
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,18 +16,20 @@
 #ifndef CANOPEN_DUMP_H_
 #define CANOPEN_DUMP_H_
 
-#define CO_DUMP_PDO_FILTER_SHIFT 8
-#define CO_DUMP_FILTER_MASK 0x0000fffe
+#define CO_DUMP_FILTER_SHIFT 8
+#define CO_DUMP_PDO_FILTER_SHIFT 16
+#define CO_DUMP_FILTER_MASK 0x00ffff00
 
 enum co_dump_options {
 	CO_DUMP_TCP = 1,
+	CO_DUMP_TIMESTAMP = 1 << 1,
 
-	CO_DUMP_FILTER_NMT = 1 << 1,
-	CO_DUMP_FILTER_SYNC = 1 << 2,
-	CO_DUMP_FILTER_TIMESTAMP = 1 << 3,
-	CO_DUMP_FILTER_EMCY = 1 << 4,
-	CO_DUMP_FILTER_SDO = 1 << 5,
-	CO_DUMP_FILTER_HEARTBEAT = 1 << 6,
+	CO_DUMP_FILTER_NMT = 1 << (CO_DUMP_FILTER_SHIFT + 0),
+	CO_DUMP_FILTER_SYNC = 1 << (CO_DUMP_FILTER_SHIFT + 1),
+	CO_DUMP_FILTER_TIMESTAMP = 1 << (CO_DUMP_FILTER_SHIFT + 2),
+	CO_DUMP_FILTER_EMCY = 1 << (CO_DUMP_FILTER_SHIFT + 3),
+	CO_DUMP_FILTER_SDO = 1 << (CO_DUMP_FILTER_SHIFT + 4),
+	CO_DUMP_FILTER_HEARTBEAT = 1 << (CO_DUMP_FILTER_SHIFT + 5),
 
 	CO_DUMP_FILTER_PDO1 = 1 << (CO_DUMP_PDO_FILTER_SHIFT + 0),
 	CO_DUMP_FILTER_PDO2 = 1 << (CO_DUMP_PDO_FILTER_SHIFT + 1),

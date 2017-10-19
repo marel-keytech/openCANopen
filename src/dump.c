@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, Marel
+/* Copyright (c) 2014-2017, Marel
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,6 +29,7 @@
 #include "canopen/sdo-dict.h"
 #include "vector.h"
 #include "canopen/error.h"
+#include "time-utils.h"
 
 #ifndef CAN_MAX_DLC
 #define CAN_MAX_DLC 8
@@ -50,6 +51,14 @@ static struct node_state node_state_[127] = { 0 };
 
 char* strlcpy(char* dst, const char* src, size_t size);
 const char* hexdump(const void* data, size_t size);
+
+static inline void print_ts(void)
+{
+	uint64_t t = gettime_us(CLOCK_MONOTONIC);
+
+	if (options_ & CO_DUMP_TIMESTAMP)
+		printf("%llu.%06llu ", t / 1000000ULL, t % 1000000ULL);
+}
 
 static inline struct node_state* get_node_state(int nodeid)
 {
@@ -85,6 +94,8 @@ static int dump_nmt(struct can_frame* cf)
 	int nodeid = nmt_get_nodeid(cf);
 	enum nmt_cs cs = nmt_get_cs(cf);
 
+	print_ts();
+
 	if (nodeid == 0)
 		printx(cf, "NMT ALL %s", nmt_cs_str(cs));
 	else
@@ -99,7 +110,10 @@ static int dump_sync(struct can_frame* cf)
 		return 0;
 
 	(void)cf;
+
+	print_ts();
 	printx(cf, "SYNC");
+
 	return 0;
 }
 
@@ -109,7 +123,10 @@ static int dump_timestamp(struct can_frame* cf)
 		return 0;
 
 	(void)cf;
+
+	print_ts();
 	printx(cf, "TIMESTAMP TODO");
+
 	return 0;
 }
 
@@ -117,6 +134,8 @@ static int dump_emcy(struct canopen_msg* msg, struct can_frame* cf)
 {
 	if (!(options_ & CO_DUMP_FILTER_EMCY))
 		return 0;
+
+	print_ts();
 
 	if (cf->can_dlc == 0) {
 		printx(cf, "EMCY %d EMPTY", msg->id);
@@ -146,6 +165,8 @@ static int dump_pdo(int type, int n, struct canopen_msg* msg,
 	if (!is_pdo_in_filter(n))
 		return 0;
 
+	print_ts();
+
 	printx(cf, "%cPDO%d %d length=%d,data=%s", type, n, msg->id,
 	       cf->can_dlc, hexdump(cf->data, cf->can_dlc));
 
@@ -172,6 +193,8 @@ static int dump_sdo_dl_init_req(struct canopen_msg* msg, struct can_frame* cf)
 
 	if (state && !is_expediated)
 		state->current_mux = SDO_MUX(index, subindex);
+
+	print_ts();
 
 	printf("RSDO %d init-download-%s index=%x,subindex=%d", msg->id,
 	       is_expediated ? "expediated" : "segment", index, subindex);
@@ -223,6 +246,8 @@ static int dump_sdo_dl_seg_req(struct canopen_msg* msg, struct can_frame* cf)
 	if (state)
 		vector_append(&state->sdo_data, data, size);
 
+	print_ts();
+
 	printf("RSDO %d download-segment%s size=%d,data=%s", msg->id,
 	       is_end ? "-end" : "", size, get_segment_data(state, data, size));
 
@@ -245,6 +270,7 @@ static int dump_sdo_ul_init_req(struct canopen_msg* msg, struct can_frame* cf)
 	int index = sdo_get_index(cf);
 	int subindex = sdo_get_subindex(cf);
 
+	print_ts();
 	printx(cf, "RSDO %d init-upload-segment index=%x,subindex=%d", msg->id,
 	       index, subindex);
 
@@ -254,6 +280,7 @@ static int dump_sdo_ul_init_req(struct canopen_msg* msg, struct can_frame* cf)
 
 static int dump_sdo_ul_seg_req(struct canopen_msg* msg, struct can_frame* cf)
 {
+	print_ts();
 	printx(cf, "RSDO %d upload-segment", msg->id);
 
 	return 0;
@@ -267,6 +294,7 @@ static int dump_sdo_abort(int type, struct canopen_msg* msg,
 
 	const char* reason = sdo_strerror(sdo_get_abort_code(cf));
 
+	print_ts();
 	printx(cf, "%cSDO %d abort index=%x,subindex=%d,reason=\"%s\"", type,
 	       msg->id, index, subindex, reason);
 	return 0;
@@ -287,6 +315,7 @@ static int dump_rsdo(struct canopen_msg* msg, struct can_frame* cf)
 	case SDO_CCS_UL_SEG_REQ: return dump_sdo_ul_seg_req(msg, cf);
 	case SDO_CCS_ABORT: return dump_sdo_abort('R', msg, cf);
 	default:
+		print_ts();
 		printx(cf, "RSDO %d unknown-command-specifier", msg->id);
 	}
 
@@ -305,6 +334,8 @@ static int dump_sdo_ul_init_res(struct canopen_msg* msg, struct can_frame* cf)
 
 	if (state && !is_expediated)
 		state->current_mux = SDO_MUX(index, subindex);
+
+	print_ts();
 
 	printf("TSDO %d init-upload-%s index=%x,subindex=%d", msg->id,
 	       is_expediated ? "expediated" : "segment", index, subindex);
@@ -343,6 +374,8 @@ static int dump_sdo_ul_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 	if (state)
 		vector_append(&state->sdo_data, data, size);
 
+	print_ts();
+
 	printf("TSDO %d upload-segment%s size=%d,data=%s", msg->id,
 	       is_end ? "-end" : "", size, get_segment_data(state, data, size));
 
@@ -360,6 +393,7 @@ static int dump_sdo_ul_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 
 static int dump_sdo_dl_init_res(struct canopen_msg* msg, struct can_frame* cf)
 {
+	print_ts();
 	printx(cf, "TSDO %d init-download-segment", msg->id);
 
 	return 0;
@@ -370,6 +404,7 @@ static int dump_sdo_dl_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 {
 	int is_end = sdo_is_end_segment(cf);
 
+	print_ts();
 	printx(cf, "TSDO %d download-segment%s", msg->id, is_end ? "-end" : "");
 
 	return 0;
@@ -389,6 +424,7 @@ static int dump_tsdo(struct canopen_msg* msg, struct can_frame* cf)
 	case SDO_SCS_UL_SEG_RES: return dump_sdo_ul_seg_res(msg, cf);
 	case SDO_SCS_ABORT: return dump_sdo_abort('T', msg, cf);
 	default:
+		print_ts();
 		printx(cf, "TSDO %d unknown-command-specifier", msg->id);
 	}
 
@@ -414,6 +450,8 @@ static int dump_heartbeat(struct canopen_msg* msg, struct can_frame* cf)
 		return 0;
 
 	enum nmt_state state = heartbeat_get_state(cf);
+
+	print_ts();
 
 	if (heartbeat_is_bootup(cf)) {
 		printx(cf, "HEARTBEAT %d bootup", msg->id);

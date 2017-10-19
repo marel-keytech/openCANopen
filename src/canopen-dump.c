@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, Marel
+/* Copyright (c) 2014-2017, Marel
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,6 +26,7 @@ const char usage_[] =
 "\n"
 "Options:\n"
 "    -h, --help                 Get help.\n"
+"    -u, --time                 Show time of arrival.\n"
 "    -T, --tcp                  Connect via TCP.\n"
 "    -n, --nmt                  Show NMT.\n"
 "    -S, --sync                 Show SYNC.\n"
@@ -56,6 +57,7 @@ int main(int argc, char* argv[])
 {
 	static const struct option long_options[] = {
 		{ "help",      no_argument,       0, 'h' },
+		{ "time",      no_argument,       0, 'u' },
 		{ "tcp",       no_argument,       0, 'T' },
 		{ "nmt",       no_argument,       0, 'n' },
 		{ "sync",      no_argument,       0, 'S' },
@@ -69,12 +71,13 @@ int main(int argc, char* argv[])
 	enum co_dump_options opt = 0;
 
 	while (1) {
-		int c = getopt_long(argc, argv, "hTnSepsiH", long_options, NULL);
+		int c = getopt_long(argc, argv, "huTnSepsiH", long_options, NULL);
 		if (c < 0)
 			break;
 
 		switch (c) {
 		case 'h': return print_usage(stdout, 0);
+		case 'u': opt |= CO_DUMP_TIMESTAMP; break;
 		case 'T': opt |= CO_DUMP_TCP; break;
 		case 'n': opt |= CO_DUMP_FILTER_NMT; break;
 		case 'S': opt |= CO_DUMP_FILTER_SYNC; break;
