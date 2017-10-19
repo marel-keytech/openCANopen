@@ -20,6 +20,8 @@
 #include "Driver.h"
 #include "CanIOHandlerInterface.h"
 
+#include <appcbase.h>
+
 using namespace std;
 
 int Driver::inst = 0;
@@ -82,7 +84,7 @@ Driver::Driver( const char *filename )
 
     candriver_close_driver = tryLoadSymbol<candriver_close_driver_t*>(handle, "candriver_close_driver");
 
-    candriver_set_parent("canopen", 0);
+    candriver_set_parent("canopen", appbase_get_instance());
 }
 
 int
