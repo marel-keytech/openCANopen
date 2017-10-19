@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, Marel
+/* Copyright (c) 2014-2017, Marel
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,6 +16,8 @@
 #ifndef __Driver_h__
 #define __Driver_h__
 #include <string>
+#include <stdexcept>
+#include <dlfcn.h>
 #include "CanIOHandlerInterface.h"
 #include "StateFactory.h"
 
@@ -33,6 +35,16 @@ class Driver
     candriver_close_driver_t* candriver_close_driver;
     void *handle;
     std::string fileName;
+
+    template<typename T> T tryLoadSymbol(void* handle, const char* name)
+    {
+        T sym = reinterpret_cast<T>(dlsym(handle, name));
+	const char* err = dlerror();
+	if (err)
+            throw std::runtime_error("Could not load symbol '"
+                  + std::string(name) + "': " + std::string(err));
+        return sym;
+    }
 
 public:
 	Driver(const char *filename);
