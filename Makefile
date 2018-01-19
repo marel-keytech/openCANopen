@@ -55,6 +55,7 @@ SRC := \
 	can-tcp.c \
 	cfg.c \
 	error.c \
+	trace-buffer.c \
 
 TEST_SRC := \
 	unit_arc.c \
@@ -72,6 +73,7 @@ TEST_SRC := \
 	sdo_async_fuzz_test.c \
 	unit_cfg.c \
 	unit_error.c \
+	unit_trace-buffer.c \
 
 include $(MDEV)/make/make.main
 
