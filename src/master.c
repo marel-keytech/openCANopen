@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, Marel
+/* Copyright (c) 2014-2018, Marel
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,6 +21,8 @@
 #include <ctype.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "plog.h"
 
 #include "mloop.h"
@@ -44,6 +46,7 @@
 #include "net-util.h"
 #include "sock.h"
 #include "cfg.h"
+#include "trace-buffer.h"
 
 #ifndef NO_MAREL_CODE
 #include <appcbase.h>
@@ -88,6 +91,9 @@ pthread_mutex_t driver_manager_lock_ = PTHREAD_MUTEX_INITIALIZER;
 
 static struct mloop* mloop_ = NULL;
 static struct mloop_socket* mux_handler_ = NULL;
+
+static struct tracebuffer tracebuffer_;
+static int is_tracebuffer_locked_ = 0;
 
 static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
@@ -260,6 +266,55 @@ static void unload_driver(int nodeid)
 #endif /* NO_MAREL_CODE */
 }
 
+static void do_dump_tracebuffer(struct mloop_work* work)
+{
+	(void)work;
+
+	assert(cfg.trace_buffer_size > 0);
+
+	struct tm tm;
+	time_t t = time(NULL);
+
+	char ts[32];
+	int rc = strftime(ts, sizeof(ts), "%y%m%d-%H%M%S", localtime_r(&t, &tm));
+	assert(rc >= 0);
+
+	char path[256];
+	snprintf(path, sizeof(path), "%s/%s.trace", cfg.trace_dump_path, ts);
+
+	FILE* stream = fopen(path, "w");
+	if (!stream)
+		return;
+
+	tb_dump(&tracebuffer_, stream);
+
+	fclose(stream);
+}
+
+static void on_trace_dump_done(struct mloop_work* work)
+{
+	(void)work;
+
+	is_tracebuffer_locked_ = 0;
+}
+
+static void dump_tracebuffer(void)
+{
+	if (is_tracebuffer_locked_ || cfg.trace_buffer_size == 0)
+		return;
+
+	is_tracebuffer_locked_ = 1;
+
+	struct mloop_work* work = mloop_work_new(mloop_default());
+	if (!work)
+		return;
+
+	mloop_work_set_work_fn(work, do_dump_tracebuffer);
+	mloop_work_set_done_fn(work, on_trace_dump_done);
+	mloop_work_start(work);
+	mloop_work_unref(work);
+}
+
 static void on_heartbeat_timeout(struct mloop_timer* timer)
 {
 	struct co_master_node* node = mloop_timer_get_context(timer);
@@ -280,6 +335,8 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 
 	plog(LOG_NOTICE, "Node \"%s\" with id %d has timed out; unloading...",
 	     node->name, nodeid);
+
+	dump_tracebuffer();
 
 	co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 	unload_driver(co_master_get_node_id(node));
@@ -986,6 +1043,9 @@ static void mux_on_frame(const struct can_frame* cf)
 {
 	struct canopen_msg msg;
 
+	if (!is_tracebuffer_locked_ && cfg.trace_buffer_size > 0)
+		tb_append(&tracebuffer_, cf);
+
 	if (cf->can_id & (CAN_RTR_FLAG | CAN_EFF_FLAG | CAN_ERR_FLAG))
 		return;
 
@@ -1417,6 +1477,23 @@ static void unload_all_drivers()
 			unload_driver(i);
 }
 
+static int init_trace_dump_path(const char* path)
+{
+	struct stat st;
+
+	if (stat(path, &st) == 0) {
+		if (!S_ISDIR(st.st_mode)) {
+			errno = EEXIST;
+			return -1;
+		}
+	} else {
+		if (mkdir(path, 0755) < 0)
+			return -1;
+	}
+
+	return 0;
+}
+
 __attribute__((visibility("default")))
 int co_master_run(void)
 {
@@ -1488,6 +1565,22 @@ int co_master_run(void)
 		goto worker_failure;
 	}
 
+	if (cfg.trace_buffer_size > 0) {
+		profile("Initialize trace buffer...\n");
+		if (tb_init(&tracebuffer_, cfg.trace_buffer_size) < 0) {
+			perror("Could not initialize trace buffer");
+			rc = 1;
+			goto tracebuffer_failure;
+		}
+
+		if (init_trace_dump_path(cfg.trace_dump_path) < 0) {
+			perror("Could not create directory for trace dump");
+			rc = 1;
+			goto trace_dump_path_failure;
+		}
+	}
+
+
 #ifndef NO_MAREL_CODE
 	rc = run_appbase();
 #else
@@ -1507,6 +1600,10 @@ int co_master_run(void)
 	}
 
 bootup_failure:
+trace_dump_path_failure:
+	if (cfg.trace_buffer_size > 0)
+		tb_destroy(&tracebuffer_);
+tracebuffer_failure:
 worker_failure:
 #ifndef NO_MAREL_CODE
 	legacy_driver_manager_delete(driver_manager_);

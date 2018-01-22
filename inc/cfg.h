@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, Marel
+/* Copyright (c) 2014-2018, Marel
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -35,6 +35,8 @@
 	X(uint, range_start, 0) \
 	X(uint, range_stop, 0) \
 	X(uint, sync_interval, 0 /* us */) \
+	X(uint, trace_buffer_size, 0) \
+	X(string, trace_dump_path, "/var/log/canopen") \
 
 #define CFG__NODE_PARAMETERS \
 	X(bool, has_zero_guard_status, 0) \
