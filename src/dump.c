@@ -529,7 +529,7 @@ int co_dump(const char* addr, enum co_dump_options options)
 	struct sock sock;
 	enum sock_type type = options & CO_DUMP_TCP ? SOCK_TYPE_TCP
 						    : SOCK_TYPE_CAN;
-	if (sock_open(&sock, type, addr) < 0) {
+	if (sock_open(&sock, type, addr, NULL) < 0) {
 		perror("Could not open CAN bus");
 		return 1;
 	}

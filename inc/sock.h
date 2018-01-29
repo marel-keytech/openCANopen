@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 struct can_frame;
+struct tracebuffer;
 
 enum sock_type {
 	SOCK_TYPE_UNSPEC = 0,
@@ -29,15 +30,19 @@ enum sock_type {
 struct sock {
 	enum sock_type type;
 	int fd;
+	struct tracebuffer* tb;
 };
 
-static inline void sock_init(struct sock* sock, enum sock_type type, int fd)
+static inline void sock_init(struct sock* sock, enum sock_type type, int fd,
+			     struct tracebuffer* tb)
 {
 	sock->type = type;
 	sock->fd = fd;
+	sock->tb = tb;
 }
 
-int sock_open(struct sock* sock, enum sock_type type, const char* addr);
+int sock_open(struct sock* sock, enum sock_type type, const char* addr,
+	      struct tracebuffer* tb);
 
 ssize_t sock_send(const struct sock* sock, struct can_frame* cf, int flags);
 int sock_timed_send(const struct sock* sock, struct can_frame* cf, int timeout);

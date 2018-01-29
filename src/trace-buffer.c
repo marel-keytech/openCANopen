@@ -16,6 +16,7 @@
 #include "trace-buffer.h"
 
 #include "socketcan.h"
+#include "co_atomic.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,6 +32,21 @@ static inline unsigned long clzl(unsigned long x)
 static inline unsigned long round_up_to_power_of_2(unsigned long x)
 {
 	return 1UL << ((sizeof(x) << 3) - clzl(x - 1UL));
+}
+
+static inline int tb_try_block(struct tracebuffer* self)
+{
+	return co_atomic_cas(&self->is_blocked, 0, 1);
+}
+
+static inline void tb_unblock(struct tracebuffer* self)
+{
+	co_atomic_store(&self->is_blocked, 0);
+}
+
+static inline int tb_is_blocked(const struct tracebuffer* self)
+{
+	return co_atomic_load(&self->is_blocked);
 }
 
 int tb_init(struct tracebuffer* self, size_t size)
@@ -50,6 +66,9 @@ void tb_destroy(struct tracebuffer* self)
 
 void tb_append(struct tracebuffer* self, const struct can_frame* frame)
 {
+	if (tb_is_blocked(self))
+		return;
+
 	self->data[self->index++] = *frame;
 	self->index &= (self->length - 1);
 
@@ -57,8 +76,11 @@ void tb_append(struct tracebuffer* self, const struct can_frame* frame)
 		self->count++;
 }
 
-void tb_dump(const struct tracebuffer* self, FILE* stream)
+void tb_dump(struct tracebuffer* self, FILE* stream)
 {
+	if (!tb_try_block(self))
+		return;
+
 	if (self->count < self->length) {
 		fwrite(self->data, sizeof(self->data[0]), self->count, stream);
 	} else {
@@ -67,6 +89,8 @@ void tb_dump(const struct tracebuffer* self, FILE* stream)
 
 		fwrite(self->data, sizeof(self->data[0]), self->index, stream);
 	}
+
+	tb_unblock(self);
 
 	fflush(stream);
 }

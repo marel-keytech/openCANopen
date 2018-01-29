@@ -279,7 +279,7 @@ int can_tcp_bridge_server(const char* can, int port)
 	struct sock cansock;
 
 	if (can) {
-		if (sock_open(&cansock, SOCK_TYPE_CAN, can) < 0) {
+		if (sock_open(&cansock, SOCK_TYPE_CAN, can, NULL) < 0) {
 			perror("Could not open CAN interface");
 			return -1;
 		}
@@ -319,7 +319,7 @@ int can_tcp_bridge_client(const char* can, const char* address, int port)
 		return -1;
 
 	if (can) {
-		if (sock_open(&cansock, SOCK_TYPE_CAN, can) < 0)
+		if (sock_open(&cansock, SOCK_TYPE_CAN, can, NULL) < 0)
 			goto cansock_failure;
 		net_fix_sndbuf(cansock.fd);
 	}

@@ -93,7 +93,6 @@ static struct mloop* mloop_ = NULL;
 static struct mloop_socket* mux_handler_ = NULL;
 
 static struct tracebuffer tracebuffer_;
-static int is_tracebuffer_locked_ = 0;
 
 static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
@@ -291,26 +290,16 @@ static void do_dump_tracebuffer(struct mloop_work* work)
 	fclose(stream);
 }
 
-static void on_trace_dump_done(struct mloop_work* work)
-{
-	(void)work;
-
-	is_tracebuffer_locked_ = 0;
-}
-
 static void dump_tracebuffer(void)
 {
-	if (is_tracebuffer_locked_ || cfg.trace_buffer_size == 0)
+	if (cfg.trace_buffer_size == 0)
 		return;
-
-	is_tracebuffer_locked_ = 1;
 
 	struct mloop_work* work = mloop_work_new(mloop_default());
 	if (!work)
 		return;
 
 	mloop_work_set_work_fn(work, do_dump_tracebuffer);
-	mloop_work_set_done_fn(work, on_trace_dump_done);
 	mloop_work_start(work);
 	mloop_work_unref(work);
 }
@@ -1043,9 +1032,6 @@ static void mux_on_frame(const struct can_frame* cf)
 {
 	struct canopen_msg msg;
 
-	if (!is_tracebuffer_locked_ && cfg.trace_buffer_size > 0)
-		tb_append(&tracebuffer_, cf);
-
 	if (cf->can_id & (CAN_RTR_FLAG | CAN_EFF_FLAG | CAN_ERR_FLAG))
 		return;
 
@@ -1524,7 +1510,8 @@ int co_master_run(void)
 
 	profile("Open interface...\n");
 	enum sock_type sock_type = cfg.use_tcp ? SOCK_TYPE_TCP : SOCK_TYPE_CAN;
-	if (sock_open(&socket_, sock_type, cfg.iface) < 0) {
+	if (sock_open(&socket_, sock_type, cfg.iface,
+		      cfg.trace_buffer_size > 0 ? &tracebuffer_ : NULL) < 0) {
 		perror("Could not open CAN bus");
 		goto socketcan_open_failure;
 	}

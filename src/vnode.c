@@ -466,7 +466,7 @@ int vnode__init_socket(struct vnode* self, enum sock_type type,
 		return 0;
 	}
 
-	if (sock_open(&vnode__sock, type, iface) < 0) {
+	if (sock_open(&vnode__sock, type, iface, NULL) < 0) {
 		perror("Failed to open CAN interface");
 		return -1;
 	}

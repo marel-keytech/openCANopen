@@ -25,12 +25,13 @@ struct tracebuffer {
 	size_t length;
 	size_t index;
 	size_t count;
+	int is_blocked;
 	struct can_frame* data;
 };
 
 int tb_init(struct tracebuffer* self, size_t size);
 void tb_destroy(struct tracebuffer* self);
 void tb_append(struct tracebuffer* self, const struct can_frame* frame);
-void tb_dump(const struct tracebuffer* self, FILE* stream);
+void tb_dump(struct tracebuffer* self, FILE* stream);
 
 #endif /* _TRACE_BUFFER_H */

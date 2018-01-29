@@ -24,6 +24,7 @@
 #include "socketcan.h"
 #include "net-util.h"
 #include "can-tcp.h"
+#include "trace-buffer.h"
 
 size_t strlcpy(char* dst, const char* src, size_t size);
 
@@ -40,7 +41,8 @@ static int sock__open_tcp(const char* addr)
 	return can_tcp_open(buffer, port);
 }
 
-int sock_open(struct sock* sock, enum sock_type type, const char* addr)
+int sock_open(struct sock* sock, enum sock_type type, const char* addr,
+	      struct tracebuffer* tb)
 {
 	int fd = -1;
 	switch (type) {
@@ -48,7 +50,7 @@ int sock_open(struct sock* sock, enum sock_type type, const char* addr)
 	case SOCK_TYPE_TCP: fd = sock__open_tcp(addr); break;
 	default: abort();
 	}
-	sock_init(sock, type, fd);
+	sock_init(sock, type, fd, tb);
 	return fd;
 }
 
@@ -70,11 +72,17 @@ sock__frame_ntohl(const struct sock* sock, struct can_frame* cf)
 
 ssize_t sock_send(const struct sock* sock, struct can_frame* cf, int flags)
 {
+	if (sock->tb)
+		tb_append(sock->tb, cf);
+
 	return send(sock->fd, sock__frame_htonl(sock, cf), sizeof(*cf), flags);
 }
 
 int sock_timed_send(const struct sock* sock, struct can_frame* cf, int timeout)
 {
+	if (sock->tb)
+		tb_append(sock->tb, cf);
+
 	return net_write_frame(sock->fd, sock__frame_htonl(sock, cf), timeout);
 }
 
@@ -83,6 +91,10 @@ ssize_t sock_recv(const struct sock* sock, struct can_frame* cf, int flags)
 	ssize_t rsize = recv(sock->fd, cf, sizeof(*cf), flags);
 	if (rsize <= 0)
 		return rsize;
+
+	if (sock->tb)
+		tb_append(sock->tb, cf);
+
 	sock__frame_ntohl(sock, cf);
 	return rsize;
 }
@@ -90,6 +102,10 @@ ssize_t sock_recv(const struct sock* sock, struct can_frame* cf, int flags)
 int sock_timed_recv(const struct sock* sock, struct can_frame* cf, int timeout)
 {
 	int rc = net_read_frame(sock->fd, cf, timeout);
+
+	if (rc >= 0 && sock->tb)
+		tb_append(sock->tb, cf);
+
 	sock__frame_ntohl(sock, cf);
 	return rc;
 }
