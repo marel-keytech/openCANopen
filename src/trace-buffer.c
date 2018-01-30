@@ -17,6 +17,7 @@
 
 #include "socketcan.h"
 #include "co_atomic.h"
+#include "time-utils.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -69,7 +70,12 @@ void tb_append(struct tracebuffer* self, const struct can_frame* frame)
 	if (tb_is_blocked(self))
 		return;
 
-	self->data[self->index++] = *frame;
+	struct tb_frame tb_frame = {
+		.timestamp = gettime_us(CLOCK_MONOTONIC),
+		.cf = *frame,
+	};
+
+	self->data[self->index++] = tb_frame;
 	self->index &= (self->length - 1);
 
 	if (self->count < self->length)

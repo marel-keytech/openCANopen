@@ -18,15 +18,21 @@
 
 #include <unistd.h>
 #include <stdio.h>
+#include <stdint.h>
 
-struct can_frame;
+#include "socketcan.h"
+
+struct tb_frame {
+	uint64_t timestamp;
+	struct can_frame cf;
+};
 
 struct tracebuffer {
 	size_t length;
 	size_t index;
 	size_t count;
 	int is_blocked;
-	struct can_frame* data;
+	struct tb_frame* data;
 };
 
 int tb_init(struct tracebuffer* self, size_t size);
