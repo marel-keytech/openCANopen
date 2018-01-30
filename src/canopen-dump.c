@@ -28,6 +28,7 @@ const char usage_[] =
 "    -h, --help                 Get help.\n"
 "    -u, --time                 Show time of arrival.\n"
 "    -T, --tcp                  Connect via TCP.\n"
+"    -f, --file                 Dump from trace buffer file.\n"
 "    -n, --nmt                  Show NMT.\n"
 "    -S, --sync                 Show SYNC.\n"
 "    -e, --emcy                 Show EMCY.\n"
@@ -59,6 +60,7 @@ int main(int argc, char* argv[])
 		{ "help",      no_argument,       0, 'h' },
 		{ "time",      no_argument,       0, 'u' },
 		{ "tcp",       no_argument,       0, 'T' },
+		{ "file",      no_argument,       0, 'f' },
 		{ "nmt",       no_argument,       0, 'n' },
 		{ "sync",      no_argument,       0, 'S' },
 		{ "emcy",      no_argument,       0, 'e' },
@@ -71,7 +73,7 @@ int main(int argc, char* argv[])
 	enum co_dump_options opt = 0;
 
 	while (1) {
-		int c = getopt_long(argc, argv, "huTnSepsiH", long_options, NULL);
+		int c = getopt_long(argc, argv, "huTfnSepsiH", long_options, NULL);
 		if (c < 0)
 			break;
 
@@ -79,6 +81,7 @@ int main(int argc, char* argv[])
 		case 'h': return print_usage(stdout, 0);
 		case 'u': opt |= CO_DUMP_TIMESTAMP; break;
 		case 'T': opt |= CO_DUMP_TCP; break;
+		case 'f': opt |= CO_DUMP_FILE; break;
 		case 'n': opt |= CO_DUMP_FILTER_NMT; break;
 		case 'S': opt |= CO_DUMP_FILTER_SYNC; break;
 		case 'e': opt |= CO_DUMP_FILTER_EMCY; break;

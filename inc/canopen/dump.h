@@ -23,6 +23,7 @@
 enum co_dump_options {
 	CO_DUMP_TCP = 1,
 	CO_DUMP_TIMESTAMP = 1 << 1,
+	CO_DUMP_FILE = 1 << 2,
 
 	CO_DUMP_FILTER_NMT = 1 << (CO_DUMP_FILTER_SHIFT + 0),
 	CO_DUMP_FILTER_SYNC = 1 << (CO_DUMP_FILTER_SHIFT + 1),

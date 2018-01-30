@@ -30,6 +30,7 @@
 #include "vector.h"
 #include "canopen/error.h"
 #include "time-utils.h"
+#include "trace-buffer.h"
 
 #ifndef CAN_MAX_DLC
 #define CAN_MAX_DLC 8
@@ -48,13 +49,14 @@ struct node_state {
 
 static enum co_dump_options options_ = 0;
 static struct node_state node_state_[127] = { 0 };
+static uint64_t current_time_ = 0;
 
 char* strlcpy(char* dst, const char* src, size_t size);
 const char* hexdump(const void* data, size_t size);
 
 static inline void print_ts(void)
 {
-	uint64_t t = gettime_us(CLOCK_MONOTONIC);
+	uint64_t t = current_time_;
 
 	if (options_ & CO_DUMP_TIMESTAMP)
 		printf("%llu.%06llu ", t / 1000000ULL, t % 1000000ULL);
@@ -505,6 +507,7 @@ static void run_dumper(struct sock* sock)
 		if (sock_recv(sock, &cf, MSG_WAITALL) <= 0)
 			break;
 
+		current_time_ = gettime_us(CLOCK_MONOTONIC);
 		multiplex(&cf);
 	}
 }
@@ -518,6 +521,22 @@ static void resolve_filters(enum co_dump_options options)
 		  : CO_DUMP_FILTER_MASK;
 }
 
+static int dump_file(const char* path, enum co_dump_options options)
+{
+	FILE* stream = fopen(path, "r");
+	if (!stream)
+		return -1;
+
+	struct tb_frame frame;
+	while (fread(&frame, sizeof(frame), 1, stream)) {
+		current_time_ = frame.timestamp;
+		multiplex(&frame.cf);
+	}
+
+	fclose(stream);
+	return 0;
+}
+
 __attribute__((visibility("default")))
 int co_dump(const char* addr, enum co_dump_options options)
 {
@@ -525,6 +544,15 @@ int co_dump(const char* addr, enum co_dump_options options)
 	node_state_init();
 
 	resolve_filters(options);
+
+	if (options & CO_DUMP_FILE) {
+		if (dump_file(addr, options) < 0) {
+			perror("Could not read file");
+			return 1;
+		}
+
+		return 0;
+	}
 
 	struct sock sock;
 	enum sock_type type = options & CO_DUMP_TCP ? SOCK_TYPE_TCP
