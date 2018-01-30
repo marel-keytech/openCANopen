@@ -9,7 +9,7 @@ int test_incomplete_buffer(void)
 {
 	struct tracebuffer tb;
 
-	ASSERT_INT_GE(0, tb_init(&tb, 3 * sizeof(struct can_frame)));
+	ASSERT_INT_GE(0, tb_init(&tb, 3 * sizeof(struct tb_frame)));
 	ASSERT_INT_EQ(4, tb.length);
 
 	struct can_frame cf = { 0 };
@@ -18,14 +18,14 @@ int test_incomplete_buffer(void)
 	cf.can_id = 2;
 	tb_append(&tb, &cf);
 
-	struct can_frame* buffer;
+	struct tb_frame* buffer;
 	size_t size;
 	FILE* stream = open_memstream((char**)&buffer, &size);
 
 	tb_dump(&tb, stream);
 
-	ASSERT_INT_EQ(1, buffer[0].can_id);
-	ASSERT_INT_EQ(2, buffer[1].can_id);
+	ASSERT_INT_EQ(1, buffer[0].cf.can_id);
+	ASSERT_INT_EQ(2, buffer[1].cf.can_id);
 
 	fclose(stream);
 	free(buffer);
@@ -37,7 +37,7 @@ int test_full_buffer(void)
 {
 	struct tracebuffer tb;
 
-	ASSERT_INT_GE(0, tb_init(&tb, 3 * sizeof(struct can_frame)));
+	ASSERT_INT_GE(0, tb_init(&tb, 3 * sizeof(struct tb_frame)));
 	ASSERT_INT_EQ(4, tb.length);
 
 	struct can_frame cf = { 0 };
@@ -50,15 +50,15 @@ int test_full_buffer(void)
 		tb_append(&tb, &cf);
 	}
 
-	struct can_frame* buffer;
+	struct tb_frame* buffer;
 	size_t size;
 	FILE* stream = open_memstream((char**)&buffer, &size);
 
 	tb_dump(&tb, stream);
 
-	ASSERT_INT_EQ(1, buffer[0].can_id);
-	ASSERT_INT_EQ(2, buffer[1].can_id);
-	ASSERT_INT_EQ(3, buffer[2].can_id);
+	ASSERT_INT_EQ(1, buffer[0].cf.can_id);
+	ASSERT_INT_EQ(2, buffer[1].cf.can_id);
+	ASSERT_INT_EQ(3, buffer[2].cf.can_id);
 
 	fclose(stream);
 	free(buffer);
