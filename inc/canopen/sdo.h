@@ -145,7 +145,7 @@ static inline int sdo_is_end_segment(const struct can_frame* frame)
 static inline
 enum sdo_abort_code sdo_get_abort_code(const struct can_frame* frame)
 {
-	enum sdo_abort_code code;
+	uint32_t code;
 	byteorder(&code, &frame->data[4], 4);
 	return code;
 }
@@ -153,7 +153,8 @@ enum sdo_abort_code sdo_get_abort_code(const struct can_frame* frame)
 static inline void sdo_set_abort_code(struct can_frame* frame,
 				      enum sdo_abort_code code)
 {
-	byteorder(&frame->data[4], &code, 4);
+	uint32_t data = code;
+	byteorder(&frame->data[4], &data, 4);
 }
 
 static inline int sdo_is_expediated(const struct can_frame* frame)
@@ -176,14 +177,14 @@ static inline void sdo_indicate_size(struct can_frame* frame)
 	frame->data[0] |= 1;
 }
 
-static inline void sdo_set_indicated_size(struct can_frame* frame, size_t size)
+static inline void sdo_set_indicated_size(struct can_frame* frame, uint32_t size)
 {
 	byteorder(&frame->data[SDO_INDICATED_SIZE_IDX], &size, 4);
 }
 
 static inline size_t sdo_get_indicated_size(const struct can_frame* frame)
 {
-	size_t size;
+	uint32_t size;
 	byteorder(&size, &frame->data[SDO_INDICATED_SIZE_IDX], 4);
 	return size;
 }
