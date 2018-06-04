@@ -71,7 +71,7 @@ void tb_append(struct tracebuffer* self, const struct can_frame* frame)
 		return;
 
 	struct tb_frame tb_frame = {
-		.timestamp = gettime_us(CLOCK_MONOTONIC),
+		.timestamp = gettime_us(CLOCK_REALTIME),
 		.cf = *frame,
 	};
 

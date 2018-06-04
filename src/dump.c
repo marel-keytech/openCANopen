@@ -507,7 +507,7 @@ static void run_dumper(struct sock* sock)
 		if (sock_recv(sock, &cf, MSG_WAITALL) <= 0)
 			break;
 
-		current_time_ = gettime_us(CLOCK_MONOTONIC);
+		current_time_ = gettime_us(CLOCK_REALTIME);
 		multiplex(&cf);
 	}
 }
