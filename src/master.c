@@ -800,12 +800,16 @@ static int schedule_load_driver(int nodeid)
 	if (node->is_loading)
 		return 0;
 
+	if (node->driver_type != CO_MASTER_DRIVER_NONE) {
+		if (!node->is_initialized)
+			return -1;
+
+		unload_driver(nodeid);
+	}
+
 	struct mloop_work* work = mloop_work_new(mloop_default());
 	if (!work)
 		return -1;
-
-	if (node->driver_type != CO_MASTER_DRIVER_NONE)
-		unload_driver(nodeid);
 
 	mloop_work_set_context(work, node, NULL);
 	mloop_work_set_work_fn(work, run_load_driver);
@@ -912,6 +916,9 @@ static int handle_heartbeat(struct co_master_node* node,
 
 		return 0;
 	}
+
+	if (!node->is_initialized)
+		return -1;
 
 	restart_heartbeat_timer(nodeid);
 
