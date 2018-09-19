@@ -19,6 +19,15 @@
 #include <unistd.h>
 #include <stdint.h>
 
+#define co_sdo_send(self, index, subindex, value) \
+({ \
+ 	typeof(value) network_order, host_order = (value); \
+	co_byteorder(&network_order, &host_order, sizeof(network_order), \
+		     sizeof(host_order)); \
+	co_sdo_send_blob(self, index, subindex, &network_order, \
+			 sizeof(network_order)); \
+})
+
 struct co_drv;
 struct co_sdo_req;
 
