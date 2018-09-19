@@ -96,6 +96,9 @@ int co_sdo_req_get_index(const struct co_sdo_req* self);
 int co_sdo_req_get_subindex(const struct co_sdo_req* self);
 enum co_sdo_status co_sdo_req_get_status(const struct co_sdo_req* self);
 
+int co_sdo_send_blob(struct co_drv* self, int index, int subindex,
+		     const void* payload, size_t size);
+
 void co_byteorder(void* dst, const void* src, size_t dst_size, size_t src_size);
 
 #endif /* _CANOPEN_DRIVER_H */

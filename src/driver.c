@@ -315,6 +315,26 @@ enum co_sdo_status co_sdo_req_get_status(const struct co_sdo_req* self)
 	return -1;
 }
 
+int co_sdo_send_blob(struct co_drv* self, int index, int subindex,
+		     const void* payload, size_t size)
+{
+	struct sdo_req_info info = {
+		.type = SDO_REQ_DOWNLOAD,
+		.index = index,
+		.subindex = subindex,
+		.dl_data = payload,
+		.dl_size = size,
+	};
+
+	struct sdo_req* req = sdo_req_new(&info);
+	if (!req)
+		return -1;
+
+	int r = sdo_req_start(req, sdo_req_queue_get(co_get_nodeid(self)));
+	sdo_req_unref(req);
+	return r;
+}
+
 void co_byteorder(void* dst, const void* src, size_t dst_size, size_t src_size)
 {
 	return byteorder2(dst, src, dst_size, src_size);
