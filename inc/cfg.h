@@ -37,6 +37,8 @@
 	X(uint, sync_interval, 0 /* us */) \
 	X(uint, trace_buffer_size, 0) \
 	X(string, trace_dump_path, "/var/log/canopen") \
+	X(bool, enable_bootup_trace, 0) \
+	X(bool, enable_incident_trace, 0) \
 
 #define CFG__NODE_PARAMETERS \
 	X(bool, has_zero_guard_status, 0) \

@@ -347,7 +347,8 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 	plog(LOG_NOTICE, "Node \"%s\" with id %d has timed out; unloading...",
 	     node->name, nodeid);
 
-	dump_tracebuffer(NULL);
+	if (cfg.enable_incident_trace)
+		dump_tracebuffer(NULL);
 
 	co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 	unload_driver(co_master_get_node_id(node));
@@ -1227,6 +1228,9 @@ static void start_all_nodes(void)
 	load_late_nodes();
 
 	start_sync_timer();
+
+	if (cfg.enable_bootup_trace)
+		dump_tracebuffer("bootup");
 }
 
 static void on_bootup_done(struct mloop_work* self)
