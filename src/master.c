@@ -1629,12 +1629,11 @@ int co_master_run(void)
 		}
 	}
 
+	init_signal_handler(mloop_);
 
 #ifndef NO_MAREL_CODE
 	rc = run_appbase();
 #else
-	init_signal_handler(mloop_);
-
 	if (start_bootup() < 0)
 		goto bootup_failure;
 
