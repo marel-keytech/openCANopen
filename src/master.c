@@ -265,21 +265,37 @@ static void unload_driver(int nodeid)
 #endif /* NO_MAREL_CODE */
 }
 
-static void do_dump_tracebuffer(struct mloop_work* work)
+static char* compose_trace_name(char* dst, size_t size)
 {
-	(void)work;
-
-	assert(cfg.trace_buffer_size > 0);
-
 	struct tm tm;
 	time_t t = time(NULL);
 
-	char ts[32];
-	int rc = strftime(ts, sizeof(ts), "%y%m%d-%H%M%S", localtime_r(&t, &tm));
+	localtime_r(&t, &tm);
+	int rc = strftime(dst, size, "%y%m%d-%H%M%S", &tm);
 	assert(rc >= 0);
 
+	return dst;
+}
+
+static void compose_trace_buffer_path(char* path, size_t size, const char* name)
+{
+	char ts[32];
+
+	if (!name)
+		name = compose_trace_name(ts, sizeof(ts));
+
+	snprintf(path, size, "%s/%s.trace", cfg.trace_dump_path, name);
+	path[size - 1] = '\0';
+}
+
+static void do_dump_tracebuffer(struct mloop_work* work)
+{
+	assert(cfg.trace_buffer_size > 0);
+
+	const char* name = mloop_work_get_context(work);
+
 	char path[256];
-	snprintf(path, sizeof(path), "%s/%s.trace", cfg.trace_dump_path, ts);
+	compose_trace_buffer_path(path, sizeof(path), name);
 
 	FILE* stream = fopen(path, "w");
 	if (!stream)
@@ -290,7 +306,7 @@ static void do_dump_tracebuffer(struct mloop_work* work)
 	fclose(stream);
 }
 
-static void dump_tracebuffer(void)
+static void dump_tracebuffer(const char* name)
 {
 	if (cfg.trace_buffer_size == 0)
 		return;
@@ -298,6 +314,12 @@ static void dump_tracebuffer(void)
 	struct mloop_work* work = mloop_work_new(mloop_default());
 	if (!work)
 		return;
+
+	if (name) {
+		char* str = strdup(name);
+		if (str)
+			mloop_work_set_context(work, str, free);
+	}
 
 	mloop_work_set_work_fn(work, do_dump_tracebuffer);
 	mloop_work_start(work);
@@ -325,7 +347,7 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 	plog(LOG_NOTICE, "Node \"%s\" with id %d has timed out; unloading...",
 	     node->name, nodeid);
 
-	dump_tracebuffer();
+	dump_tracebuffer(NULL);
 
 	co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 	unload_driver(co_master_get_node_id(node));
