@@ -22,8 +22,8 @@
 #define co_sdo_send(self, index, subindex, value) \
 ({ \
  	typeof(value) network_order, host_order = (value); \
-	co_byteorder(&network_order, &host_order, sizeof(network_order), \
-		     sizeof(host_order)); \
+	co_byteorder((void*)&network_order, &host_order, \
+		     sizeof(network_order), sizeof(host_order)); \
 	co_sdo_send_blob(self, index, subindex, &network_order, \
 			 sizeof(network_order)); \
 })
@@ -48,6 +48,41 @@ enum co_sdo_status {
 enum co_options {
 	CO_OPT_UNSPEC = 0,
 	CO_OPT_INHIBIT_START = 1,
+};
+
+enum co_pdo_type {
+	CO_TPDO1 = 1,
+	CO_RPDO1,
+	CO_TPDO2,
+	CO_RPDO2,
+	CO_TPDO3,
+	CO_RPDO3,
+	CO_TPDO4,
+	CO_RPDO4,
+};
+
+enum co_tpdo_xmission_type {
+	CO_TPDO_XMISSION_SYNCHRONOUS = 0,
+	CO_TPDO_XMISSION_RTR_SYNCHRONOUS = 0xfc,
+	CO_TPDO_XMISSION_RTR_EVENT_DRIVEN = 0xfd,
+	CO_TPDO_XMISSION_MANUFACTURER_EVENT_DRIVEN = 0xfe,
+	CO_TPDO_XMISSION_STANDARD_EVENT_DRIVEN = 0xff,
+};
+
+struct co_pdo_map_entry {
+	uint16_t index;
+	uint8_t subindex;
+	uint8_t length;
+};
+
+struct co_tpdo_map {
+	enum co_pdo_type type;
+	enum co_tpdo_xmission_type xmission_type;
+	uint16_t inhibit_time;
+	uint16_t event_time;
+	uint8_t sync_start_value;
+
+	struct co_pdo_map_entry* entries;
 };
 
 struct co_emcy {
@@ -107,6 +142,8 @@ enum co_sdo_status co_sdo_req_get_status(const struct co_sdo_req* self);
 
 int co_sdo_send_blob(struct co_drv* self, int index, int subindex,
 		     const void* payload, size_t size);
+
+int co_map_tpdo(struct co_drv* self, const struct co_tpdo_map* map);
 
 void co_byteorder(void* dst, const void* src, size_t dst_size, size_t src_size);
 

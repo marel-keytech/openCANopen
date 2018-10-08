@@ -29,6 +29,14 @@
 #define DRIVER_PATH "/usr/lib/canopen"
 #endif
 
+#define TPDO_COMMUNICATION_START_INDEX 0x1800
+#define PDO_COMMUNICATION_COB 1
+#define PDO_COMMUNICATION_TRANSMISSION_TYPE 2
+#define PDO_COMMUNICATION_INHIBIT_TIME 3
+#define PDO_COMMUNICATION_EVENT_TIME 5
+
+#define TPDO_MAPPING_START_INDEX 0x1A00
+
 size_t strlcpy(char*, const char*, size_t);
 
 struct co_sdo_req {
@@ -96,6 +104,38 @@ void co_drv_unload(struct co_drv* drv)
 	dlclose(drv->dso);
 
 	memset(drv, 0, sizeof(*drv));
+}
+
+uint32_t co__cob_from_pdo_type(enum co_pdo_type type)
+{
+	switch (type) {
+	case CO_TPDO1: return R_TPDO1;
+	case CO_RPDO1: return R_RPDO1;
+	case CO_TPDO2: return R_TPDO2;
+	case CO_RPDO2: return R_RPDO2;
+	case CO_TPDO3: return R_TPDO3;
+	case CO_RPDO3: return R_RPDO3;
+	case CO_TPDO4: return R_TPDO4;
+	case CO_RPDO4: return R_RPDO4;
+	}
+
+	return 0;
+}
+
+int co__pdo_number_from_type(enum co_pdo_type type)
+{
+
+	switch (type) {
+	case CO_TPDO1:
+	case CO_RPDO1: return 1;
+	case CO_TPDO2:
+	case CO_RPDO2: return 2;
+	case CO_TPDO3:
+	case CO_RPDO3: return 3;
+	case CO_TPDO4:
+	case CO_RPDO4: return 4;
+	}
+	return 0;
 }
 
 #pragma GCC visibility push(default)
@@ -348,6 +388,45 @@ void co_setopt(struct co_drv* self, enum co_options opt)
 void co_start(struct co_drv* self)
 {
 	co__start(co_get_nodeid(self));
+}
+
+int co_map_tpdo(struct co_drv* self, const struct co_tpdo_map* map)
+{
+	int nodeid = co_get_nodeid(self);
+	uint32_t cobid = co__cob_from_pdo_type(map->type) + nodeid;
+
+	int index = co__pdo_number_from_type(map->type) - 1;
+	int com_index = TPDO_COMMUNICATION_START_INDEX + index;
+
+	co_sdo_send(self, com_index, PDO_COMMUNICATION_COB,
+		    (uint32_t)(0xC0000000 + cobid));
+
+	co_sdo_send(self, com_index, PDO_COMMUNICATION_TRANSMISSION_TYPE,
+		    (uint8_t)map->xmission_type);
+
+	co_sdo_send(self, com_index, PDO_COMMUNICATION_INHIBIT_TIME,
+		    map->inhibit_time);
+
+	co_sdo_send(self, com_index, PDO_COMMUNICATION_EVENT_TIME,
+		    map->event_time);
+
+	int map_index = TPDO_MAPPING_START_INDEX + index;
+
+	co_sdo_send(self, map_index, 0, (uint8_t)0);
+
+	uint8_t i;
+	for (i = 0; i <= 255 && map->entries[i].index; ++i) {
+		struct co_pdo_map_entry* e = &map->entries[i];
+		uint32_t data = e->index << 16 | e->subindex << 8 | e->length;
+		co_sdo_send(self, map_index, i + 1, data);
+	}
+
+	co_sdo_send(self, map_index, 0, i);
+
+	co_sdo_send(self, com_index, PDO_COMMUNICATION_COB,
+		    (uint32_t)(0x40000000 + cobid));
+
+	return 0;
 }
 
 #pragma GCC visibility pop
