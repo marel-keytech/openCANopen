@@ -1513,6 +1513,35 @@ static int init_trace_dump_path(const char* path)
 	return 0;
 }
 
+void on_stop_signal(struct mloop_signal* sig, int signo)
+{
+	(void)sig;
+	(void)signo;
+
+	mloop_exit(mloop_default());
+}
+
+int init_signal_handler(struct mloop* mloop)
+{
+	struct mloop_signal* ms = mloop_signal_new(mloop);
+	if (!ms)
+		return -1;
+
+	sigset_t s;
+	sigemptyset(&s);
+	sigaddset(&s, SIGINT);
+	sigaddset(&s, SIGTERM);
+	sigaddset(&s, SIGQUIT);
+
+	pthread_sigmask(SIG_BLOCK, &s, NULL);
+
+	mloop_signal_set_signals(ms, &s);
+	mloop_signal_set_callback(ms, on_stop_signal);
+	int rc = mloop_signal_start(ms);
+	mloop_signal_unref(ms);
+	return rc;
+}
+
 __attribute__((visibility("default")))
 int co_master_run(void)
 {
@@ -1604,6 +1633,8 @@ int co_master_run(void)
 #ifndef NO_MAREL_CODE
 	rc = run_appbase();
 #else
+	init_signal_handler(mloop_);
+
 	if (start_bootup() < 0)
 		goto bootup_failure;
 
