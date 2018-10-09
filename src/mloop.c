@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, Marel
+/* Copyright (c) 2014-2018, Marel
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -705,15 +705,8 @@ static void* mloop__worker_fn(void* context)
 			break;
 
 		struct mloop_work* work = elem.data;
-		if (work->is_cancelled) {
-			if (mloop__object_list_remove(work) == 0)
-				continue;
-
-			int rc = mloop__change_state(work, MLOOP_STARTING,
-						     MLOOP_STOPPED);
-			assert(rc == 0);
-			continue;
-		}
+		if (work->is_cancelled)
+			goto cancelled;
 
 		mloop_work_ref(work);
 
@@ -724,10 +717,18 @@ static void* mloop__worker_fn(void* context)
 		if (mloop_work_unref(work) == 0)
 			continue; /* No one is interested in the result */
 
-		if (work->done_fn)
+		if (work->done_fn) {
 			mloop__forward_work(work);
-		else
-			mloop__change_state(work, MLOOP_STARTED, MLOOP_STOPPED);
+			continue;
+		}
+
+cancelled:
+		if (mloop__object_list_remove(work) == 0)
+			continue;
+
+		int rc = mloop__change_state(work, MLOOP_STARTING,
+					     MLOOP_STOPPED);
+		assert(rc == 0);
 	};
 
 	return NULL;
@@ -1488,6 +1489,9 @@ int mloop_timer_start(struct mloop_timer* timer)
 {
 	struct mloop_socket* socket = &timer->socket;
 	struct mloop* mloop = socket->creator;
+
+	if (timer->time == 0)
+		return -1;
 
 	if (mloop__change_state(socket, MLOOP_STOPPED, MLOOP_STARTING) < 0)
 		return -1;
