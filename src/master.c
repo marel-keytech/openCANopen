@@ -1516,9 +1516,15 @@ static int init_trace_dump_path(const char* path)
 void on_stop_signal(struct mloop_signal* sig, int signo)
 {
 	(void)sig;
-	(void)signo;
 
-	mloop_exit(mloop_default());
+	switch (signo) {
+	case SIGUSR1:
+		dump_tracebuffer(NULL);
+		break;
+	default:
+		mloop_exit(mloop_default());
+		break;
+	}
 }
 
 int init_signal_handler(struct mloop* mloop)
@@ -1532,6 +1538,7 @@ int init_signal_handler(struct mloop* mloop)
 	sigaddset(&s, SIGINT);
 	sigaddset(&s, SIGTERM);
 	sigaddset(&s, SIGQUIT);
+	sigaddset(&s, SIGUSR1);
 
 	pthread_sigmask(SIG_BLOCK, &s, NULL);
 
