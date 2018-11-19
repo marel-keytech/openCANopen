@@ -250,14 +250,6 @@ int sdo_req_queue_remove(struct sdo_req_queue* self, struct sdo_req* req)
 	return 0;
 }
 
-struct sdo_req* sdo_req_queue_head(struct sdo_req_queue* self)
-{
-	sdo_req_queue__lock(self);
-	struct sdo_req* req = TAILQ_FIRST(&self->list);
-	sdo_req_queue__unlock(self);
-	return req;
-}
-
 void sdo_req_wait(struct sdo_req* self)
 {
 	while (self->status == SDO_REQ_PENDING)
@@ -279,8 +271,11 @@ void sdo_req__on_stop(void* ptr)
 int sdo_req__have_req(struct mloop_idle* idle)
 {
 	struct sdo_req_queue* queue = mloop_idle_get_context(idle);
-	return !queue->sdo_client.is_running
-	    && sdo_req_queue_head(queue) != NULL;
+	if (queue->sdo_client.is_running)
+	       return 0;
+
+	__sync_synchronize();
+	return !TAILQ_EMPTY(&queue->list);
 }
 
 void sdo_req__process_queue(struct mloop_idle* idle)
