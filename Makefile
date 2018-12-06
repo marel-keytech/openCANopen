@@ -4,7 +4,7 @@ PRJ_TYPE := SOLIB
 ADD_CFLAGS := -std=gnu99 -std=gnu++0x -D_GNU_SOURCE -Wextra -fexceptions \
 	      -fvisibility=hidden -pthread
 
-ADD_LIBS := mloop appbase dl sharedmalloc plog
+ADD_LIBS := mloop appbase dl sharedmalloc plog plutopst digitaliopin
 ADD_LFLAGS := -pthread -Wl,-rpath=/usr/lib/mloop
 
 #ifeq ($(shell marel_getcompilerprefix powerpc),powerpc-marel-linux-gnu)
@@ -56,6 +56,7 @@ SRC := \
 	cfg.c \
 	error.c \
 	trace-buffer.c \
+	userdata.c \
 
 TEST_SRC := \
 	unit_arc.c \

@@ -47,6 +47,7 @@
 #include "sock.h"
 #include "cfg.h"
 #include "trace-buffer.h"
+#include "userdata.h"
 
 #ifndef NO_MAREL_CODE
 #include <appcbase.h>
@@ -93,6 +94,8 @@ static struct mloop* mloop_ = NULL;
 static struct mloop_socket* mux_handler_ = NULL;
 
 static struct tracebuffer tracebuffer_;
+
+static struct userdata userdata_;
 
 static void* master_iface_init(int nodeid);
 static int master_request_sdo(int nodeid, int index, int subindex);
@@ -352,6 +355,7 @@ static void on_heartbeat_timeout(struct mloop_timer* timer)
 
 	co_net_send_nmt(&socket_, NMT_CS_RESET_NODE, nodeid);
 	unload_driver(co_master_get_node_id(node));
+	userdata_set_missing(&userdata_, nodeid);
 }
 
 static struct mloop_timer* get_heartbeat_timer(struct co_master_node* node)
@@ -806,6 +810,7 @@ static void on_load_driver_done(struct mloop_work* self)
 		return;
 
 	node->is_initialized = 1;
+	userdata_clear_missing(&userdata_, nodeid);
 
 	if (master_state_ == MASTER_STATE_STARTUP)
 		return;
@@ -828,6 +833,7 @@ static int schedule_load_driver(int nodeid)
 			return -1;
 
 		unload_driver(nodeid);
+		userdata_set_missing(&userdata_, nodeid);
 	}
 
 	struct mloop_work* work = mloop_work_new(mloop_default());
@@ -1231,6 +1237,8 @@ static void start_all_nodes(void)
 
 	if (cfg.enable_bootup_trace)
 		dump_tracebuffer("bootup");
+
+	userdata_check_missing(&userdata_);
 }
 
 static void on_bootup_done(struct mloop_work* self)
@@ -1284,6 +1292,12 @@ static int appbase_dummy()
 	return 0;
 }
 
+static void on_reconfigure()
+{
+	userdata_reload(&userdata_);
+	userdata_check_missing(&userdata_);
+}
+
 static int run_appbase()
 {
 	appcbase_t cb = { 0 };
@@ -1292,6 +1306,7 @@ static int run_appbase()
 	cb.initialize = appbase_dummy;
 	cb.deinitialize = appbase_dummy;
 	cb.on_tickmaster_alive = on_tickermaster_alive;
+	cb.reconfigure = on_reconfigure;
 
 	if (appbase_initialize("canopen", appbase_get_instance(), &cb) != 0)
 		return 1;
@@ -1636,6 +1651,8 @@ int co_master_run(void)
 		}
 	}
 
+	userdata_init(&userdata_);
+
 	init_signal_handler(mloop_);
 
 #ifndef NO_MAREL_CODE
@@ -1648,6 +1665,8 @@ int co_master_run(void)
 #endif /* NO_MAREL_CODE */
 
 	master_state_ = MASTER_STATE_STOPPING;
+
+	userdata_destroy(&userdata_);
 
 	unload_all_drivers();
 
