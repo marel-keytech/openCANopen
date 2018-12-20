@@ -65,7 +65,11 @@ void userdata__load_required(struct userdata* self)
 		if (pst_get_par_info(par, &info) < 0)
 			continue;
 
-		unsigned int id = strtoul(info.name, NULL, 0);
+		char* rest = NULL;
+		unsigned int id = strtoul(info.name, &rest, 0);
+		if (strcmp(rest, ".required") != 0)
+			continue;
+
 		if (id > CANOPEN_NODEID_MAX)
 			continue;
 
@@ -130,14 +134,6 @@ void userdata_destroy(struct userdata* self)
 
 	pst_close(self->pst);
 	dio_remove_pin(self->pin);
-}
-
-int userdata__is_required(struct userdata* self, unsigned int id)
-{
-	char name[128];
-	userdata__make_name(name, id, "required", sizeof(name));
-	int* p = pst_get_int_ptr(self->pst, name);
-	return !!*p;
 }
 
 int userdata__have_missing_nodes(struct userdata* self)

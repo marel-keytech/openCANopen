@@ -1284,6 +1284,8 @@ static int start_bootup(void)
 #ifndef NO_MAREL_CODE
 static int on_tickermaster_alive(void)
 {
+	userdata_init(&userdata_);
+
 	return start_bootup();
 }
 
@@ -1315,6 +1317,7 @@ static int run_appbase()
 
 	mloop_run(mloop_);
 
+	userdata_destroy(&userdata_);
 	appbase_deinitialize();
 
 	return 0;
@@ -1651,8 +1654,6 @@ int co_master_run(void)
 		}
 	}
 
-	userdata_init(&userdata_);
-
 	init_signal_handler(mloop_);
 
 #ifndef NO_MAREL_CODE
@@ -1665,8 +1666,6 @@ int co_master_run(void)
 #endif /* NO_MAREL_CODE */
 
 	master_state_ = MASTER_STATE_STOPPING;
-
-	userdata_destroy(&userdata_);
 
 	unload_all_drivers();
 
