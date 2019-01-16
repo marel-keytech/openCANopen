@@ -26,10 +26,17 @@ static int test_cia302_monitoring_rpdo_timeout()
 	return 0;
 }
 
+static int test_cia302_reset()
+{
+	ASSERT_STR_EQ("Error reset or no error", error_code_to_string(0, 302));
+	return 0;
+}
+
 int main()
 {
 	int r = 0;
 	RUN_TEST(test_cia402_monitoring_torque_too_high);
 	RUN_TEST(test_cia302_monitoring_rpdo_timeout);
+	RUN_TEST(test_cia302_reset);
 	return r;
 }

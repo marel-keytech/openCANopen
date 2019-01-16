@@ -45,6 +45,9 @@ convert_to_string(uint16_t code, const char* (*lookup)(uint16_t))
 	static char buf[256];
 	uint16_t current_code, last_code = 0;
 
+	if (code == 0)
+		return lookup(0);
+
 	memset(buf, 0, sizeof(buf));
 
 #define X(mask) \
