@@ -4,7 +4,7 @@ ExtraVersion: beta
 Description: CANopen master version 2.
 
 Destination: target
-#BuildDepends: marel-env-host, libmloop-crossdevelopment, libmloop-eloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment, ui-canopen(>=0.1)
+#BuildDepends: marel-env-host, libmloop-crossdevelopment, libmloop-eloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment
 Depends: libmloop, libmloop-eloop, appbase, libplog (>= 0.5.0), luasharedmemory, pst, digitaliopin
 
 Type: release
@@ -30,7 +30,7 @@ Install: ##BUILDDEBUG##bin/canopen-vnode usr/bin/debug
 
 Destination: host
 #BuildDepends: marel-env-host, libmloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment
-Depends: libmloop-crossdevelopment, libmloop-eloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment (>= 0.5.0), luasharedmemory-crossdevelopment, pst-crossdevelopment, digitaliopin-crossdevelopment, ui-canopen-crossdevelopment(>=0.1)
+Depends: libmloop-crossdevelopment, libmloop-eloop-crossdevelopment, appbase-crossdevelopment, libplog-crossdevelopment (>= 0.5.0), luasharedmemory-crossdevelopment, pst-crossdevelopment, digitaliopin-crossdevelopment
 Type: development
 
 Install: ##BUILDRELEASE##lib/libcanopen2.so usr/lib
