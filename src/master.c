@@ -949,6 +949,7 @@ static int handle_heartbeat(struct co_master_node* node,
 	if (!node->is_initialized)
 		return -1;
 
+	node->ntimeouts = 0;
 	restart_heartbeat_timer(nodeid);
 
 	/* Make sure the node is in operational state */
