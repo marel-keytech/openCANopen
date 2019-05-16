@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "socketcan.h"
 #include "canopen.h"
@@ -56,10 +57,17 @@ const char* hexdump(const void* data, size_t size);
 
 static inline void print_ts(void)
 {
-	uint64_t t = current_time_;
+	if (!(options_ & CO_DUMP_TIMESTAMP))
+		return;
 
-	if (options_ & CO_DUMP_TIMESTAMP)
-		printf("%llu.%06llu ", t / 1000000ULL, t % 1000000ULL);
+	time_t seconds = current_time_ / 1000000ULL;
+	uint32_t microseconds = current_time_ % 1000000ULL;
+
+	struct tm tm = { 0 };
+	char buffer[256];
+
+	strftime(buffer, sizeof(buffer), "%FT%T", localtime_r(&seconds, &tm));
+	printf("%s.%06lluZ ", buffer, microseconds);
 }
 
 static inline struct node_state* get_node_state(int nodeid)
