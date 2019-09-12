@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <time.h>
+#include <inttypes.h>
 
 #include "socketcan.h"
 #include "canopen.h"
@@ -67,7 +68,7 @@ static inline void print_ts(void)
 	char buffer[256];
 
 	strftime(buffer, sizeof(buffer), "%FT%T", localtime_r(&seconds, &tm));
-	printf("%s.%06lluZ ", buffer, microseconds);
+	printf("%s.%06"PRIu32"Z ", buffer, microseconds);
 }
 
 static inline struct node_state* get_node_state(int nodeid)
@@ -157,7 +158,7 @@ static int dump_emcy(struct canopen_msg* msg, struct can_frame* cf)
 	unsigned int code = emcy_get_code(cf);
 	unsigned int register_ = emcy_get_register(cf);
 	uint64_t manufacturer_error = emcy_get_manufacturer_error(cf);
-	printx(cf, "EMCY %d code=%#x,register=%#x,manufacturer-error=%#llx,dlc=%d,text=\"%s\"",
+	printx(cf, "EMCY %d code=%#x,register=%#x,manufacturer-error=%#"PRIx64",dlc=%d,text=\"%s\"",
 	       msg->id, code, register_, manufacturer_error, cf->can_dlc,
 	       error_code_to_string(code, state->device_type & 0xffff));
 
@@ -211,14 +212,14 @@ static int dump_sdo_dl_init_req(struct canopen_msg* msg, struct can_frame* cf)
 
 	if (!is_expediated && is_size_indicated && cf->can_dlc == CAN_MAX_DLC) {
 		size_t size = sdo_get_indicated_size(cf);
-		printx(cf, ",size=%d", size);
+		printx(cf, ",size=%zu", size);
 		if (state) {
 			vector_reserve(&state->sdo_data, size);
 			vector_clear(&state->sdo_data);
 		}
 	} else if (is_expediated) {
 		size_t size = get_expediated_size(cf);
-		printx(cf, ",size=%d,data=%s", size,
+		printx(cf, ",size=%zu,data=%s", size,
 		       hexdump(&cf->data[SDO_EXPEDIATED_DATA_IDX], size));
 	}
 
@@ -258,14 +259,14 @@ static int dump_sdo_dl_seg_req(struct canopen_msg* msg, struct can_frame* cf)
 
 	print_ts();
 
-	printf("RSDO %d download-segment%s size=%d,data=%s", msg->id,
+	printf("RSDO %d download-segment%s size=%zu,data=%s", msg->id,
 	       is_end ? "-end" : "", size, get_segment_data(state, data, size));
 
 	if (state && is_end) {
 		const void* final_data = state->sdo_data.data;
 		size_t final_size = state->sdo_data.index;
 
-		printf(",final-size=%d,final-data=%s", final_size,
+		printf(",final-size=%zu,final-data=%s", final_size,
 		       get_segment_data(state, final_data, final_size));
 
 		state->current_mux = 0;
@@ -352,7 +353,7 @@ static int dump_sdo_ul_init_res(struct canopen_msg* msg, struct can_frame* cf)
 
 	if (!is_expediated && is_size_indicated && cf->can_dlc == CAN_MAX_DLC) {
 		size_t size = sdo_get_indicated_size(cf);
-		printx(cf, ",size=%d", size);
+		printx(cf, ",size=%zu", size);
 		if (state) {
 			vector_reserve(&state->sdo_data, size);
 			vector_clear(&state->sdo_data);
@@ -366,7 +367,7 @@ static int dump_sdo_ul_init_res(struct canopen_msg* msg, struct can_frame* cf)
 				   sizeof(state->device_type),
 				   MIN(sizeof(state->device_type), size));
 
-		printx(cf, ",size=%d,data=%s", size, hexdump(payload, size));
+		printx(cf, ",size=%zu,data=%s", size, hexdump(payload, size));
 	}
 
 	return 0;
@@ -386,14 +387,14 @@ static int dump_sdo_ul_seg_res(struct canopen_msg* msg, struct can_frame* cf)
 
 	print_ts();
 
-	printf("TSDO %d upload-segment%s size=%d,data=%s", msg->id,
+	printf("TSDO %d upload-segment%s size=%zu,data=%s", msg->id,
 	       is_end ? "-end" : "", size, get_segment_data(state, data, size));
 
 	if (state && is_end) {
 		const void* final_data = state->sdo_data.data;
 		size_t final_size = state->sdo_data.index;
 
-		printf(",final-size=%d,final-data=%s", final_size,
+		printf(",final-size=%zu,final-data=%s", final_size,
 		       get_segment_data(state, final_data, final_size));
 	}
 

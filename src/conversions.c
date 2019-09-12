@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 #include "canopen/byteorder.h"
 #include "conversions.h"
 
@@ -35,7 +36,7 @@ char* canopen_ ## name ## _tostring(char* dst, size_t dst_size, \
 	return dst; \
 }
 
-MAKE_TOSTRING(uint, uint64_t, "%llu")
+MAKE_TOSTRING(uint, uint64_t, "%"PRIu64)
 MAKE_TOSTRING(float, float, "%e")
 MAKE_TOSTRING(double, double, "%e")
 
@@ -58,7 +59,7 @@ char* canopen_int_tostring(char* dst, size_t dst_size, struct canopen_data* src)
 	if (size != 8 && byte[size - 1] & 0x80)
 		value -= 1LLU << (size << 3);
 
-	snprintf(dst, dst_size - 1, "%lld", value);
+	snprintf(dst, dst_size - 1, "%"PRId64, value);
 	dst[dst_size - 1] = '\0';
 
 	return dst;
