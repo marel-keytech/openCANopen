@@ -173,7 +173,7 @@ static inline void rest__print_content_type(FILE* output, const char* type)
 
 static inline void rest__print_content_length(FILE* output, size_t length)
 {
-	fprintf(output, "Content-Length: %u\r\n", length);
+	fprintf(output, "Content-Length: %zu\r\n", length);
 }
 
 static inline void rest__print_connection_type(FILE* output)
