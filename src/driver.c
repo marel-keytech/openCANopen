@@ -29,13 +29,15 @@
 #define DRIVER_PATH "/usr/lib/canopen"
 #endif
 
+#define RPDO_COMMUNICATION_START_INDEX 0x1400
+#define RPDO_MAPPING_START_INDEX 0x1600
 #define TPDO_COMMUNICATION_START_INDEX 0x1800
+#define TPDO_MAPPING_START_INDEX 0x1A00
+
 #define PDO_COMMUNICATION_COB 1
 #define PDO_COMMUNICATION_TRANSMISSION_TYPE 2
 #define PDO_COMMUNICATION_INHIBIT_TIME 3
 #define PDO_COMMUNICATION_EVENT_TIME 5
-
-#define TPDO_MAPPING_START_INDEX 0x1A00
 
 size_t strlcpy(char*, const char*, size_t);
 
@@ -122,18 +124,34 @@ uint32_t co__cob_from_pdo_type(enum co_pdo_type type)
 	return 0;
 }
 
-int co__pdo_number_from_type(enum co_pdo_type type)
+int co__comm_index_from_pdo_type(enum co_pdo_type type)
 {
 
 	switch (type) {
-	case CO_TPDO1:
-	case CO_RPDO1: return 1;
-	case CO_TPDO2:
-	case CO_RPDO2: return 2;
-	case CO_TPDO3:
-	case CO_RPDO3: return 3;
-	case CO_TPDO4:
-	case CO_RPDO4: return 4;
+	case CO_TPDO1: return TPDO_COMMUNICATION_START_INDEX;
+	case CO_RPDO1: return RPDO_COMMUNICATION_START_INDEX;
+	case CO_TPDO2: return TPDO_COMMUNICATION_START_INDEX + 1;
+	case CO_RPDO2: return RPDO_COMMUNICATION_START_INDEX + 1;
+	case CO_TPDO3: return TPDO_COMMUNICATION_START_INDEX + 2;
+	case CO_RPDO3: return RPDO_COMMUNICATION_START_INDEX + 2;
+	case CO_TPDO4: return TPDO_COMMUNICATION_START_INDEX + 3;
+	case CO_RPDO4: return RPDO_COMMUNICATION_START_INDEX + 3;
+	}
+	return 0;
+}
+
+int co__mapping_index_from_pdo_type(enum co_pdo_type type)
+{
+
+	switch (type) {
+	case CO_TPDO1: return TPDO_MAPPING_START_INDEX;
+	case CO_RPDO1: return RPDO_MAPPING_START_INDEX;
+	case CO_TPDO2: return TPDO_MAPPING_START_INDEX + 1;
+	case CO_RPDO2: return RPDO_MAPPING_START_INDEX + 1;
+	case CO_TPDO3: return TPDO_MAPPING_START_INDEX + 2;
+	case CO_RPDO3: return RPDO_MAPPING_START_INDEX + 2;
+	case CO_TPDO4: return TPDO_MAPPING_START_INDEX + 3;
+	case CO_RPDO4: return RPDO_MAPPING_START_INDEX + 3;
 	}
 	return 0;
 }
@@ -390,13 +408,12 @@ void co_start(struct co_drv* self)
 	co__start(co_get_nodeid(self));
 }
 
-int co_map_tpdo(struct co_drv* self, const struct co_tpdo_map* map)
+int co_map_pdo(struct co_drv* self, const struct co_pdo_map* map)
 {
 	int nodeid = co_get_nodeid(self);
 	uint32_t cobid = co__cob_from_pdo_type(map->type) + nodeid;
-
-	int index = co__pdo_number_from_type(map->type) - 1;
-	int com_index = TPDO_COMMUNICATION_START_INDEX + index;
+	int com_index = co__comm_index_from_pdo_type(map->type);
+	int map_index = co__mapping_index_from_pdo_type(map->type);
 
 	co_sdo_send(self, com_index, PDO_COMMUNICATION_COB,
 		    (uint32_t)(0xC0000000 + cobid));
@@ -409,8 +426,6 @@ int co_map_tpdo(struct co_drv* self, const struct co_tpdo_map* map)
 
 	co_sdo_send(self, com_index, PDO_COMMUNICATION_EVENT_TIME,
 		    map->event_time);
-
-	int map_index = TPDO_MAPPING_START_INDEX + index;
 
 	co_sdo_send(self, map_index, 0, (uint8_t)0);
 

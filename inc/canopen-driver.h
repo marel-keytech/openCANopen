@@ -61,12 +61,12 @@ enum co_pdo_type {
 	CO_RPDO4,
 };
 
-enum co_tpdo_xmission_type {
-	CO_TPDO_XMISSION_SYNCHRONOUS = 0,
+enum co_pdo_xmission_type {
+	CO_PDO_XMISSION_SYNCHRONOUS = 0,
 	CO_TPDO_XMISSION_RTR_SYNCHRONOUS = 0xfc,
 	CO_TPDO_XMISSION_RTR_EVENT_DRIVEN = 0xfd,
-	CO_TPDO_XMISSION_MANUFACTURER_EVENT_DRIVEN = 0xfe,
-	CO_TPDO_XMISSION_STANDARD_EVENT_DRIVEN = 0xff,
+	CO_PDO_XMISSION_MANUFACTURER_EVENT_DRIVEN = 0xfe,
+	CO_PDO_XMISSION_STANDARD_EVENT_DRIVEN = 0xff,
 };
 
 struct co_pdo_map_entry {
@@ -75,9 +75,9 @@ struct co_pdo_map_entry {
 	uint8_t length;
 };
 
-struct co_tpdo_map {
+struct co_pdo_map {
 	enum co_pdo_type type;
-	enum co_tpdo_xmission_type xmission_type;
+	enum co_pdo_xmission_type xmission_type;
 	uint16_t inhibit_time;
 	uint16_t event_time;
 	uint8_t sync_start_value;
@@ -143,7 +143,7 @@ enum co_sdo_status co_sdo_req_get_status(const struct co_sdo_req* self);
 int co_sdo_send_blob(struct co_drv* self, int index, int subindex,
 		     const void* payload, size_t size);
 
-int co_map_tpdo(struct co_drv* self, const struct co_tpdo_map* map);
+int co_map_pdo(struct co_drv* self, const struct co_pdo_map* map);
 
 void co_byteorder(void* dst, const void* src, size_t dst_size, size_t src_size);
 
