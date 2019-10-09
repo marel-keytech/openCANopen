@@ -429,14 +429,14 @@ int co_map_pdo(struct co_drv* self, const struct co_pdo_map* map)
 
 	co_sdo_send(self, map_index, 0, (uint8_t)0);
 
-	uint8_t i;
-	for (i = 0; i <= 255 && map->entries[i].index; ++i) {
+	int i;
+	for (i = 0; i <= UINT8_MAX && map->entries[i].index; ++i) {
 		struct co_pdo_map_entry* e = &map->entries[i];
 		uint32_t data = e->index << 16 | e->subindex << 8 | e->length;
 		co_sdo_send(self, map_index, i + 1, data);
 	}
 
-	co_sdo_send(self, map_index, 0, i);
+	co_sdo_send(self, map_index, 0, (uint8_t)i);
 
 	co_sdo_send(self, com_index, PDO_COMMUNICATION_COB,
 		    (uint32_t)(0x40000000 + cobid));
