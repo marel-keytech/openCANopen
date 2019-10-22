@@ -464,16 +464,35 @@ static int load_profile_driver(int nodeid)
 	return co_drv_load(&node->ndrv, buffer);
 }
 
-static int load_new_driver(int nodeid)
+static int load_identity_driver(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 
-	if (co_drv_load(&node->ndrv, node->name) < 0)
-		if (load_profile_driver(nodeid) < 0)
-			return -1;
+	char buffer[256];
+	snprintf(buffer, sizeof(buffer), "id-%x-%x",
+		 node->vendor_id, node->product_code);
+	buffer[sizeof(buffer) - 1] = '\0';
 
+	return co_drv_load(&node->ndrv, buffer);
+}
+
+static int load_new_driver(int nodeid, int has_identity)
+{
+	struct co_master_node* node = co_master_get_node(nodeid);
+
+	if (co_drv_load(&node->ndrv, node->name) >= 0)
+		goto ok;
+
+	if (has_identity && load_identity_driver(nodeid) >= 0)
+		goto ok;
+
+	else if (load_profile_driver(nodeid) >= 0)
+		goto ok;
+
+	return -1;
+
+ok:
 	node->driver_type = CO_MASTER_DRIVER_NEW;
-
 	return 0;
 }
 
@@ -565,9 +584,9 @@ static void apply_quirks(struct co_master_node* node)
 
 }
 
-static int load_any_driver(int nodeid)
+static int load_any_driver(int nodeid, int has_identity)
 {
-	if (load_new_driver(nodeid) >= 0)
+	if (load_new_driver(nodeid, has_identity) >= 0)
 		return 0;
 
 #ifndef NO_MAREL_CODE
@@ -614,7 +633,8 @@ static int load_driver(int nodeid)
 	cfg_load_node(nodeid);
 	apply_quirks(node);
 
-	if (node_has_identity(nodeid)) {
+	int has_identity = node_has_identity(nodeid);
+	if (has_identity) {
 		node->vendor_id = get_vendor_id(nodeid);
 		node->product_code = get_product_code(nodeid);
 		node->revision_number = get_revision_number(nodeid);
@@ -644,7 +664,7 @@ static int load_driver(int nodeid)
 	load_error_register(nodeid);
 #endif /* NO_MAREL_CODE */
 
-	if (load_any_driver(nodeid) < 0) {
+	if (load_any_driver(nodeid, has_identity) < 0) {
 		if (node->is_heartbeat_supported)
 			turn_off_heartbeat(nodeid);
 
