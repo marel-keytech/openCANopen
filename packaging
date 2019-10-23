@@ -1,6 +1,5 @@
 Package: canopen2
 Version: 0.0.0
-ExtraVersion: beta
 Description: CANopen master version 2.
 
 Destination: target
