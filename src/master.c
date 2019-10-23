@@ -170,6 +170,9 @@ static void stop_heartbeat_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->heartbeat_timer;
+	if (!timer)
+		return;
+
 	mloop_timer_stop(timer);
 	mloop_timer_unref(timer);
 	node->heartbeat_timer = NULL;
@@ -179,6 +182,9 @@ static void stop_ping_timer(int nodeid)
 {
 	struct co_master_node* node = co_master_get_node(nodeid);
 	struct mloop_timer* timer = node->ping_timer;
+	if (!timer)
+		return;
+
 	mloop_timer_stop(timer);
 	mloop_timer_unref(timer);
 	node->ping_timer = NULL;
